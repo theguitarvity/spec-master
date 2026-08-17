@@ -77,6 +77,23 @@ class DiscoveryTests(unittest.TestCase):
                 fh.write("")
         result = discovery.scan(self.tmp)
         self.assertEqual(result["speckit_commands"], ["speckit.plan.md", "speckit.specify.md"])
+        self.assertEqual(
+            result["speckit_command_paths"]["claude"],
+            [".claude/commands/speckit.plan.md", ".claude/commands/speckit.specify.md"],
+        )
+
+    def test_opencode_speckit_commands_listed(self):
+        cmd_dir = os.path.join(self.tmp, ".opencode", "commands")
+        os.makedirs(cmd_dir)
+        for name in ("speckit.specify.md", "speckit.plan.md", "other.md"):
+            with open(os.path.join(cmd_dir, name), "w", encoding="utf-8") as fh:
+                fh.write("")
+        result = discovery.scan(self.tmp)
+        self.assertEqual(result["speckit_commands"], ["speckit.plan.md", "speckit.specify.md"])
+        self.assertEqual(
+            result["speckit_command_paths"]["opencode"],
+            [".opencode/commands/speckit.plan.md", ".opencode/commands/speckit.specify.md"],
+        )
 
 
 if __name__ == "__main__":

@@ -50,6 +50,7 @@ COPILOT_SKILLS_DIR="$HOME/.copilot/skills/spec-master"
 COPILOT_AGENTS_DIR="$HOME/.copilot/agents"
 CODEX_SKILLS_DIR="$HOME/.codex/skills/spec-master"
 AGENTS_SHARED_SKILLS_DIR="$HOME/.agents/skills/spec-master"
+OPENCODE_COMMANDS_DIR="$HOME/.config/opencode/commands"
 
 log()  { printf '[spec-master init] %s\n' "$1"; }
 warn() { printf '[spec-master init] WARNING: %s\n' "$1" >&2; }
@@ -259,6 +260,41 @@ EOF
 
   log "OpenAI Codex CLI entrypoint installed globally:"
   log "  $CODEX_SKILLS_DIR/SKILL.md"
+}
+
+# ---------------------------------------------------------------------------
+# Step 4a — global OpenCode command (~/.config/opencode/commands)
+# ---------------------------------------------------------------------------
+install_opencode_global() {
+  mkdir -p "$OPENCODE_COMMANDS_DIR"
+
+  cat > "$OPENCODE_COMMANDS_DIR/spec-master.md" <<EOF
+---
+description: "Executar o Spec Master por fases verificaveis a partir de um arquivo de contexto"
+---
+
+O argumento em \`\$ARGUMENTS\` e o caminho do contexto, relativo ao projeto.
+Leia integralmente \`$ENGINE_DST/PROTOCOL.md\` antes de agir.
+
+Regras obrigatorias para OpenCode:
+
+1. Use exclusivamente ferramentas nativas do OpenCode. Nunca imprima XML,
+   \`<function=...>\`, \`<tool_call>\` ou comandos como substituto de uma
+   chamada de ferramenta.
+2. A CLI nao aceita o contexto como subcomando. Toda decisao estrutural usa
+   exatamente \`python3 $ENGINE_DST/lib/cli.py <grupo> <acao> ...\` conforme
+   o help e o protocolo.
+3. Descubra comandos Spec Kit em \`.opencode/commands/speckit.*.md\` e leia
+   apenas o comando da fase atual.
+4. Execute uma fase por vez; confirme que os artefatos exigidos existem antes
+   de marcar a fase como PASSED no state.
+5. Se uma ferramenta falhar, relate a saida real. Nao simule sucesso.
+
+Execute o protocolo contra o projeto atual, usando \`$ENGINE_DST\` como motor.
+EOF
+
+  log "OpenCode entrypoint installed globally:"
+  log "  $OPENCODE_COMMANDS_DIR/spec-master.md"
 }
 
 # ---------------------------------------------------------------------------
@@ -492,6 +528,7 @@ if [ "$MODE" = "install" ]; then
   install_claude_global
   install_copilot_global
   install_codex_global
+  install_opencode_global
   install_agents_shared_global
   install_hermes_global
   [ "$ENGINE_ONLY" -eq 1 ] && { log "done (--engine-only, project steps skipped)."; exit 0; }

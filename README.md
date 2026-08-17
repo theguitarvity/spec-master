@@ -28,6 +28,7 @@ gera o contexto inicial.
 - [Retomada e idempotência](#retomada-e-idempotência)
 - [Team Mode](#team-mode)
 - [Métricas de entrega](#métricas-de-entrega)
+- [Modo guarded (opt-in, experimental)](#modo-guarded-opt-in-experimental)
 - [Arquitetura](#arquitetura)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Testes](#testes)
@@ -369,6 +370,33 @@ expor esses dados, pacotes/features concluídos e velocidade calculada. O
 relatório final inclui total de tokens, tokens por minuto, pacotes por hora,
 features por hora e observações quando a plataforma não expõe contagem exata
 de tokens.
+
+## Modo guarded (opt-in, experimental)
+
+O comportamento padrão de `/spec-master` documentado acima — o agente
+conduz o workflow inteiro — **não muda**. Existe, além dele, um
+controlador determinístico opcional que conduz cada fase do Spec Kit
+(`constitution` → `specify` → `clarify` → `plan` → `tasks` → `analyze` →
+`implement` → `validate`) em uma sessão isolada, validando o artefato
+obrigatório de cada fase antes de promovê-la — pensado para modelos
+locais menos confiáveis (que podem implementar cedo demais, simular
+chamadas de ferramenta como texto, ou declarar sucesso sem produzir o
+artefato esperado). Hoje ele é acionado diretamente, não pelo comando
+`/spec-master`:
+
+```bash
+python3 spec-master/lib/controller.py run \
+  --project . --context context.md \
+  --mode guarded --integration opencode --model <modelo>
+
+python3 spec-master/lib/controller.py resume --project .
+python3 spec-master/lib/controller.py status --project .
+```
+
+Suporta apenas a integração OpenCode nesta primeira versão. Detalhes de
+design, contrato de fases e escopo em
+[`docs/spec-master/guarded-mode-spec.md`](docs/spec-master/guarded-mode-spec.md)
+e [`specs/001-guarded-mode-controller/`](specs/001-guarded-mode-controller/).
 
 ## Arquitetura
 

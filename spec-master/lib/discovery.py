@@ -135,12 +135,30 @@ def scan(root: str = ".") -> dict:
         except OSError:
             existing_specs = []
 
+    # Spec Kit installs command files in a platform-specific directory. Keep
+    # the relative path so an orchestrator can execute the command for the
+    # active integration instead of assuming Claude's layout.
     speckit_commands = []
-    commands_dir = os.path.join(root, ".claude", "commands")
-    if os.path.isdir(commands_dir):
-        speckit_commands = sorted(
-            f for f in os.listdir(commands_dir) if f.startswith("speckit.")
+    command_dirs = (
+        ("claude", os.path.join(root, ".claude", "commands")),
+        ("opencode", os.path.join(root, ".opencode", "commands")),
+        ("qwen", os.path.join(root, ".qwen", "commands")),
+    )
+    speckit_command_paths = {}
+    for integration, commands_dir in command_dirs:
+        if not os.path.isdir(commands_dir):
+            continue
+        found = sorted(
+            f for f in os.listdir(commands_dir)
+            if f.startswith("speckit.") and f.endswith(".md")
         )
+        if found:
+            speckit_command_paths[integration] = [
+                os.path.relpath(os.path.join(commands_dir, name), root)
+                for name in found
+            ]
+            speckit_commands.extend(found)
+    speckit_commands = sorted(set(speckit_commands))
 
     docs_present = os.path.isdir(os.path.join(root, "docs"))
     readme_present = any(
@@ -159,6 +177,7 @@ def scan(root: str = ".") -> dict:
         "specs_dir_present": specs_dir_present,
         "existing_specs": existing_specs,
         "speckit_commands": speckit_commands,
+        "speckit_command_paths": speckit_command_paths,
         "docs_present": docs_present,
         "readme_present": readme_present,
         "claude_md_present": claude_md_present,

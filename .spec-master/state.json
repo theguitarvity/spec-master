@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "context": "docs/spec-master/guarded-mode-spec.md",
+  "workflow": "trunk",
+  "status": "COMPLETED",
+  "constitution": {
+    "status": "VALIDATED",
+    "path": ".specify/memory/constitution.md"
+  },
+  "features": [
+    {
+      "id": "guarded-mode-controller",
+      "name": "Guarded Mode Controller",
+      "description": "Add native/guarded/auto execution modes and a deterministic controller that isolates each Spec Kit phase in its own session, validates required artifacts before promoting state, and migrates auto -> guarded on unsafe behavior.",
+      "source_requirements": [
+        "GM-001",
+        "GM-002",
+        "GM-003",
+        "GM-004",
+        "GM-005",
+        "GM-006",
+        "GM-007",
+        "GM-008",
+        "GM-009",
+        "GM-010",
+        "GM-011",
+        "GM-012"
+      ],
+      "acceptance_criteria": [
+        "--mode accepts native|guarded|auto; default is auto when omitted",
+        "guarded mode isolates every phase in its own session with no prior-phase history",
+        "no phase is promoted to PASSED without required-artifact validation (non-empty, no placeholders)",
+        "writes outside the phase allowlist are rejected",
+        "code created before the implement phase is detected and rejected",
+        "simulated tool calls printed as text are detected and rejected",
+        "timeout and max-attempts-per-phase are enforced; exhausted attempts -> BLOCKED",
+        "auto mode migrates irreversibly to guarded per the critical/recoverable event policy",
+        "resume is idempotent and never repeats a PASSED phase with a valid fingerprint",
+        "transcripts and failure causes are preserved for every attempt",
+        "OpenCode adapter works end to end without changing --mode native behavior",
+        "python3 -m unittest discover -s spec-master/tests -v passes, including new unit + fake-agent integration tests"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/001-guarded-mode-controller",
+      "analyze_repair_cycles": 1,
+      "phases": {
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
+      }
+    }
+  ],
+  "quality_gates": [],
+  "fingerprint": {
+    "guarded-mode-spec.md": "39334e7601310e3cf680992d2000479c291c72c0460e4577ec82b1a3a87159aa",
+    "app-features.md": "9ccdb9245193e3b8d68f7413acc6190c1c3983a317ddc21d8019cf04771a9a81",
+    "project-goals.md": "65b4080feb167b53f079006ce10e9c8d97f55eac6f851a264b09ee6b36ed41cd",
+    "tech-stack.md": "9c24ecc1c6a035ff68c7c57eb8abb3a06886216c8ade8339b8f53d6562cee80f"
+  },
+  "traceability": [
+    {
+      "requirement": "GM-001",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-002",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-003",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-004",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-005",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-006",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-007",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-008",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-009",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-010",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-011",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "GM-012",
+      "source": "docs/spec-master/guarded-mode-spec.md §14",
+      "feature": "guarded-mode-controller",
+      "spec": "specs/001-guarded-mode-controller/spec.md",
+      "plan": "specs/001-guarded-mode-controller/plan.md",
+      "task": "specs/001-guarded-mode-controller/tasks.md",
+      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    }
+  ]
+}
