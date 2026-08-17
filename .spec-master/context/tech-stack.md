@@ -94,6 +94,39 @@ Affected areas:
 
 - Delegação ao adaptador de integração (`opencode_runner.py` inicialmente).
 
+### `phase_result.py` (novo, Feature 2)
+
+Responsibilities:
+
+- Parser seguro do bloco `phase_result` estruturado emitido como texto
+  no transcript (JSON inválido rejeitado com segurança; nunca executa
+  conteúdo do transcript); extrai o último bloco válido.
+
+Affected areas:
+
+- Consumido por `phase_runner.py` para decidir `valid_noop` vs.
+  `phase_result_missing`/`phase_result_invalid`, nunca substitui as
+  verificações de filesystem já existentes.
+
+### `phase_contracts.py` e `phase_runner.py` (Feature 2 — modificação)
+
+Responsibilities:
+
+- `phase_contracts.py` ganha uma política explícita por fase
+  (`produce-or-update`/`inspect-or-update`/`execute`) e a resolução
+  segura do artefato ativo via `.specify/feature.json` (rejeitando `..`,
+  path absoluto, symlink que escape do projeto).
+- `phase_runner.py` deixa de exigir `required_artifact_changed`
+  incondicionalmente para toda fase; passa a decidir por política:
+  `inspect-or-update` pode aprovar um `valid_noop` sob as condições
+  determinísticas de `clarify`/`analyze`; `produce-or-update` continua
+  exigindo alteração; `execute` usa critério próprio.
+
+Affected areas:
+
+- Não pode regredir nenhuma proteção/teste já entregue pela Feature 1
+  (allowlist, snapshot, detecção de ferramenta simulada, timeout).
+
 ### `opencode_runner.py` (já existente, não commitado)
 
 Responsibilities:

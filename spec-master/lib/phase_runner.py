@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import phase_contracts  # noqa: E402
+import phase_result  # noqa: E402
 import quality_gates  # noqa: E402
 
 SOURCE_LIKE_EXTENSIONS = frozenset((
@@ -186,8 +187,111 @@ def _artifact_wrong_location(project: Path, phase: str, changed: list[str]) -> l
     return sorted(misplaced)
 
 
+def _reason_for_hard_fail(findings: dict, blocking_gate_failed: bool) -> str:
+    if findings["timed_out"]:
+        return "timeout"
+    if blocking_gate_failed:
+        return "blocking_quality_gate_failed"
+    if findings["fake_tool_markers"]:
+        return "fake_tool_marker"
+    if findings["forbidden_writes"] or findings["artifact_wrong_location"]:
+        return "forbidden_write"
+    return "exit_nonzero"
+
+
+def _evaluate_inspect_noop(project: Path, phase: str, structured_result: dict | None,
+                            outcome: str | None) -> tuple[str, str, str | None, list[str]]:
+    """`inspect-or-update` no-op decision (clarify/analyze) — specs/002-
+    guarded-noop-phase-validation/spec.md §5, §8. Relies only on the
+    active-feature-scoped predicate, never the generic glob-based
+    `missing_artifacts`/`placeholder_artifacts` findings, since those can
+    be satisfied or tripped by an unrelated feature directory in a
+    multi-feature project (research.md item 4's active-feature scoping
+    applies here specifically to avoid that false signal).
+    """
+    if outcome != "no_changes_required":
+        reason = "phase_result_missing" if structured_result is None else "phase_result_invalid"
+        return "FAILED", reason, outcome, []
+
+    predicate = phase_contracts.clarify_result_ok if phase == "clarify" else phase_contracts.analyze_result_ok
+    names = ("spec.md",) if phase == "clarify" else ("spec.md", "plan.md", "tasks.md")
+    try:
+        ok = predicate(project, structured_result)
+        feature_dir = phase_contracts.resolve_active_feature_dir(project)
+        active_artifacts = [str((feature_dir / name).relative_to(project)) for name in names]
+    except phase_contracts.ActiveFeatureUnresolved:
+        return "FAILED", "active_feature_unresolved", outcome, []
+
+    if ok:
+        return "PASSED", "valid_noop", "no_changes_required", active_artifacts
+    return "FAILED", "phase_result_invalid", outcome, active_artifacts
+
+
+def _evaluate_producer_retry(findings: dict, history: list) -> tuple[str, str, str | None]:
+    """`produce-or-update` retry-trust decision — spec.md §9, research.md item 2.
+
+    Never eligible on a phase's very first attempt (`history` empty); a
+    single historical forbidden write or out-of-project write anywhere in
+    `history` permanently disqualifies trusting the existing artifact.
+    """
+    trustworthy = bool(history) and not any(
+        record.get("forbidden_writes") or "out_of_project_write" in (record.get("events") or [])
+        for record in history
+    )
+    if trustworthy and not findings["missing_artifacts"] and not findings["placeholder_artifacts"]:
+        return "PASSED", "valid_noop", "no_changes_required"
+    if findings["missing_artifacts"]:
+        return "FAILED", "missing_artifact", None
+    if findings["placeholder_artifacts"]:
+        return "FAILED", "placeholder_artifact", None
+    return "FAILED", "unchanged_artifact", None
+
+
+def revalidate_from_transcript(project, phase: str, transcript_text: str, history: list) -> dict | None:
+    """Re-evaluate a previously-blocked attempt under the *current* contract
+    without spawning a new subprocess (controller.py's contract-revalidation,
+    specs/002-guarded-noop-phase-validation/spec.md §11, research.md item 6).
+
+    For `inspect-or-update` phases, re-parses `transcript_text` (the old
+    attempt's preserved transcript) for a structured result and evaluates it
+    against the filesystem *as it stands now*. For `produce-or-update`
+    phases, no transcript is needed at all — the same retry-trust check
+    `run_phase` itself uses is re-run against `history` (every attempt
+    *before* the one being revalidated) and the current filesystem state.
+    Returns `None` (not a dict) when revalidation doesn't apply or doesn't
+    pass — the caller then falls back to a genuine live attempt.
+    """
+    project = Path(project).resolve()
+    policy = phase_contracts.PHASE_POLICY[phase]
+
+    if policy == "inspect-or-update":
+        structured_result = phase_result.parse_last_phase_result(transcript_text)
+        outcome = structured_result.get("phase_result") if structured_result else None
+        status, _reason, outcome, active_artifacts = _evaluate_inspect_noop(project, phase, structured_result, outcome)
+        if status != "PASSED":
+            return None
+        return {
+            "outcome": outcome,
+            "policy": policy,
+            "active_artifacts": active_artifacts,
+            "structured_result": structured_result,
+        }
+
+    if policy == "produce-or-update":
+        findings = {
+            "missing_artifacts": phase_contracts.validate_artifacts(project, phase),
+            "placeholder_artifacts": phase_contracts.placeholder_artifacts(project, phase),
+        }
+        status, _reason, outcome = _evaluate_producer_retry(findings, list(history))
+        if status != "PASSED":
+            return None
+        return {"outcome": outcome, "policy": policy, "active_artifacts": [], "structured_result": None}
+
+    return None  # "execute" (implement) has no revalidation-without-a-new-attempt path
+
+
 def run_phase(project, phase: str, integration: str, model: str, prompt_text: str,
-              timeout_seconds: int, agent: str = "spec-phase") -> dict:
+              timeout_seconds: int, agent: str = "spec-phase", history: list = ()) -> dict:
     if integration not in INTEGRATIONS:
         raise UnsupportedIntegrationError(
             f"integration {integration!r} is not supported in guarded mode yet "
@@ -226,39 +330,58 @@ def run_phase(project, phase: str, integration: str, model: str, prompt_text: st
 
     events = classify_events(phase, findings)
 
-    passed = (
-        not findings["timed_out"]
-        and findings["exit_code"] == 0
-        and not findings["fake_tool_markers"]
-        and not findings["missing_artifacts"]
-        and not findings["placeholder_artifacts"]
-        and not findings["forbidden_writes"]
-        and not findings["artifact_wrong_location"]
-        and required_changed
-        and not blocking_gate_failed
+    # Decision priority order fixed in specs/002-guarded-noop-phase-validation/
+    # research.md item 7 (analyze finding C1): hard-fail checks always win;
+    # `user_decision_required` wins next, even over an incidental file change;
+    # only then does the ordinary "did it change what it should" path run,
+    # followed by the two no-op paths policy adds.
+    structured_result = phase_result.parse_last_phase_result(invocation["stdout"])
+    outcome = structured_result.get("phase_result") if structured_result else None
+    active_artifacts: list[str] = []
+    policy = phase_contracts.PHASE_POLICY[phase]
+
+    hard_fail = (
+        findings["timed_out"] or findings["exit_code"] != 0 or findings["fake_tool_markers"]
+        or findings["forbidden_writes"] or findings["artifact_wrong_location"] or blocking_gate_failed
     )
 
-    if passed:
-        reason = None
-    elif findings["timed_out"]:
-        reason = "timeout"
-    elif blocking_gate_failed:
-        reason = "blocking_quality_gate_failed"
-    elif findings["fake_tool_markers"]:
-        reason = "fake_tool_marker"
-    elif findings["forbidden_writes"] or findings["artifact_wrong_location"]:
-        reason = "forbidden_write"
-    elif findings["placeholder_artifacts"]:
-        reason = "placeholder_artifact"
-    elif findings["exit_code"] != 0:
-        reason = "exit_nonzero"
-    else:
-        reason = "missing_artifact"
+    if hard_fail:
+        status, reason = "FAILED", _reason_for_hard_fail(findings, blocking_gate_failed)
+    elif outcome == "user_decision_required":
+        status, reason = "FAILED", "user_decision_required"
+    elif required_changed:
+        if findings["missing_artifacts"]:
+            status, reason = "FAILED", "missing_artifact"
+        elif findings["placeholder_artifacts"]:
+            status, reason = "FAILED", "placeholder_artifact"
+        else:
+            status, reason = "PASSED", None
+            outcome = outcome or "artifact_updated"
+    elif policy == "inspect-or-update":
+        status, reason, outcome, active_artifacts = _evaluate_inspect_noop(
+            project, phase, structured_result, outcome
+        )
+    elif policy == "produce-or-update":
+        status, reason, noop_outcome = _evaluate_producer_retry(findings, list(history))
+        if noop_outcome:
+            outcome = noop_outcome
+    else:  # policy == "execute" (implement), no change this attempt
+        if findings["missing_artifacts"]:
+            status, reason = "FAILED", "missing_artifact"
+        elif findings["placeholder_artifacts"]:
+            status, reason = "FAILED", "placeholder_artifact"
+        else:
+            status, reason = "FAILED", "missing_artifact"
 
     return {
-        "status": "PASSED" if passed else "FAILED",
+        "status": status,
         "phase": phase,
         "reason": reason,
+        "outcome": outcome,
+        "policy": policy,
+        "contract_version": phase_contracts.PHASE_CONTRACT_VERSION,
+        "active_artifacts": active_artifacts,
+        "structured_result": structured_result,
         "events": events,
         "exit_code": findings["exit_code"],
         "changed_paths": changed,

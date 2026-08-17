@@ -144,14 +144,22 @@ def _context_hash(project: Path, context: str) -> str | None:
     return fingerprint.compute_file_hash(str(context_path))
 
 
+def _consumed_attempts(attempts: list[dict]) -> int:
+    # A user_decision_required record is preserved for audit (FR-011) but
+    # never counts against the attempt budget (spec.md §10/§16 item 2).
+    return len([a for a in attempts if a.get("reason") != "user_decision_required"])
+
+
 def _phase_status(state: dict, phase: str) -> str:
     attempts = state.get("attempts", {}).get(phase, [])
     if not attempts:
         return "PENDING"
     if attempts[-1]["status"] == "PASSED":
         return "PASSED"
+    if attempts[-1].get("reason") == "user_decision_required":
+        return "PAUSED"
     max_attempts = state.get("execution", {}).get("max_attempts_per_phase", DEFAULT_MAX_ATTEMPTS)
-    if len(attempts) >= max_attempts:
+    if _consumed_attempts(attempts) >= max_attempts:
         return "BLOCKED"
     return "FAILED"
 
@@ -165,6 +173,57 @@ def _promote_feature_phase(state: dict, feature_id: str | None, phase: str) -> N
         pass  # no matching feature/phase in the per-feature loop — standalone run
 
 
+def _try_contract_revalidation(project: Path, phase: str, attempts: list[dict],
+                                context_hash: str | None) -> dict | None:
+    """NPV-010 / spec.md §11: a cheap, no-subprocess re-check of a
+    previously-blocked attempt under the *current* phase contract. Returns
+    a ready-to-append `PhaseAttempt` dict on success, or `None` when any of
+    the four gate conditions fails — the caller then falls through to a
+    normal, live attempt (research.md item 6).
+    """
+    last_attempt = attempts[-1]
+    if last_attempt.get("contract_version", 1) >= phase_contracts.PHASE_CONTRACT_VERSION:
+        return None
+    if last_attempt.get("reason") not in ("missing_artifact", "unchanged_artifact"):
+        return None
+    if phase_contracts.validate_artifacts(project, phase):
+        return None
+    if last_attempt.get("context_hash") != context_hash:
+        return None
+
+    transcript_path = Path(last_attempt.get("transcript", ""))
+    transcript_text = ""
+    if transcript_path.is_file():
+        transcript_text = transcript_path.read_text(encoding="utf-8", errors="replace")
+
+    # History for a produce-or-update trust check excludes the attempt being
+    # revalidated itself (research.md item 2 — every *prior* attempt).
+    prior_history = attempts[:-1]
+    revalidated = phase_runner.revalidate_from_transcript(project, phase, transcript_text, prior_history)
+    if revalidated is None:
+        return None
+
+    now = _now_iso()
+    return {
+        "status": "PASSED",
+        "reason": "valid_noop",
+        "outcome": revalidated["outcome"],
+        "policy": revalidated["policy"],
+        "contract_version": phase_contracts.PHASE_CONTRACT_VERSION,
+        "active_artifacts": revalidated["active_artifacts"],
+        "structured_result": revalidated["structured_result"],
+        "events": [],
+        "transcript": last_attempt.get("transcript"),
+        "changed_paths": [],
+        "forbidden_writes": [],
+        "quality_gates": None,
+        "started_at": now,
+        "finished_at": now,
+        "context_hash": context_hash,
+        "source": "contract_revalidation",
+    }
+
+
 def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id: str | None) -> str:
     execution = state["execution"]
     max_attempts = execution.get("max_attempts_per_phase", DEFAULT_MAX_ATTEMPTS)
@@ -173,25 +232,46 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
     allowed_writes = phase_contracts.PHASE_ALLOWED_WRITES[phase]
     expected_artifacts = phase_contracts.PHASE_ARTIFACTS[phase]
     context = state["context"]
+    context_hash = _context_hash(project, context)
 
     if attempts and attempts[-1]["status"] == "PASSED":
-        if attempts[-1].get("context_hash") == _context_hash(project, context):
+        if attempts[-1].get("context_hash") == context_hash:
             print(f"[Spec Master] {phase} already PASSED (fingerprint unchanged) — skipping.")
             return "PASSED"
 
-    start_number = len(attempts) + 1
-    for attempt_number in range(start_number, start_number + max_attempts):
+    if attempts and attempts[-1]["status"] != "PASSED":
+        revalidated = _try_contract_revalidation(project, phase, attempts, context_hash)
+        if revalidated is not None:
+            revalidated["number"] = len(attempts) + 1
+            attempts.append(revalidated)
+            state_mod.save(str(_state_path(project)), state)
+            print(f"[Spec Master] {phase} revalidated under contract v"
+                  f"{phase_contracts.PHASE_CONTRACT_VERSION} — passed without a new attempt.")
+            if phase == "constitution":
+                state["constitution"] = {"status": "VALIDATED", "path": expected_artifacts[0]}
+            _promote_feature_phase(state, feature_id, phase)
+            state_mod.save(str(_state_path(project)), state)
+            return "PASSED"
+
+    # Every call grants a fresh budget of up to `max_attempts` *new*
+    # attempts (matching Feature 1's behavior: resuming a phase that
+    # exhausted a prior budget still gets to try again) — only attempts
+    # made *during this call* count against it, not the phase's full
+    # cumulative history.
+    consumed_before_this_call = _consumed_attempts(attempts)
+    while _consumed_attempts(attempts) - consumed_before_this_call < max_attempts:
+        attempt_number = len(attempts) + 1
+        used = _consumed_attempts(attempts) - consumed_before_this_call
         _check_and_clear_lock(project, phase_timeout)
         _acquire_lock(project, phase)
         started_at = _now_iso()
-        print(f"[Spec Master] {phase} attempt {attempt_number - start_number + 1}/{max_attempts} "
-              f"started ({execution['active_mode']}).")
+        print(f"[Spec Master] {phase} attempt {used + 1}/{max_attempts} started ({execution['active_mode']}).")
         last_attempt = attempts[-1] if attempts else None
         prompt = _render_prompt(phase, attempt_number, last_attempt, allowed_writes, expected_artifacts)
         try:
             result = phase_runner.run_phase(
                 project, phase, execution["integration"], execution["model"],
-                prompt, phase_timeout, agent="spec-phase",
+                prompt, phase_timeout, agent="spec-phase", history=list(attempts),
             )
         finally:
             _release_lock(project)
@@ -201,6 +281,11 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
             "number": attempt_number,
             "status": result["status"],
             "reason": result["reason"],
+            "outcome": result.get("outcome"),
+            "policy": result.get("policy"),
+            "contract_version": result.get("contract_version"),
+            "active_artifacts": result.get("active_artifacts") or [],
+            "structured_result": result.get("structured_result"),
             "events": result["events"],
             "transcript": result["transcript"],
             "changed_paths": result["changed_paths"],
@@ -208,10 +293,22 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
             "quality_gates": result.get("quality_gates"),
             "started_at": started_at,
             "finished_at": finished_at,
-            "context_hash": _context_hash(project, context),
+            "context_hash": context_hash,
         }
         attempts.append(record)
         state_mod.save(str(_state_path(project)), state)
+
+        if result["reason"] == "user_decision_required":
+            try:
+                state_mod.transition_workflow_status(state, "PAUSED")
+            except state_mod.InvalidTransitionError:
+                pass
+            state_mod.save(str(_state_path(project)), state)
+            print(f"[Spec Master] {phase} paused: user decision required.")
+            checks = (record.get("structured_result") or {}).get("checks")
+            if checks:
+                print(f"[Spec Master] {phase} checks: {checks}")
+            return "PAUSED"
 
         if execution["active_mode"] == "native":
             for event in result["events"]:
@@ -219,7 +316,8 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
             state_mod.save(str(_state_path(project)), state)
 
         if result["status"] == "PASSED":
-            print(f"[Spec Master] {phase} attempt {attempt_number - start_number + 1}/{max_attempts} passed.")
+            print(f"[Spec Master] {phase} attempt {used + 1}/{max_attempts} passed "
+                  f"({result['reason'] or 'artifact_updated'}).")
             if phase == "constitution":
                 state["constitution"] = {"status": "VALIDATED", "path": expected_artifacts[0]}
             _promote_feature_phase(state, feature_id, phase)
@@ -242,21 +340,38 @@ def _drive_workflow(state: dict, project: Path, feature_id: str | None) -> int:
         return 2
 
     blocked_phase = None
+    paused_phase = None
     for phase in PHASES:
         status = _run_phase_with_attempts(state, project, phase, feature_id)
         if status == "BLOCKED":
             blocked_phase = phase
             break
+        if status == "PAUSED":
+            paused_phase = phase
+            break
 
-    workflow_status = "BLOCKED" if blocked_phase else "COMPLETED"
-    try:
-        state_mod.transition_workflow_status(state, workflow_status)
-        state_mod.save(str(_state_path(project)), state)
-    except state_mod.InvalidTransitionError:
-        pass
+    if paused_phase:
+        workflow_status = "PAUSED"
+    elif blocked_phase:
+        workflow_status = "BLOCKED"
+    else:
+        workflow_status = "COMPLETED"
+
+    if workflow_status != "PAUSED":
+        # _run_phase_with_attempts already set state["status"] = "PAUSED"
+        # itself (and saved) — don't overwrite it here.
+        try:
+            state_mod.transition_workflow_status(state, workflow_status)
+            state_mod.save(str(_state_path(project)), state)
+        except state_mod.InvalidTransitionError:
+            pass
 
     phases_summary = {phase: _phase_status(state, phase) for phase in PHASES}
     attempts_summary = {phase: len(attempts) for phase, attempts in state["attempts"].items()}
+    outcomes = {
+        phase: (attempts[-1].get("outcome") if attempts else None)
+        for phase, attempts in state["attempts"].items()
+    }
     validate_attempts = state["attempts"].get("validate", [])
     quality_gates = (validate_attempts[-1].get("quality_gates") if validate_attempts else None) or []
 
@@ -266,7 +381,9 @@ def _drive_workflow(state: dict, project: Path, feature_id: str | None) -> int:
         "mode_transitions": state["execution"]["mode_transitions"],
         "phases": phases_summary,
         "blocked_phase": blocked_phase,
+        "paused_phase": paused_phase,
         "attempts_summary": attempts_summary,
+        "outcomes": outcomes,
         "quality_gates": quality_gates,
     }
     _print_json(report)

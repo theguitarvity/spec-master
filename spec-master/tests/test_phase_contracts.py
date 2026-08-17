@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import shutil
 import tempfile
@@ -98,6 +99,96 @@ class PhaseContractsTests(unittest.TestCase):
         (self.tmp / ".spec-master" / "logs" / "x.jsonl").write_text("x", encoding="utf-8")
 
         self.assertEqual(phase_contracts.snapshot(self.tmp), {})
+
+    # --- PHASE_POLICY (§16 test_phase_contracts.py item 1) ------------------
+
+    def test_phase_policy_classifies_every_phase(self):
+        self.assertEqual(phase_contracts.PHASE_POLICY["constitution"], "produce-or-update")
+        self.assertEqual(phase_contracts.PHASE_POLICY["specify"], "produce-or-update")
+        self.assertEqual(phase_contracts.PHASE_POLICY["clarify"], "inspect-or-update")
+        self.assertEqual(phase_contracts.PHASE_POLICY["plan"], "produce-or-update")
+        self.assertEqual(phase_contracts.PHASE_POLICY["tasks"], "produce-or-update")
+        self.assertEqual(phase_contracts.PHASE_POLICY["analyze"], "inspect-or-update")
+        self.assertEqual(phase_contracts.PHASE_POLICY["implement"], "execute")
+        self.assertEqual(phase_contracts.PHASE_POLICY["validate"], "produce-or-update")
+
+    # --- resolve_active_feature_dir (§16 items 2-3) -------------------------
+
+    def _write_feature_json(self, feature_directory) -> None:
+        (self.tmp / ".specify").mkdir(parents=True, exist_ok=True)
+        (self.tmp / ".specify" / "feature.json").write_text(
+            json.dumps({"feature_directory": feature_directory}), encoding="utf-8",
+        )
+
+    def test_resolves_valid_feature_json(self):
+        (self.tmp / "specs" / "002-demo").mkdir(parents=True)
+        self._write_feature_json("specs/002-demo")
+        resolved = phase_contracts.resolve_active_feature_dir(self.tmp)
+        self.assertEqual(resolved, (self.tmp / "specs" / "002-demo").resolve())
+
+    def test_missing_feature_json_raises(self):
+        with self.assertRaises(phase_contracts.ActiveFeatureUnresolved):
+            phase_contracts.resolve_active_feature_dir(self.tmp)
+
+    def test_dotdot_feature_directory_rejected(self):
+        self._write_feature_json("../escape")
+        with self.assertRaises(phase_contracts.ActiveFeatureUnresolved):
+            phase_contracts.resolve_active_feature_dir(self.tmp)
+
+    def test_absolute_feature_directory_rejected(self):
+        self._write_feature_json("/etc/passwd")
+        with self.assertRaises(phase_contracts.ActiveFeatureUnresolved):
+            phase_contracts.resolve_active_feature_dir(self.tmp)
+
+    def test_symlink_escaping_feature_directory_rejected(self):
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        (self.tmp / "specs").mkdir()
+        (self.tmp / "specs" / "002-demo").symlink_to(outside, target_is_directory=True)
+        self._write_feature_json("specs/002-demo")
+        with self.assertRaises(phase_contracts.ActiveFeatureUnresolved):
+            phase_contracts.resolve_active_feature_dir(self.tmp)
+
+    def test_invalid_json_feature_file_rejected(self):
+        (self.tmp / ".specify").mkdir(parents=True)
+        (self.tmp / ".specify" / "feature.json").write_text("not json", encoding="utf-8")
+        with self.assertRaises(phase_contracts.ActiveFeatureUnresolved):
+            phase_contracts.resolve_active_feature_dir(self.tmp)
+
+    # --- clarify_result_ok / analyze_result_ok (§16 items 5-6) -------------
+
+    def test_clean_spec_is_clarify_eligible(self):
+        (self.tmp / "specs" / "002-demo").mkdir(parents=True)
+        (self.tmp / "specs" / "002-demo" / "spec.md").write_text(
+            "# Spec\n\nComplete, no markers.", encoding="utf-8",
+        )
+        self._write_feature_json("specs/002-demo")
+        self.assertTrue(phase_contracts.clarify_result_ok(self.tmp, {}))
+
+    def test_spec_with_needs_clarification_marker_not_eligible(self):
+        (self.tmp / "specs" / "002-demo").mkdir(parents=True)
+        (self.tmp / "specs" / "002-demo" / "spec.md").write_text(
+            "# Spec\n\nFR-001: system MUST [NEEDS CLARIFICATION: how?]", encoding="utf-8",
+        )
+        self._write_feature_json("specs/002-demo")
+        self.assertFalse(phase_contracts.clarify_result_ok(self.tmp, {}))
+
+    def test_clean_spec_plan_tasks_trio_is_analyze_eligible(self):
+        feature = self.tmp / "specs" / "002-demo"
+        feature.mkdir(parents=True)
+        (feature / "spec.md").write_text("# Spec\n\nComplete.", encoding="utf-8")
+        (feature / "plan.md").write_text("# Plan\n\nComplete.", encoding="utf-8")
+        (feature / "tasks.md").write_text("# Tasks\n\n- [ ] T001 do thing", encoding="utf-8")
+        self._write_feature_json("specs/002-demo")
+        self.assertTrue(phase_contracts.analyze_result_ok(self.tmp, {}))
+
+    def test_missing_plan_makes_analyze_ineligible(self):
+        feature = self.tmp / "specs" / "002-demo"
+        feature.mkdir(parents=True)
+        (feature / "spec.md").write_text("# Spec\n\nComplete.", encoding="utf-8")
+        (feature / "tasks.md").write_text("# Tasks\n\n- [ ] T001 do thing", encoding="utf-8")
+        self._write_feature_json("specs/002-demo")
+        self.assertFalse(phase_contracts.analyze_result_ok(self.tmp, {}))
 
 
 if __name__ == "__main__":

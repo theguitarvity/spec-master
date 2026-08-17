@@ -42,7 +42,7 @@
       ],
       "dependencies": [],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/001-guarded-mode-controller",
       "analyze_repair_cycles": 1,
       "phases": {
@@ -54,14 +54,67 @@
         "implement": "PASSED",
         "validate": "PASSED"
       }
+    },
+    {
+      "id": "guarded-noop-phase-validation",
+      "name": "Guarded No-op Phase Validation",
+      "description": "Fix the guarded controller so inspection phases (clarify, analyze) can pass without modifying a file when the pre-existing artifact already satisfies deterministic, phase-specific validations, without weakening any existing false-success protection.",
+      "source_requirements": [
+        "NPV-001",
+        "NPV-002",
+        "NPV-003",
+        "NPV-004",
+        "NPV-005",
+        "NPV-006",
+        "NPV-007",
+        "NPV-008",
+        "NPV-009",
+        "NPV-010",
+        "NPV-011",
+        "NPV-012"
+      ],
+      "acceptance_criteria": [
+        "each phase is classified as produce-or-update, inspect-or-update, or execute",
+        "clarify can pass without changing spec.md when the active spec is complete and unambiguous",
+        "analyze can pass without changing files when there are no blocking findings",
+        "a structured phase_result block is required to promote any no-op",
+        "the active artifact is resolved via .specify/feature.json, never an ambiguous glob",
+        "producer phases still require a change on their first valid run",
+        "missing_artifact, unchanged_artifact, and valid_noop are distinguished",
+        "user_decision_required pauses the workflow immediately without consuming an attempt",
+        "allowlists, path protection, and simulated-tool-call detection remain intact",
+        "a previously-blocked attempt can be recoverably revalidated under a new contract version",
+        "policy, contract version, outcome, and artifact hashes are recorded in attempt state",
+        "already-completed workflows remain compatible (no destructive state migration)",
+        "the existing 95-test suite from feature 1 continues to pass",
+        "the qwen-greeting-api case can leave the clarify block without artificially editing the spec",
+        "the final report distinguishes artifact_updated from no_changes_required"
+      ],
+      "dependencies": [
+        "guarded-mode-controller"
+      ],
+      "branch": null,
+      "status": "COMPLETED",
+      "spec_directory": "specs/002-guarded-noop-phase-validation",
+      "phases": {
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
+      },
+      "analyze_repair_cycles": 1
     }
   ],
   "quality_gates": [],
   "fingerprint": {
     "guarded-mode-spec.md": "39334e7601310e3cf680992d2000479c291c72c0460e4577ec82b1a3a87159aa",
-    "app-features.md": "9ccdb9245193e3b8d68f7413acc6190c1c3983a317ddc21d8019cf04771a9a81",
-    "project-goals.md": "65b4080feb167b53f079006ce10e9c8d97f55eac6f851a264b09ee6b36ed41cd",
-    "tech-stack.md": "9c24ecc1c6a035ff68c7c57eb8abb3a06886216c8ade8339b8f53d6562cee80f"
+    "spec.md": "001a9e66284e8fe3765142345ca4e61742bf682480fe80145d43a2600ff9c330",
+    "app-features.md": "b61f00e0b8b632b3dd0e48e6c7d2dcf73aa27a59f76aab91b069b987c682095d",
+    "project-goals.md": "40295ecd43d2195f838e91d598e2da24175043e1c309d6512daa119c6b0142a8",
+    "tech-stack.md": "f40064c1318bc7e8188152ce78dd3b257983ac5cf1e474f9d27583b8fc6ea2c5"
   },
   "traceability": [
     {
@@ -182,6 +235,126 @@
       "plan": "specs/001-guarded-mode-controller/plan.md",
       "task": "specs/001-guarded-mode-controller/tasks.md",
       "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-001",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-002",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-003",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-004",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-005",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-006",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-007",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-008",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-009",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-010",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-011",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "requirement": "NPV-012",
+      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
+      "feature": "guarded-noop-phase-validation",
+      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
+      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
+      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
+      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
       "status": "IMPLEMENTED"
     }
   ]

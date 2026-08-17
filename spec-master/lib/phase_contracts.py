@@ -8,8 +8,28 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import json
 import re
 from pathlib import Path
+
+# Bumped whenever the phase-contract semantics change in a way that could
+# retroactively re-validate a previously-blocked attempt (resume's
+# contract-revalidation, specs/002-guarded-noop-phase-validation/spec.md
+# §11-12). Version 1 is implicit: any attempt recorded before this
+# feature shipped has no `contract_version` field at all.
+PHASE_CONTRACT_VERSION = 2
+
+# Result policy per phase (specs/002-guarded-noop-phase-validation/spec.md §4).
+PHASE_POLICY = {
+    "constitution": "produce-or-update",
+    "specify": "produce-or-update",
+    "clarify": "inspect-or-update",
+    "plan": "produce-or-update",
+    "tasks": "produce-or-update",
+    "analyze": "inspect-or-update",
+    "implement": "execute",
+    "validate": "produce-or-update",
+}
 
 PHASE_ARTIFACTS = {
     "constitution": (".specify/memory/constitution.md",),
@@ -148,3 +168,67 @@ def placeholder_artifacts(project: Path, phase: str) -> list[str]:
             if any(marker.search(text) for marker in _PLACEHOLDER_PATTERNS):
                 placeholders.append(path.relative_to(project).as_posix())
     return sorted(placeholders)
+
+
+class ActiveFeatureUnresolved(Exception):
+    pass
+
+
+def resolve_active_feature_dir(project: Path) -> Path:
+    """Resolve the active feature directory from `.specify/feature.json`.
+
+    Never trusts a raw `specs/*/...` glob (which is ambiguous once a
+    project has more than one feature directory — specs/002-guarded-noop-
+    phase-validation/spec.md §7). Raises `ActiveFeatureUnresolved` for a
+    missing/invalid file, an absolute or `..`-containing
+    `feature_directory`, or one that resolves (including via a symlink)
+    outside the project root.
+    """
+    project = Path(project).resolve()
+    feature_json_path = project / ".specify" / "feature.json"
+    try:
+        data = json.loads(feature_json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise ActiveFeatureUnresolved(f"feature.json missing or invalid: {exc}") from exc
+
+    feature_directory = data.get("feature_directory") if isinstance(data, dict) else None
+    if not feature_directory or not isinstance(feature_directory, str):
+        raise ActiveFeatureUnresolved("feature_directory missing or empty in feature.json")
+
+    candidate = Path(feature_directory)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise ActiveFeatureUnresolved(f"feature_directory is not a safe relative path: {feature_directory!r}")
+
+    resolved = (project / candidate).resolve()
+    try:
+        resolved.relative_to(project)
+    except ValueError as exc:
+        raise ActiveFeatureUnresolved(f"feature_directory resolves outside the project: {feature_directory!r}") from exc
+    return resolved
+
+
+def _has_blocking_placeholder(path: Path) -> bool:
+    if not path.is_file() or not path.stat().st_size:
+        return True  # missing/empty counts as "not ready", same as a placeholder
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return any(marker.search(text) for marker in _PLACEHOLDER_PATTERNS)
+
+
+def clarify_result_ok(project: Path, structured_result: dict) -> bool:
+    """Filesystem-level conditions 5-8 of spec.md §5 for a `clarify` no-op.
+
+    Conditions 1-4 (process/transcript-level) and 9-11 (outcome-level) are
+    already evaluated by `phase_runner.py` before this is called.
+    """
+    feature_dir = resolve_active_feature_dir(project)  # may raise ActiveFeatureUnresolved
+    spec_path = feature_dir / "spec.md"
+    return not _has_blocking_placeholder(spec_path)
+
+
+def analyze_result_ok(project: Path, structured_result: dict) -> bool:
+    """Filesystem-level conditions 1-2 of spec.md §8 for an `analyze` no-op."""
+    feature_dir = resolve_active_feature_dir(project)  # may raise ActiveFeatureUnresolved
+    return not any(
+        _has_blocking_placeholder(feature_dir / name)
+        for name in ("spec.md", "plan.md", "tasks.md")
+    )

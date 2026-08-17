@@ -114,10 +114,115 @@ Ver `## Testes obrigatórios` da spec original
 de integração com agente falso, e um smoke test opcional não bloqueante com
 `qwen-todo-api`.
 
+### Feature 2 — guarded-noop-phase-validation
+
+#### Objective
+
+Corrigir o controlador guarded para que fases de inspeção (`clarify`,
+`analyze`) possam ser aprovadas sem alterar arquivo quando o artefato
+preexistente já satisfizer validações determinísticas específicas da
+fase — sem enfraquecer nenhuma proteção existente contra falso sucesso.
+Bug real encontrado ao rodar o case `qwen-greeting-api` em modo `guarded`:
+`clarify` foi incorretamente bloqueado (`missing_artifact`) mesmo com um
+`spec.md` completo e sem ambiguidades, porque o controlador hoje exige
+`required_artifact_changed` para toda fase, sem distinguir "falso
+sucesso" de "no-op válido".
+
+#### Expected behavior
+
+- Cada fase ganha uma política explícita em `phase_contracts.py`:
+  `produce-or-update` (`constitution`, `specify`, `plan`, `tasks`,
+  `validate` — exige alteração), `inspect-or-update` (`clarify`,
+  `analyze` — pode concluir sem alteração sob condições determinísticas),
+  `execute` (`implement` — critérios próprios, não a regra genérica).
+- `clarify` só passa sem alteração quando TODAS as 11 condições da spec
+  original §5 forem verdadeiras (sem timeout, exit 0, sem escrita
+  proibida, sem ferramenta simulada, exatamente uma feature ativa
+  resolvida via `.specify/feature.json`, `spec.md` existe/preenchido/sem
+  placeholder/sem `[NEEDS CLARIFICATION`, resultado estruturado
+  reconhecível de "nenhuma mudança necessária", sem pedido de decisão do
+  usuário, sem erro/bloqueio declarado).
+- `analyze` só passa sem alteração quando spec/plan/tasks da feature
+  ativa existirem/estiverem preenchidos, sem placeholders bloqueantes,
+  sem timeout/erro/escrita proibida/ferramenta simulada, resultado
+  estruturado `no_changes_required` com zero achados `CRITICAL`/`HIGH` e
+  sem `USER_DECISION_REQUIRED`/`SPEC_DRIFT` aberto.
+- Resultado estruturado obrigatório para promover um no-op: bloco JSON
+  `{"phase_result": ..., ...}` emitido como texto comum no transcript,
+  com valores aceitos `artifact_updated | no_changes_required |
+  user_decision_required | failed`; o controlador extrai o último bloco
+  válido — texto fora dele nunca promove uma fase; o bloco é evidência
+  complementar, nunca substitui as verificações de filesystem.
+- Resolução do artefato ativo por `.specify/feature.json`
+  (`feature_directory`), não por glob `specs/*/spec.md`: validar que é
+  relativo ao projeto, rejeitar `..`/caminho absoluto/symlink que escape,
+  resolver `<feature_directory>/spec.md`. Ausente/inválido →
+  `active_feature_unresolved`.
+- Fases produtoras continuam exigindo criação/alteração na primeira
+  execução válida; só podem passar sem alteração numa tentativa
+  subsequente se os artefatos já existentes forem integralmente
+  validados, associados ao mesmo fingerprint de contexto, e sem evidência
+  de terem vindo de uma tentativa rejeitada por escrita proibida ou
+  escape de diretório.
+- Motivos de resultado padronizados (`missing_artifact`,
+  `placeholder_artifact`, `unchanged_artifact`, `valid_noop`,
+  `phase_result_missing`, `phase_result_invalid`,
+  `user_decision_required`, `forbidden_write`, `fake_tool_marker`,
+  `timeout`, `tool_error`). `valid_noop` é sucesso;
+  `user_decision_required` pausa o workflow (`PAUSED`) sem consumir uma
+  nova tentativa automaticamente.
+- `resume` reavalia (sem apagar histórico) uma última tentativa
+  bloqueada quando a versão do contrato de fase mudou, o motivo anterior
+  foi `missing_artifact`/`unchanged_artifact`, o artefato existe, e o
+  fingerprint do contexto não mudou — registrando uma nova entrada de
+  tentativa (`source: contract_revalidation`) sem reescrever a antiga.
+- Estado de tentativa ganha `contract_version`, `policy`, `outcome`,
+  `active_artifacts`, `artifact_hashes_before/after`, `structured_result`.
+
+#### Acceptance criteria
+
+- [ ] NPV-001: cada fase é classificada como `produce-or-update`,
+      `inspect-or-update` ou `execute`.
+- [ ] NPV-002: `clarify` pode passar sem alteração quando o spec ativo
+      estiver completo e sem ambiguidades.
+- [ ] NPV-003: `analyze` pode passar sem alteração quando não houver
+      achados bloqueantes.
+- [ ] NPV-004: resultado estruturado é exigido para promover um no-op.
+- [ ] NPV-005: o artefato é resolvido pela feature ativa
+      (`.specify/feature.json`), nunca por glob ambíguo.
+- [ ] NPV-006: fases produtoras continuam exigindo alteração.
+- [ ] NPV-007: `missing_artifact`, `unchanged_artifact` e `valid_noop`
+      são distinguidos.
+- [ ] NPV-008: `user_decision_required` pausa imediatamente sem
+      desperdiçar tentativas.
+- [ ] NPV-009: allowlists, proteção de paths e detecção de ferramenta
+      simulada continuam intactas.
+- [ ] NPV-010: uma tentativa bloqueada pelo contrato antigo pode ser
+      revalidada de forma recuperável.
+- [ ] NPV-011: política, versão do contrato, outcome e hashes são
+      registrados no estado.
+- [ ] NPV-012: workflows já concluídos continuam compatíveis (nenhuma
+      migração destrutiva de estado existente).
+- [ ] A suíte de testes atual (feature 1) continua passando integralmente.
+- [ ] O case `qwen-greeting-api` consegue sair do bloqueio de `clarify`
+      sem edição artificial no spec.
+- [ ] O relatório final diferencia `artifact_updated` de
+      `no_changes_required`.
+
+#### Test scenarios
+
+Ver `docs/spec-master/../..` — na verdade ver
+`specs/002-guarded-noop-phase-validation/spec.md` §15 (cenários A-G) e
+§16 (testes obrigatórios: 6 casos em `test_phase_contracts.py`, 7 em
+`test_phase_runner.py`, 5 em `test_controller.py`, incluindo o cenário de
+regressão G baseado no case real `qwen-greeting-api`).
+
 ## Cross-feature requirements
 
-- Não há outras features nesta execução — a spec descreve uma única
-  entrega coesa (o controlador guarded + os três modos).
+- Feature 2 (`guarded-noop-phase-validation`) depende da Feature 1
+  (`guarded-mode-controller`): ela modifica `phase_contracts.py` e
+  `phase_runner.py` já criados pela Feature 1 e não pode regredir nenhum
+  dos testes/garantias já entregues por ela.
 
 ## Quality requirements
 
@@ -128,6 +233,13 @@ de integração com agente falso, e um smoke test opcional não bloqueante com
   próprio controlador (RNF).
 - A adição não deve alterar o comportamento de `--mode native` (RNF).
 - O controlador deve usar Python stdlib sempre que possível (RNF).
+- Toda validação de no-op deve ser determinística e testável sem LLM (RNF,
+  Feature 2).
+- O parser do resultado estruturado não deve executar conteúdo do
+  transcript; JSON inválido deve ser rejeitado com segurança; paths
+  informados pelo agente são não confiáveis (RNF, Feature 2).
+- A correção da Feature 2 não pode reduzir as proteções de fases
+  produtoras já entregues pela Feature 1 (RNF, Feature 2).
 
 ## Non-goals
 
@@ -140,6 +252,11 @@ de integração com agente falso, e um smoke test opcional não bloqueante com
 - Suportar, neste primeiro incremento, todos os agentes do registro do Spec
   Kit em modo protegido (apenas OpenCode inicialmente; arquitetura não deve
   impedir adaptadores futuros).
+- (Feature 2) Confiar irrestritamente na resposta textual do modelo;
+  aprovar automaticamente ambiguidades de produto; alterar comandos do
+  GitHub Spec Kit; remover allowlists ou snapshots; considerar timeout
+  como no-op válido; reavaliar semanticamente toda a especificação usando
+  outro LLM; mudar a política de tentativas global.
 
 ## Dependencies
 
@@ -150,6 +267,10 @@ de integração com agente falso, e um smoke test opcional não bloqueante com
   integrado ao novo contrato de fases per §19 da spec original).
 - `spec-master/lib/discovery.py` já estendido (não commitado) para localizar
   comandos `speckit.*` em `.opencode/commands` além de `.claude/commands`.
+- Feature 2 depende inteiramente dos módulos entregues pela Feature 1
+  (`controller.py`, `execution_mode.py`, `phase_contracts.py`,
+  `phase_runner.py`, `opencode_runner.py`) e da suíte de testes existente
+  (95 testes) permanecer verde.
 
 ## Open questions
 
@@ -182,3 +303,18 @@ de integração com agente falso, e um smoke test opcional não bloqueante com
 | Critérios de aceite | guarded-mode-spec.md §17 | EXPLICIT |
 | `opencode_runner.py` e discovery multi-integração já existem no repo | leitura do repositório (`git status`, `git diff`) | DISCOVERED_FROM_CODEBASE |
 | Nome/local do `run.lock` e do timeout de stale-lock | inferência a partir de §12 | INFERRED |
+| Bug real: `clarify` bloqueado com `missing_artifact` apesar de spec completo | specs/002-guarded-noop-phase-validation/spec.md §1 | EXPLICIT |
+| Classificação de fases: `produce-or-update`/`inspect-or-update`/`execute` | specs/002-guarded-noop-phase-validation/spec.md §4 | EXPLICIT |
+| Regras de no-op para `clarify` (11 condições) | specs/002-guarded-noop-phase-validation/spec.md §5 | EXPLICIT |
+| Resultado estruturado (`phase_result`) e extração do último bloco válido | specs/002-guarded-noop-phase-validation/spec.md §6 | EXPLICIT |
+| Resolução do artefato ativo via `.specify/feature.json` | specs/002-guarded-noop-phase-validation/spec.md §7 | EXPLICIT |
+| Regras de no-op para `analyze` | specs/002-guarded-noop-phase-validation/spec.md §8 | EXPLICIT |
+| Regras para fases produtoras (não regredir) | specs/002-guarded-noop-phase-validation/spec.md §9 | EXPLICIT |
+| Motivos de resultado padronizados | specs/002-guarded-noop-phase-validation/spec.md §10 | EXPLICIT |
+| Retomada após bloqueio incorreto (revalidação de contrato) | specs/002-guarded-noop-phase-validation/spec.md §11 | EXPLICIT |
+| Novos campos de estado por tentativa | specs/002-guarded-noop-phase-validation/spec.md §12 | EXPLICIT |
+| Requisitos funcionais NPV-001..NPV-012 | specs/002-guarded-noop-phase-validation/spec.md §13 | EXPLICIT |
+| Requisitos não funcionais | specs/002-guarded-noop-phase-validation/spec.md §14 | EXPLICIT |
+| Cenários de aceite A-G | specs/002-guarded-noop-phase-validation/spec.md §15 | EXPLICIT |
+| Testes obrigatórios | specs/002-guarded-noop-phase-validation/spec.md §16 | EXPLICIT |
+| Módulos afetados/novos já existem em `spec-master/lib/` (Feature 1) | leitura do repositório | DISCOVERED_FROM_CODEBASE |

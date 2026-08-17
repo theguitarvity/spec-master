@@ -271,6 +271,209 @@ class TestFullWorkflow(ControllerTestCase):
         self.assertIn("quality_gates", printed)
 
 
+def _clarify_noop_step(spec_content="# Spec\n\nComplete, no markers.") -> FakeAgentStep:
+    structured = json.dumps({
+        "phase_result": "no_changes_required",
+        "checks": {"needs_clarification_markers": 0, "user_decision_required": False},
+    })
+    # No write to spec.md at all — this is the point of a no-op.
+    return FakeAgentStep(writes={}, stdout=structured)
+
+
+class TestPaused(ControllerTestCase):
+    # §16 test_controller.py item 2: user_decision_required pauses without
+    # consuming a new attempt.
+    def test_user_decision_required_pauses_without_burning_attempt(self):
+        state = self._new_state(mode="guarded", max_attempts=1)
+        step = FakeAgentStep(writes={}, stdout=json.dumps({"phase_result": "user_decision_required"}))
+        with patch("phase_runner.subprocess.run", side_effect=fake_subprocess_run([step], self.tmp)):
+            status = controller._run_phase_with_attempts(state, self.tmp, "clarify", feature_id=None)
+        self.assertEqual(status, "PAUSED")
+        self.assertEqual(state["status"], "PAUSED")
+        attempts = state["attempts"]["clarify"]
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["reason"], "user_decision_required")
+        # The attempt budget (max_attempts=1) was NOT consumed by the pause.
+        self.assertEqual(controller._consumed_attempts(attempts), 0)
+
+
+class TestContractRevalidation(ControllerTestCase):
+    # §16 test_controller.py items 3-4; Cenário G; acceptance criterion 8.
+    def test_resume_revalidates_a_pre_feature_blocked_clarify_attempt(self):
+        state = self._new_state(mode="guarded", max_attempts=1)
+        # Simulate a real spec.md already complete on disk (as it would be
+        # after a successful `specify`), and an old, pre-this-feature
+        # attempt record: no contract_version, blocked as missing_artifact,
+        # with a transcript that (since this feature didn't exist yet) has
+        # no structured phase_result block at all.
+        feature_dir = self.tmp / "specs" / "001-demo"
+        feature_dir.mkdir(parents=True)
+        (feature_dir / "spec.md").write_text("# Spec\n\nComplete, no markers.", encoding="utf-8")
+        (self.tmp / ".specify").mkdir(parents=True)
+        (self.tmp / ".specify" / "feature.json").write_text(
+            json.dumps({"feature_directory": "specs/001-demo"}), encoding="utf-8",
+        )
+        old_transcript = self.tmp / ".spec-master" / "logs" / "old-clarify.jsonl"
+        old_transcript.parent.mkdir(parents=True)
+        old_transcript.write_text("looks complete to me, nothing to change", encoding="utf-8")
+        context_hash = controller._context_hash(self.tmp, state["context"])
+        state["attempts"]["clarify"] = [{
+            "number": 1,
+            "status": "FAILED",
+            "reason": "missing_artifact",
+            "transcript": str(old_transcript),
+            "forbidden_writes": [],
+            "events": [],
+            "context_hash": context_hash,
+            # deliberately no contract_version key — a pre-feature record.
+        }]
+
+        # The old transcript has no structured result, so the cheap
+        # revalidation can't apply — expect a fall-through to a real,
+        # live attempt, which this time succeeds via the new no-op path.
+        with patch("phase_runner.subprocess.run",
+                   side_effect=fake_subprocess_run([_clarify_noop_step()], self.tmp)):
+            status = controller._run_phase_with_attempts(state, self.tmp, "clarify", feature_id=None)
+
+        self.assertEqual(status, "PASSED")
+        attempts = state["attempts"]["clarify"]
+        self.assertEqual(len(attempts), 2)
+        # The original blocked entry must survive untouched.
+        self.assertEqual(attempts[0]["reason"], "missing_artifact")
+        self.assertEqual(attempts[0]["status"], "FAILED")
+        self.assertEqual(attempts[1]["status"], "PASSED")
+        self.assertEqual(attempts[1]["reason"], "valid_noop")
+
+    def test_cheap_revalidation_skips_subprocess_when_old_transcript_has_result(self):
+        # A blocked attempt whose transcript *does* have a valid structured
+        # result (e.g. blocked for an unrelated reason after this feature
+        # shipped) is promoted with zero new subprocess calls.
+        state = self._new_state(mode="guarded", max_attempts=1)
+        feature_dir = self.tmp / "specs" / "001-demo"
+        feature_dir.mkdir(parents=True)
+        (feature_dir / "spec.md").write_text("# Spec\n\nComplete, no markers.", encoding="utf-8")
+        (self.tmp / ".specify").mkdir(parents=True)
+        (self.tmp / ".specify" / "feature.json").write_text(
+            json.dumps({"feature_directory": "specs/001-demo"}), encoding="utf-8",
+        )
+        old_transcript = self.tmp / ".spec-master" / "logs" / "old-clarify.jsonl"
+        old_transcript.parent.mkdir(parents=True)
+        old_transcript.write_text(json.dumps({
+            "phase_result": "no_changes_required",
+            "checks": {"needs_clarification_markers": 0, "user_decision_required": False},
+        }), encoding="utf-8")
+        context_hash = controller._context_hash(self.tmp, state["context"])
+        state["attempts"]["clarify"] = [{
+            "number": 1,
+            "status": "FAILED",
+            "reason": "unchanged_artifact",
+            "transcript": str(old_transcript),
+            "forbidden_writes": [],
+            "events": [],
+            "context_hash": context_hash,
+            "contract_version": 1,
+        }]
+
+        with patch("phase_runner.subprocess.run") as mocked_run:
+            status = controller._run_phase_with_attempts(state, self.tmp, "clarify", feature_id=None)
+            mocked_run.assert_not_called()
+
+        self.assertEqual(status, "PASSED")
+        attempts = state["attempts"]["clarify"]
+        self.assertEqual(attempts[-1]["source"], "contract_revalidation")
+
+
+class TestFullWorkflowWithNoops(ControllerTestCase):
+    # §16 test_controller.py item 5.
+    def test_workflow_completes_with_clarify_and_analyze_noops(self):
+        steps = [
+            _happy_step("constitution"),
+            _happy_step("specify"),
+            _clarify_noop_step(),
+            _happy_step("plan"),
+            _happy_step("tasks"),
+            FakeAgentStep(writes={}, stdout=json.dumps({
+                "phase_result": "no_changes_required",
+                "checks": {"critical_findings": 0, "high_findings": 0, "spec_drift": False,
+                           "user_decision_required": False},
+            })),
+            _happy_step("implement"),
+            _happy_step("validate"),
+        ]
+        args = controller.build_parser().parse_args([
+            "run", "--project", str(self.tmp), "--context", "context.md",
+            "--mode", "guarded", "--model", "fake-model", "--max-attempts", "1",
+        ])
+        with patch("phase_runner.subprocess.run", side_effect=fake_subprocess_run(steps, self.tmp)):
+            with patch("sys.stdout"):
+                exit_code = controller.cmd_run(args)
+
+        self.assertEqual(exit_code, 0)
+        state = state_mod.load(str(self.tmp / ".spec-master" / "state.json"))
+        self.assertEqual(state["status"], "COMPLETED")
+        self.assertEqual(state["attempts"]["clarify"][-1]["reason"], "valid_noop")
+        self.assertEqual(state["attempts"]["analyze"][-1]["reason"], "valid_noop")
+
+
+class TestOutcomesInReport(ControllerTestCase):
+    # spec.md §18 criterion 9 — analyze finding H1 fix.
+    def test_report_distinguishes_artifact_updated_from_no_changes_required(self):
+        steps = [
+            _happy_step("constitution"),
+            _happy_step("specify"),
+            _clarify_noop_step(),
+            _happy_step("plan"),
+            _happy_step("tasks"),
+            _happy_step("analyze"),
+            _happy_step("implement"),
+            _happy_step("validate"),
+        ]
+        args = controller.build_parser().parse_args([
+            "run", "--project", str(self.tmp), "--context", "context.md",
+            "--mode", "guarded", "--model", "fake-model", "--max-attempts", "1",
+        ])
+        with patch("phase_runner.subprocess.run", side_effect=fake_subprocess_run(steps, self.tmp)):
+            with patch("builtins.print") as mocked_print:
+                controller.cmd_run(args)
+        final_payload = json.loads(mocked_print.call_args.args[0])
+        self.assertEqual(final_payload["outcomes"]["specify"], "artifact_updated")
+        self.assertEqual(final_payload["outcomes"]["clarify"], "no_changes_required")
+
+
+class TestCompatibilityWithFeature1Only(ControllerTestCase):
+    # NPV-012 — analyze finding M1.
+    def test_loading_a_pre_feature_completed_state_does_not_crash(self):
+        state = self._new_state(mode="guarded", max_attempts=2)
+        state["status"] = "COMPLETED"
+        old_style_attempt = {
+            "number": 1,
+            "status": "PASSED",
+            "reason": None,
+            "events": [],
+            "transcript": str(self.tmp / "nonexistent.jsonl"),
+            "changed_paths": [".specify/memory/constitution.md"],
+            "forbidden_writes": [],
+            "quality_gates": None,
+            "started_at": "2026-08-01T00:00:00Z",
+            "finished_at": "2026-08-01T00:00:05Z",
+            "context_hash": "deadbeef",
+            # no contract_version/policy/outcome/active_artifacts/structured_result/source
+        }
+        state["attempts"] = {"constitution": [old_style_attempt]}
+        state_mod.save(str(self.tmp / ".spec-master" / "state.json"), state)
+
+        args = controller.build_parser().parse_args(["status", "--project", str(self.tmp)])
+        with patch("builtins.print") as mocked_print:
+            exit_code = controller.cmd_status(args)
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(mocked_print.call_args.args[0])
+        self.assertEqual(payload["phases"]["constitution"], "PASSED")
+
+        self.assertIsNone(
+            controller._try_contract_revalidation(self.tmp, "constitution", [old_style_attempt], "deadbeef")
+        )
+
+
 class TestStatus(ControllerTestCase):
     def test_status_with_no_state_file_returns_empty_payload(self):
         args = controller.build_parser().parse_args(["status", "--project", str(self.tmp)])

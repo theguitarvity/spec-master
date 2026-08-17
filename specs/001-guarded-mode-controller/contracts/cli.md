@@ -38,12 +38,19 @@ python3 spec-master/lib/controller.py run \
     "phases": {"constitution": "PASSED", "specify": "PASSED", "...": "..."},
     "blocked_phase": null,
     "attempts_summary": {"constitution": 1, "specify": 2, "...": 1},
-    "quality_gates": [{"name": "...", "command": "...", "result": "PASSED", "exit_code": 0, "blocking": true}]
+    "quality_gates": [{"name": "...", "command": "...", "result": "PASSED", "exit_code": 0, "blocking": true}],
+    "outcomes": {"constitution": "artifact_updated", "clarify": "no_changes_required", "...": "..."}
   }
   ```
   `quality_gates` is `[]` until the `validate` phase has run at least once
   (it is populated by `validate`'s attempt, per `data-model.md`'s
   "`validate` phase behavior" note — not by any other phase).
+  `outcomes` (added by `specs/002-guarded-noop-phase-validation/`) maps
+  each phase to its last attempt's `outcome` field
+  (`artifact_updated | no_changes_required | user_decision_required |
+  failed | null`) — distinct from `phases`, which reports `status`
+  (`PASSED`/`FAILED`/`BLOCKED`/`PENDING`), so the report can
+  differentiate an ordinary pass from a validated no-op.
 
 ## `resume`
 

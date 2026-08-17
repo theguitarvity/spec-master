@@ -41,6 +41,13 @@ Ver `## Escopo` — Incluído / Fora do escopo em
 `[[app-features]]`. Primeiro incremento suporta apenas a integração
 OpenCode; a arquitetura não deve impedir adaptadores futuros.
 
+Feature 2 (`guarded-noop-phase-validation`) restringe seu escopo à
+correção de um bug real do controlador entregue pela Feature 1: fases de
+inspeção (`clarify`, `analyze`) sendo incorretamente bloqueadas por
+exigirem alteração de arquivo mesmo quando o resultado válido é "nenhuma
+mudança necessária". Ver `## Escopo` em
+`specs/002-guarded-noop-phase-validation/spec.md` §3.
+
 ## Delivery Approach
 
 Trunk-based: trabalho direto em `main`, feature isolada logicamente em
@@ -68,11 +75,18 @@ README/adapters/instalador global.
    integração com agente falso.
 5. O case pequeno (`qwen-todo-api`) produz um relatório que distingue
    corretamente o sucesso do workflow do desempenho do modelo avaliado.
+6. (Feature 2) Fases de inspeção (`clarify`, `analyze`) aceitam no-op
+   válido sob contrato determinístico, sem enfraquecer nenhuma proteção
+   de fases produtoras contra falso sucesso.
+7. (Feature 2) O case real `qwen-greeting-api` sai do bloqueio de
+   `clarify` sem edição artificial no spec.
 
 ## Success Criteria
 
 Ver `docs/spec-master/guarded-mode-spec.md` §17 (Critérios de aceite,
 9 itens) — reproduzidos como acceptance criteria em `[[app-features]]`.
+Ver `specs/002-guarded-noop-phase-validation/spec.md` §18 (Critérios de
+aceite, 9 itens) para a Feature 2.
 
 ## Constraints
 
