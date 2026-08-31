@@ -3,12 +3,18 @@
 Agentic orchestrator for the GitHub Spec Kit workflow. One invocation drives
 `constitution → specify → clarify → plan → tasks → analyze (+repair) →
 implement → validate` across one or more features, with a tested,
-model-agnostic core underneath.
+model-agnostic core underneath. Team Mode adds guided intake, multi-agent
+roles, technical workstreams, peer review, and delivery metrics without
+replacing the Spec Kit spine.
 
 ## Usage
 
 ```text
 /spec-master <context-file>
+```
+
+```text
+/spec-master new
 ```
 
 Works out of the box only inside *this* repo (project-local entrypoints), or
@@ -37,13 +43,16 @@ classified `EXPLICIT` / `INFERRED` / `DISCOVERED_FROM_CODEBASE` /
 
 ```text
 Context
+  → Guided intake when no context exists
   → Discovery (read-only repo scan)
   → Spec Kit check + Git strategy question (once, batched into one prompt)
   → Normalize (app-features.md / project-goals.md / tech-stack.md)
   → Constitution
   → Feature discovery + dependency ordering
+  → Team Mode workstreams (optional/adopted)
   → per feature: Specify → Clarify → Plan → Tasks → Analyze (+repair, max 3) → Implement → Validate
   → Quality gates
+  → Metrics summary
   → Traceability matrix
   → Final report (SUCCESS | PARTIAL | BLOCKED | FAILED)
 ```
@@ -97,6 +106,10 @@ the context/normalized documents against the one stored at the last run:
 ```text
 .spec-master/
 ├── context/{app-features,project-goals,tech-stack}.md   # normalized context layer
+├── context.generated.md                                  # created by guided intake when needed
+├── workstreams.json                                      # Team Mode packages, owners, reviewers
+├── team/{roles,adoption-report}.json|md
+├── metrics/rounds.json
 ├── state.json                                            # persistent checkpoint
 ├── reports/{discovery,traceability,final-report}.md
 └── logs/workflow.md
@@ -114,8 +127,10 @@ spec-master/                         neutral, top-level package — NOT inside .
 ├── adapters/{claude-code,copilot,codex,qwen,generic}.md
 ├── templates/                       normalized-doc templates + per-phase prompt skeletons
 ├── lib/                             deterministic core, Python 3 stdlib, zero dependencies
-│   ├── cli.py                       state | fingerprint | discovery | features | git-strategy | gates | constitution | traceability
+│   ├── cli.py                       state | fingerprint | discovery | features | git-strategy | gates | constitution | traceability | team | metrics
 │   ├── adapters_gen.py              generates entrypoints for every non-bespoke Spec Kit agent
+│   ├── team_model.py                Team Mode roles, guided intake, adoption plan, workstreams, peer review
+│   ├── metrics.py                   round token usage and delivery-speed calculations
 │   ├── state.py, fingerprint.py, discovery.py, feature_model.py,
 │   │   git_strategy.py, quality_gates.py, constitution_diff.py, traceability.py
 └── tests/                           unittest suite, no LLM required
@@ -123,7 +138,8 @@ spec-master/                         neutral, top-level package — NOT inside .
 .claude/commands/spec-master.md      Claude Code entrypoint ($ARGUMENTS, AskUserQuestion) — pointer only
 .claude/skills/spec-master/SKILL.md  Claude Code skill auto-discovery pointer — same, no logic
 .github/skills/spec-master/SKILL.md  GitHub Copilot entrypoint (/spec-master) — pointer only
-.agents/skills/spec-master/SKILL.md  OpenAI Codex CLI entrypoint ($spec-master) — shared w/ agy, Zed
+.agents/skills/spec-master/SKILL.md  OpenAI Codex CLI entrypoint ($spec-master)
+.agents/agents/spec-master/agent.md  Antigravity (agy) custom agent, selected through /agents
 .qwen/commands/spec-master.md        Qwen-compatible adapter pointer — pointer only
 .gemini/ .cursor/ .bob/ .trae/ ...   generated entrypoints for the 30+ other Spec Kit agents
 ```
@@ -134,7 +150,10 @@ call `spec-master/lib/cli.py`, and here's how *this* platform asks the user /
 resolves its invocation argument." The Copilot and Codex entrypoints are
 real, working files (not placeholders): they follow the exact
 `speckit-<command>/SKILL.md`-style skills layout Spec Kit itself installs
-for each of those agents. So do the 30+ generated ones — they're rendered
+for each of those agents. Antigravity (`agy`) also gets a dedicated custom
+agent at `.agents/agents/spec-master/agent.md`, because Antigravity can
+route that through `/agents` even when it ignores a slash-command-style
+skill. So do the 30+ generated ones — they're rendered
 directly from Spec Kit's own integration registry (see
 `spec-master/adapters/generic.md`), not placeholders either. That's what
 "model-agnostic core" (CLAUDE.md §2) means in practice here: one tested
@@ -144,7 +163,8 @@ pointers for every agent Spec Kit supports.
 The split matters: everything **structural** (state transitions, staleness,
 dependency ordering, git-strategy idempotency, which build/test/lint command
 actually exists in this repo, constitution heading diff, traceability
-rendering) lives in `spec-master/lib/` and is unit-tested. Everything
+rendering, team roles/workstreams/adoption, and delivery metrics) lives in
+`spec-master/lib/` and is unit-tested. Everything
 **semantic** (reading the user's context, writing spec/plan/tasks content,
 resolving business ambiguity) stays in the agent's prompt, driven by
 `spec-master/PROTOCOL.md` and the `spec-master/templates/prompts/*.md`
@@ -158,7 +178,36 @@ Call the core directly for any structural question, from the repo root:
 python3 spec-master/lib/cli.py discovery scan --path .
 python3 spec-master/lib/cli.py gates detect --path .
 python3 spec-master/lib/cli.py git-strategy plan --strategy trunk --feature-name "Demo feature"
+python3 spec-master/lib/cli.py team intake
+python3 spec-master/lib/cli.py team adopt
+python3 spec-master/lib/cli.py metrics record-round --round-id r1 --phase tasks --started-at 2026-08-31T10:00:00Z --ended-at 2026-08-31T10:10:00Z
 ```
+
+## Team Mode
+
+Team Mode models a delivery organization around the Spec Kit workflow:
+Product Owner, Scrum Master, Architect, Tech Lead, UI/UX + Brand, Backend
+Dev, Frontend Dev, Fullstack Dev, QA, DevOps, Infrastructure, and Security.
+Spec Master remains the orchestrator. The Tech Lead owns technical
+decomposition, file/package ownership, code-conflict resolution, and final
+integration approval. Dev agents implement assigned packages only, and every
+package requires review by a different dev agent before QA validation.
+
+For a project that already has `.spec-master/state.json`, Team Mode adoption
+is state-preserving and additive. `team adopt` produces the checklist for
+mapping existing specs/tasks into `.spec-master/workstreams.json` without
+restarting, rewriting constitution, or invalidating completed phases unless
+normal fingerprint comparison proves a concrete artifact stale.
+
+## Metrics
+
+Each significant round can be recorded with `metrics record-round`: intake
+batches, Spec Kit phases, workstream packages, peer reviews, QA validation,
+and quality gates. The row stores timestamps, token counts when the adapter
+exposes them, completed packages/features, tokens per minute, packages per
+hour, and features per hour. If the platform does not expose exact token
+counts, adapters must record `0` and note that limitation instead of
+guessing. `metrics summarize` feeds the final report.
 
 ## Global installation
 
@@ -243,13 +292,13 @@ escalated to the user instead of looping forever or masking the problem.
 python3 -m unittest discover -s spec-master/tests -v
 ```
 
-45 tests cover state transitions (including the 3-cycle repair cap and the
+The tests cover state transitions (including the 3-cycle repair cap and the
 rule that a phase can't start before its predecessor `PASSED`), fingerprint
 staleness propagation, repo discovery (never inventing a command for a stack
 that has no manifest present), dependency ordering (including cycle
 detection), git-strategy idempotency and identifier preservation, quality
 gate detection per stack, constitution structural diffing, and traceability
-rendering.
+rendering, plus Team Mode and metrics primitives.
 
 ## Example walkthrough
 

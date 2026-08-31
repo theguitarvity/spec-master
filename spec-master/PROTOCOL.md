@@ -26,6 +26,13 @@ only report `FAILED — Spec Kit unavailable` (§29 of CLAUDE.md) if the user
 declines or no `specify`/`uvx` is reachable — never simulate Spec Kit's
 output as a substitute.
 
+Spec Master also supports **Team Mode**: a deterministic multi-agent delivery
+model layered around the same Spec Kit workflow. Team Mode never replaces the
+canonical `constitution -> specify -> clarify -> plan -> tasks -> analyze ->
+implement -> validate` spine; it adds role-specific discovery, technical
+work-package ownership, parallel workstream opportunities, UI/UX + brand
+direction, and peer review by another dev agent before tech-lead integration.
+
 ## Global installation
 
 This engine doesn't have to live inside a single project. `init.sh` (next to
@@ -56,8 +63,9 @@ given machine; every adapter, in every project, reads from it.
 - **Core (`spec-master/lib/cli.py`, pure Python, tested without an LLM)**:
   state machine, context fingerprint/staleness, dependency ordering,
   git-strategy planning, quality-gate command detection, constitution
-  structural diff, traceability rendering. The agent calls it via `Bash` for
-  every structural decision — never re-derive these by hand.
+  structural diff, traceability rendering, Team Mode roles, guided-intake
+  questions, and workstream/review assignment. The agent calls it via `Bash`
+  for every structural decision — never re-derive these by hand.
 - **Agent (you, running this skill)**: reading and semantically understanding
   the user's context file and the repository, writing the normalized context
   documents, generating each `speckit.*` prompt from the templates in
@@ -85,10 +93,36 @@ existing codebase. Every generated fact must carry a classification:
 
 ## 2. Protocol
 
+### Step -1 — Guided intake when no context exists
+
+If the invocation is `/spec-master`, `/spec-master new`, or `/spec-master
+novo projeto` and no context file is provided, do not fail immediately. Start
+guided intake:
+
+1. `python3 spec-master/lib/cli.py team intake`.
+2. Ask the returned questions via normal turn-taking, batched as much as the
+   platform allows and using multiple choice first, with an "other/free text"
+   escape when the user needs it.
+3. Let the Product Owner Agent shape value, scope, MVP, and prioritization.
+4. Let the UI/UX and Brand Agent shape initial experience direction, brand
+   tone, palette/typography guidance, screen map, and accessibility criteria.
+5. Let Architect and Scrum Master collect technical constraints, delivery
+   strategy, blockers, and parallelization signals.
+6. Write `.spec-master/context.generated.md` with the same source
+   classifications from §1 (`EXPLICIT`, `INFERRED`,
+   `DISCOVERED_FROM_CODEBASE`, `UNRESOLVED`).
+7. Continue the normal protocol using that generated file as the context
+   argument.
+
+This mode is for turning a raw idea into a Spec Kit-ready context. It must
+not invent commitments: unresolved answers stay unresolved and trigger the
+usual clarification gates later.
+
 ### Step 0 — Resolve input & resume check
 
 1. Resolve the context-file argument. If missing or the file doesn't exist,
-   stop and tell the user (this is not a state to persist).
+   and it was not a guided-intake invocation from Step -1, stop and tell the
+   user (this is not a state to persist).
 2. `python3 spec-master/lib/cli.py state show --path .spec-master/state.json` (if it
    fails because the file doesn't exist, this is a fresh run — go to Step 1).
 3. If state exists: recompute the fingerprint of the context file + any
@@ -102,6 +136,13 @@ existing codebase. Every generated fact must carry a classification:
      compare` need to be redone if the user resumes; never blindly redo
      everything, and never treat `implement` as auto-invalidated — assess
      impact instead (§33).
+
+If state exists and the user asks to adopt Team Mode in an already-running
+project, run `python3 spec-master/lib/cli.py team adopt` and follow its
+state-preserving checklist before resuming. Adoption is additive: it writes
+Team Mode artifacts and future gates, but it does not restart the workflow,
+rewrite the constitution, or invalidate completed phases unless the normal
+fingerprint/staleness logic proves a concrete artifact changed.
 
 ### Step 1 — Discovery (read-only, CLAUDE.md §6)
 
@@ -216,6 +257,46 @@ spec_directory: specs/<NNN-feature-id>
 cycle is a hard stop — report it, don't guess an order.
 
 ### Step 6 — Per-feature workflow (CLAUDE.md §19-27)
+
+Before entering per-feature execution, initialize Team Mode when the user
+asked for it explicitly, when guided intake created the context, or when an
+existing project adopted Team Mode:
+
+1. `python3 spec-master/lib/cli.py team roles` to load the canonical delivery
+   roles. The Spec Master remains the orchestrator; the Tech Lead Agent owns
+   technical decomposition, internal code conflicts, and integration
+   approval.
+2. During/after `tasks`, call `python3 spec-master/lib/cli.py team
+   workstreams --file <features-with-tasks.json>` and write the result to
+   `.spec-master/workstreams.json`.
+3. The workstream plan may expose safe parallel work, but each package must
+   still respect feature dependencies, Spec Kit phase gates, and analyze
+   repair rules.
+4. Dev agents implement only assigned packages:
+   - Backend Dev Agent: APIs, persistence, business rules, backend tests,
+     integrations.
+   - Frontend Dev Agent: screens, components, forms, UI state,
+     accessibility, responsive behavior, UI tests.
+   - Fullstack Dev Agent: thin vertical slices and front/back integration.
+5. Every implementation package requires peer review by a different dev
+   agent (`reviewer_agent`) before QA validation. The reviewer cannot be the
+   package owner.
+6. QA validates behavior against acceptance criteria. The Tech Lead resolves
+   code conflicts, shared-file ownership, contract ordering, and final
+   integration readiness. Spec Master records the result and controls
+   workflow status.
+
+At the end of every meaningful round (guided intake batch, phase execution,
+workstream package, peer review, QA validation, or quality gate run), record
+delivery metrics with `python3 spec-master/lib/cli.py metrics record-round`.
+Use observed timestamps and platform-provided token counts when available.
+If exact token usage is unavailable, record `0` and note that the adapter did
+not expose token accounting; never invent token counts. Append each row to
+`.spec-master/metrics/rounds.json`. Before the final report, call
+`python3 spec-master/lib/cli.py metrics summarize --file
+.spec-master/metrics/rounds.json` and include total tokens, tokens/minute,
+packages/hour, features/hour, and per-round speed in
+`.spec-master/reports/final-report.md`.
 
 For each feature id in the resolved order, drive:
 

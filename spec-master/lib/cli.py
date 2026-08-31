@@ -25,8 +25,10 @@ import discovery  # noqa: E402
 import feature_model  # noqa: E402
 import fingerprint  # noqa: E402
 import git_strategy  # noqa: E402
+import metrics  # noqa: E402
 import quality_gates  # noqa: E402
 import state as state_mod  # noqa: E402
+import team_model  # noqa: E402
 import traceability  # noqa: E402
 
 
@@ -155,6 +157,46 @@ def cmd_traceability(args: argparse.Namespace) -> int:
     raise SystemExit(f"unknown traceability action: {args.trace_action}")
 
 
+def cmd_team(args: argparse.Namespace) -> int:
+    if args.team_action == "roles":
+        _print_json({"roles": team_model.roles()})
+        return 0
+    if args.team_action == "intake":
+        _print_json(team_model.guided_intake())
+        return 0
+    if args.team_action == "adopt":
+        _print_json(team_model.adoption_plan())
+        return 0
+    if args.team_action == "workstreams":
+        features = _load_json_file(args.file)
+        _print_json(team_model.build_workstreams(features))
+        return 0
+    raise SystemExit(f"unknown team action: {args.team_action}")
+
+
+def cmd_metrics(args: argparse.Namespace) -> int:
+    if args.metrics_action == "record-round":
+        _print_json(
+            metrics.record_round(
+                round_id=args.round_id,
+                phase=args.phase,
+                started_at=args.started_at,
+                ended_at=args.ended_at,
+                input_tokens=args.input_tokens,
+                output_tokens=args.output_tokens,
+                work_packages_completed=args.work_packages_completed,
+                features_completed=args.features_completed,
+                notes=args.notes,
+            )
+        )
+        return 0
+    if args.metrics_action == "summarize":
+        rounds = _load_json_file(args.file)
+        _print_json(metrics.summarize(rounds))
+        return 0
+    raise SystemExit(f"unknown metrics action: {args.metrics_action}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spec-master-cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -249,6 +291,31 @@ def build_parser() -> argparse.ArgumentParser:
     trace_add.add_argument("--row-json", dest="row_json", default=None)
     trace_render = trace_sub.add_parser("render")
     trace_render.add_argument("--path", default=".spec-master/state.json")
+
+    p_team = sub.add_parser("team")
+    p_team.set_defaults(func=cmd_team)
+    team_sub = p_team.add_subparsers(dest="team_action", required=True)
+    team_sub.add_parser("roles")
+    team_sub.add_parser("intake")
+    team_sub.add_parser("adopt")
+    team_workstreams = team_sub.add_parser("workstreams")
+    team_workstreams.add_argument("--file", required=True, help="JSON file: feature objects with optional tasks")
+
+    p_metrics = sub.add_parser("metrics")
+    p_metrics.set_defaults(func=cmd_metrics)
+    metrics_sub = p_metrics.add_subparsers(dest="metrics_action", required=True)
+    metrics_record = metrics_sub.add_parser("record-round")
+    metrics_record.add_argument("--round-id", required=True)
+    metrics_record.add_argument("--phase", required=True)
+    metrics_record.add_argument("--started-at", required=True)
+    metrics_record.add_argument("--ended-at", required=True)
+    metrics_record.add_argument("--input-tokens", type=int, default=0)
+    metrics_record.add_argument("--output-tokens", type=int, default=0)
+    metrics_record.add_argument("--work-packages-completed", type=int, default=0)
+    metrics_record.add_argument("--features-completed", type=int, default=0)
+    metrics_record.add_argument("--notes", default=None)
+    metrics_summary = metrics_sub.add_parser("summarize")
+    metrics_summary.add_argument("--file", required=True, help="JSON file: list of round metrics")
 
     return parser
 

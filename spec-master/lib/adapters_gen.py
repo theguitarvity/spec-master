@@ -19,7 +19,8 @@ Each row is (key, dir, layout, ext, prefix, args_placeholder, note):
   key       -- Spec Kit integration key (matches ``specify integration list``)
   dir       -- project-relative directory Spec Kit itself writes into
   layout    -- "skill" (a speckit-<name>/SKILL.md-style scaffold) or
-               "command" (a single file directly under ``dir``)
+               "command" (a single file directly under ``dir``) or
+               "agent" (Antigravity custom agent at ``dir/<name>/agent.md``)
   ext       -- file extension for "command" layout (ignored for "skill")
   prefix    -- how the agent's own chat surface invokes it: "/", "$",
                or "/skill:"
@@ -51,7 +52,7 @@ DESCRIPTION = (
 class Agent:
     key: str
     dir: str
-    layout: str  # "skill" | "command"
+    layout: str  # "skill" | "command" | "agent"
     ext: str
     prefix: str  # "/" | "$" | "/skill:"
     args: str
@@ -66,7 +67,10 @@ class Agent:
 # generator: claude, copilot, codex, qwen. "generic" has no fixed directory
 # (bring-your-own-agent) and is intentionally excluded too.
 AGENTS: list[Agent] = [
-    Agent("agy", ".agents/skills", "skill", "", "/", "$ARGUMENTS",
+    Agent("agy", ".agents/agents", "agent", ".md", "/", "$ARGUMENTS",
+          note=("Antigravity may ignore slash-command-style skill invocation; "
+                "this entrypoint is a project custom agent discovered through "
+                "/agents instead."),
           label="Antigravity (agy)"),
     Agent("alquimia", ".alquimia/skills", "skill", "", "/", "$ARGUMENTS",
           label="Alquimia AI"),
@@ -287,11 +291,56 @@ def _command_body_yaml(agent: Agent, protocol: str, cli: str, templates: str) ->
     )
 
 
+def _agent_body_markdown(agent: Agent, protocol: str, cli: str, templates: str) -> str:
+    note = f"\n\n> **Note:** {agent.note}" if agent.note else ""
+    return f"""---
+name: spec-master
+description: {DESCRIPTION}
+---
+
+# Spec Master ({agent.display()} custom agent)
+
+You are the **Spec Master** custom agent for {agent.display()}. Use this
+agent when the user asks for Spec Master, `/spec-master`, `$spec-master`, a
+new guided Spec Kit project, Team Mode adoption, or multi-agent delivery
+orchestration.{note}
+
+The protocol, deterministic core, and templates are **not duplicated here**:
+
+```
+{protocol}   # protocol (source of truth) — read and follow in full
+{cli}    # deterministic core CLI
+{templates}    # normalized-doc + per-phase prompt templates
+```
+
+Antigravity specifics:
+
+1. Select this custom agent through `/agents` when Antigravity does not route
+   `/spec-master` as a slash command.
+2. Treat the user's message after selecting the agent as the invocation
+   argument. It may be `<context-file>`, `new`, `novo projeto`, or an
+   adoption request for a project already running Spec Master.
+3. Call `python3 {cli} <command> ...` for every structural decision,
+   including Team Mode (`team intake`, `team adopt`, `team workstreams`) and
+   metrics (`metrics record-round`, `metrics summarize`).
+4. Ask the user via normal Antigravity chat turns in place of
+   `AskUserQuestion`, batching related decisions into one message.
+5. Execute real Spec Kit phases through the `speckit-<phase>` entries
+   installed for Antigravity when present. If the needed phase is missing,
+   report `FAILED — Spec Kit unavailable` per `{protocol}`.
+
+Run the steps in `{protocol}` now.
+"""
+
+
 def render_files(agent: Agent, protocol: str, cli: str, templates: str) -> dict[str, str]:
     """Return {relative_path: content} for this agent, relative to its root."""
     if agent.layout == "skill":
         content = _skill_body(agent, protocol, cli, templates)
         return {f"{agent.dir}/spec-master/SKILL.md": content}
+    if agent.layout == "agent":
+        content = _agent_body_markdown(agent, protocol, cli, templates)
+        return {f"{agent.dir}/spec-master/agent{agent.ext}": content}
 
     if agent.ext == ".toml":
         content = _command_body_toml(agent, protocol, cli, templates)

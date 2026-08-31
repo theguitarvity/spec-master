@@ -22,7 +22,8 @@ reconfigures one. Instead:
   directory, file layout, extension) and `specify_cli/_invocation_style.py`
   (chat invocation prefix: `/`, `$`, or `/skill:`).
 - Running it renders every agent's real entrypoint file, in that agent's own
-  format (Markdown `SKILL.md`, Markdown command, TOML, or YAML recipe) —
+  format (Markdown `SKILL.md`, Markdown command, TOML, YAML recipe, or
+  Antigravity custom-agent Markdown) —
   content equivalent to the hand-written adapters, just generated instead of
   copy-pasted 30 times.
 - When Spec Kit changes an agent's directory or invocation style, update one
@@ -63,6 +64,7 @@ python3 spec-master/lib/adapters_gen.py generate --root <project> --engine-ref ~
 
 # Regenerate just one agent:
 python3 spec-master/lib/adapters_gen.py generate --root . --engine-ref spec-master --only gemini
+python3 spec-master/lib/adapters_gen.py generate --root . --engine-ref spec-master --only agy
 ```
 
 The generator never writes into a directory owned by a bespoke adapter
@@ -79,6 +81,12 @@ Hermes, which Spec Kit installs to `~/.hermes/skills` unconditionally).
   path in the chat message itself.
 - **Goose** (`.goose/recipes/spec-master.yaml`) is a recipe, run with
   `goose run`, not a typed slash command.
+- **Antigravity / agy** gets a project custom agent at
+  `.agents/agents/spec-master/agent.md`. Antigravity can still discover
+  workspace skills under `.agents/skills/`, but that directory is also used
+  by the bespoke Codex adapter in this repo and Antigravity may ignore the
+  slash-command-style routing. Select `spec-master` via `/agents` when the
+  slash command is ignored.
 - **Cline** and **Firebender** are IDE-based; their file is picked from a
   workflow/command list inside the IDE rather than typed.
 - **Hermes** always installs skills globally (`~/.hermes/skills`), never

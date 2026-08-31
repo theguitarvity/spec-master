@@ -5,9 +5,11 @@
 **Orquestrador agentic para o [GitHub Spec Kit](https://github.com/github/spec-kit).**
 Um único comando — `/spec-master <arquivo-de-contexto>` — conduz todo o
 ciclo *Specification-Driven Development*: `constitution → specify → clarify
-→ plan → tasks → analyze (+repair) → implement → validate`.
+→ plan → tasks → analyze (+repair) → implement → validate`. Se você ainda
+não tem contexto, `/spec-master new` guia a descoberta da ideia por chat e
+gera o contexto inicial.
 
-`45 testes automatizados` · `Python 3 stdlib, zero dependências` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
+`55 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
 
 </div>
 
@@ -24,6 +26,8 @@ ciclo *Specification-Driven Development*: `constitution → specify → clarify
 - [Referência de comandos](#referência-de-comandos)
 - [Estratégias de Git](#estratégias-de-git)
 - [Retomada e idempotência](#retomada-e-idempotência)
+- [Team Mode](#team-mode)
+- [Métricas de entrega](#métricas-de-entrega)
 - [Arquitetura](#arquitetura)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Testes](#testes)
@@ -67,6 +71,13 @@ discovery, uma spec preliminar, o que já existir — e ele:
 6. roda os quality gates reais do projeto (nunca um comando inventado);
 7. entrega uma matriz de rastreabilidade e um relatório final.
 
+No **Team Mode**, esse mesmo fluxo ganha uma camada de organização de equipe:
+PO, Scrum Master, Architect, Tech Lead, UI/UX + Brand, Backend Dev, Frontend
+Dev, Fullstack Dev, QA, DevOps, Infra e Security. O Spec Master continua
+orquestrando o Spec Kit; o Tech Lead quebra o trabalho, resolve conflitos
+técnicos e aprova integração; os dev agents implementam pacotes específicos;
+e todo pacote passa por code review de outro dev agent antes da validação.
+
 Sem inventar requisito, critério de aceite, dependência ou tecnologia que
 não esteja sustentado pelo contexto fornecido ou pelo código existente — toda
 inferência é marcada como `EXPLICIT`, `INFERRED`, `DISCOVERED_FROM_CODEBASE`
@@ -76,6 +87,10 @@ ou `UNRESOLVED`.
 
 ```text
 Context (.md)
+  │
+  ▼
+Guided intake, se nao houver contexto
+  PO · UI/UX + Brand · Architect · Scrum Master
   │
   ▼
 Discovery (read-only)
@@ -93,6 +108,10 @@ Constitution (gerada ou evoluída, nunca sobrescrita às cegas)
   │
   ▼
 Feature discovery + dependency ordering
+  │
+  ▼
+Team Mode workstreams
+  Tech Lead quebra packages · dev agents implementam · peer review obrigatório
   │
   ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -123,7 +142,7 @@ Clone (ou já estando neste repo) — nada para instalar, é tudo Python 3
 stdlib:
 
 ```bash
-python3 -m unittest discover -s spec-master/tests -v   # 45 testes, ~10ms
+python3 -m unittest discover -s spec-master/tests -v   # 55 testes, ~10ms
 ```
 
 Os entrypoints já existem neste repositório e funcionam imediatamente.
@@ -139,8 +158,8 @@ Quatro agentes têm adapter dedicado, com mecânicas próprias documentadas em
 
 Todos os **demais agentes que o [GitHub Spec Kit](https://github.com/github/spec-kit)
 suporta** (30+ — Gemini CLI, Cursor, IBM Bob, Trae, Kilo Code, Goose, Cline,
-Auggie, Devin, Factory Droid, Grok Build, RovoDev, ZCode, Zed, Kiro CLI,
-Tabnine, Forge, Kimi Code, e mais) também têm um entrypoint real e
+Auggie, Devin, Factory Droid, Grok Build, RovoDev, ZCode, Zed, Antigravity
+`agy`, Kiro CLI, Tabnine, Forge, Kimi Code, e mais) também têm um entrypoint real e
 já-versionado neste repositório — gerado, não copiado à mão, a partir da
 tabela em [`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py)
 (transcrita do próprio registro de integrações do Spec Kit, então cada
@@ -220,6 +239,15 @@ vez de travar).
 /spec-master docs/architecture-context.md
 ```
 
+```bash
+/spec-master new
+```
+
+Quando chamado sem um contexto pronto, Spec Master entra no modo guiado:
+pergunta tipo de projeto, usuario, MVP, direcao de experiencia/marca, stack
+e estrategia de entrega por multiplas escolhas, gera
+`.spec-master/context.generated.md` e entao continua o fluxo normal.
+
 O arquivo de contexto pode ter qualquer organização — Spec Master interpreta
 semanticamente, não exige headings específicos. Numa primeira execução, ele
 pergunta **uma única vez**, numa única mensagem:
@@ -247,11 +275,15 @@ tanto pelo agente quanto por você, para depurar ou inspecionar o estado:
 | `gates detect` | detecta os comandos reais de build/test/lint/coverage do projeto |
 | `constitution diff` | diff estrutural (heading a heading) entre constitution existente e proposta |
 | `traceability add\|render` | acumula e renderiza a matriz de rastreabilidade |
+| `team roles\|intake\|adopt\|workstreams` | define papeis multiagente, perguntas guiadas, adoção incremental e work packages com peer review |
+| `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada |
 
 ```bash
 python3 spec-master/lib/cli.py discovery scan --path .
 python3 spec-master/lib/cli.py gates detect --path .
 python3 spec-master/lib/cli.py git-strategy plan --strategy trunk --feature-name "Demo feature"
+python3 spec-master/lib/cli.py team intake
+python3 spec-master/lib/cli.py team adopt
 ```
 
 Referência completa de cada subcomando: [`spec-master/lib/cli.py`](spec-master/lib/cli.py) (docstring de topo) e [`spec-master/PROTOCOL.md`](spec-master/PROTOCOL.md) §0.
@@ -285,6 +317,44 @@ Toda fase administrativa é idempotente: Spec Kit já instalado não é
 reinstalado, extensão git já presente não é readicionada, constitution já
 compatível não é reescrita, feature já validada não é reimplementada.
 
+## Team Mode
+
+Team Mode adiciona uma organização multiagente sobre o fluxo canônico do
+Spec Kit, sem substituir suas fases:
+
+| Papel | Responsabilidade principal |
+|---|---|
+| Spec Master | orquestra processo, estado, rastreabilidade e gates |
+| PO Agent | escopo, valor, MVP, prioridade e decisões de negócio |
+| Scrum Master Agent | bloqueios, dependências e paralelismo seguro |
+| Architect Agent | arquitetura macro, integrações e riscos técnicos |
+| Tech Lead Agent | quebra técnica, ownership, conflitos de código e integração |
+| UI/UX + Brand Agent | experiência, fluxos, identidade visual e design system inicial |
+| Backend Dev Agent | APIs, dados, regras de negócio, integrações e testes backend |
+| Frontend Dev Agent | telas, componentes, estado, acessibilidade e testes UI |
+| Fullstack Dev Agent | slices ponta a ponta e costura front/back |
+| QA / DevOps / Infra / Security | validação, entrega operacional, ambientes e riscos |
+
+Em projeto novo, `/spec-master new` usa `team intake` para gerar o contexto.
+Em projeto que já está rodando Spec Master, `team adopt` adequa o workflow de
+forma incremental: preserva estado, constitution, decisões e fases já
+concluídas, cria `.spec-master/workstreams.json` e aplica os novos gates só
+daquele ponto em diante.
+
+## Métricas de entrega
+
+Ao final de cada rodada significativa, Spec Master registra métricas em:
+
+```text
+.spec-master/metrics/rounds.json
+```
+
+Cada rodada guarda fase, início/fim, tokens de entrada/saída quando o adapter
+expor esses dados, pacotes/features concluídos e velocidade calculada. O
+relatório final inclui total de tokens, tokens por minuto, pacotes por hora,
+features por hora e observações quando a plataforma não expõe contagem exata
+de tokens.
+
 ## Arquitetura
 
 ```text
@@ -295,7 +365,11 @@ spec-master/                    engine neutro, na raiz — fora de .claude/, .gi
 ├── templates/                  templates dos 3 docs normalizados + prompts por fase
 ├── lib/                        core determinístico, Python 3 stdlib, zero deps
 │   ├── cli.py                  state · fingerprint · discovery · features ·
-│   │                           git-strategy · gates · constitution · traceability
+│   │                           git-strategy · gates · constitution ·
+│   │                           traceability · team
+│   ├── team_model.py           Team Mode: papeis, intake, adoção, workstreams,
+│   │                           Tech Lead ownership e peer review
+│   ├── metrics.py              rodadas, tokens e velocidade de entrega
 │   └── adapters_gen.py         gera os entrypoints dos 30+ agentes não-bespoke
 │                                (tabela == registro de integrações do Spec Kit)
 └── tests/                      suíte unittest, sem LLM
@@ -303,7 +377,8 @@ spec-master/                    engine neutro, na raiz — fora de .claude/, .gi
 .claude/commands/spec-master.md      entrypoint Claude Code — $ARGUMENTS, AskUserQuestion
 .claude/skills/spec-master/          pointer de auto-discovery do Claude Code
 .github/skills/spec-master/          entrypoint GitHub Copilot
-.agents/skills/spec-master/          entrypoint OpenAI Codex CLI (compartilhado com agy/zed)
+.agents/skills/spec-master/          entrypoint OpenAI Codex CLI
+.agents/agents/spec-master/agent.md  custom agent Antigravity (agy)
 .qwen/commands/spec-master.md        entrypoint Qwen-compatible shells
 .gemini/ .cursor/ .bob/ .trae/ ...   entrypoints gerados para os demais 30+ agentes
                                       do Spec Kit (ver spec-master/lib/adapters_gen.py)
@@ -334,7 +409,7 @@ Claude Code.
 ├── docs/spec-master/README.md  referência técnica detalhada
 ├── .claude/                    entrypoints Claude Code
 ├── .github/                    entrypoint GitHub Copilot
-├── .agents/                    entrypoint OpenAI Codex CLI (+ agy, Zed — mesmo dir)
+├── .agents/                    entrypoint OpenAI Codex CLI + custom agent Antigravity
 ├── .qwen/                      entrypoint Qwen-compatible shells
 └── .gemini/ .cursor/ .bob/ ... entrypoints gerados p/ os 30+ demais agentes do Spec Kit
 ```
@@ -350,13 +425,15 @@ Para o detalhamento completo de cada arquivo do core (`state.py`,
 python3 -m unittest discover -s spec-master/tests -v
 ```
 
-45 testes, sem depender de nenhum LLM: transições de estado (incluindo o
+55 testes, sem depender de nenhum LLM: transições de estado (incluindo o
 teto de 3 ciclos de repair e a regra de que uma fase não começa antes da
 anterior ter `PASSED`), propagação de staleness por fingerprint, discovery
 de repositório (nunca inventa comando para uma stack sem manifest),
 ordenação de dependências (com detecção de ciclo), idempotência e
 preservação de identificador na estratégia de git, detecção de quality gate
-por stack, diff estrutural de constitution, renderização de rastreabilidade.
+por stack, diff estrutural de constitution, renderização de rastreabilidade,
+Team Mode com intake guiado, adoção incremental, papeis, workstreams e peer
+review, além de métricas de tokens e velocidade de entrega.
 
 ## Condições de parada
 
@@ -413,6 +490,8 @@ saída dela), mas são diretórios diferentes.
 
 - Paralelização real de features independentes (o grafo de dependências já
   suporta; a execução hoje é sequencial).
+- Execução real dos workstreams do Team Mode por subagentes conectados aos
+  adapters, usando `.spec-master/workstreams.json` como contrato.
 - Integrações Jira / Azure DevOps / GitHub Issues.
 - Dashboard/UI e MCP dedicado.
 - Acompanhar mudanças nos diretórios globais de Copilot CLI/Codex CLI (ainda

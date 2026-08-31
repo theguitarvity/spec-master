@@ -39,6 +39,14 @@ Quality gates:
 - [ ] tests
 - [ ] lint
 
+## Team Mode
+
+Mode:
+Adoption:
+Workstreams:
+Peer reviews:
+Tech Lead integration:
+
 ## Traceability
 
 Requirements: X
@@ -48,6 +56,15 @@ Uncovered: 0
 ## Quality Gates
 
 ...
+
+## Delivery Metrics
+
+Rounds:
+Total tokens:
+Tokens/minute:
+Work packages/hour:
+Features/hour:
+Token accounting notes:
 
 ## Remaining Risks
 
