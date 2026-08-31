@@ -145,9 +145,9 @@ stdlib:
 python3 -m unittest discover -s spec-master/tests -v   # 55 testes, ~10ms
 ```
 
-Os entrypoints já existem neste repositório e funcionam imediatamente.
-Quatro agentes têm adapter dedicado, com mecânicas próprias documentadas em
-[`spec-master/adapters/`](spec-master/adapters/):
+Os entrypoints locais mantidos na raiz deste repositório são só os que
+precisam funcionar imediatamente aqui: adapters dedicados, com mecânicas
+próprias documentadas em [`spec-master/adapters/`](spec-master/adapters/):
 
 | Agente | Entrypoint | Invocação |
 |---|---|---|
@@ -155,20 +155,21 @@ Quatro agentes têm adapter dedicado, com mecânicas próprias documentadas em
 | GitHub Copilot | [`.github/skills/spec-master/SKILL.md`](.github/skills/spec-master/SKILL.md) | `/spec-master <context-file>` |
 | OpenAI Codex CLI | [`.agents/skills/spec-master/SKILL.md`](.agents/skills/spec-master/SKILL.md) | `$spec-master <context-file>` |
 | Qwen-compatible shells | [`.qwen/commands/spec-master.md`](.qwen/commands/spec-master.md) | `/spec-master <context-file>` |
+| Antigravity (`agy`) | [`.agents/agents/spec-master/agent.md`](.agents/agents/spec-master/agent.md) | selecione via `/agents` |
 
 Todos os **demais agentes que o [GitHub Spec Kit](https://github.com/github/spec-kit)
 suporta** (30+ — Gemini CLI, Cursor, IBM Bob, Trae, Kilo Code, Goose, Cline,
 Auggie, Devin, Factory Droid, Grok Build, RovoDev, ZCode, Zed, Antigravity
-`agy`, Kiro CLI, Tabnine, Forge, Kimi Code, e mais) também têm um entrypoint real e
-já-versionado neste repositório — gerado, não copiado à mão, a partir da
-tabela em [`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py)
-(transcrita do próprio registro de integrações do Spec Kit, então cada
-agente é instalado no diretório e formato — `SKILL.md`, comando Markdown,
-TOML ou recipe YAML — que aquele agente realmente lê):
+`agy`, Kiro CLI, Tabnine, Forge, Kimi Code, e mais) continuam cobertos, mas
+não ficam mais materializados na raiz do repo-fonte. Eles são gerados sob
+demanda pela tabela em
+[`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py) para o
+projeto alvo, no diretório e formato que cada agente realmente lê
+(`SKILL.md`, custom agent, comando Markdown, TOML ou recipe YAML):
 
 ```bash
-python3 spec-master/lib/adapters_gen.py list        # lista os 30+ agentes cobertos
-python3 spec-master/lib/adapters_gen.py generate --root . --engine-ref spec-master
+python3 spec-master/lib/adapters_gen.py list
+python3 spec-master/lib/adapters_gen.py generate --root ~/code/projeto --engine-ref ~/.spec-master-engine
 ```
 
 Ver [`spec-master/adapters/generic.md`](spec-master/adapters/generic.md) para
@@ -380,8 +381,6 @@ spec-master/                    engine neutro, na raiz — fora de .claude/, .gi
 .agents/skills/spec-master/          entrypoint OpenAI Codex CLI
 .agents/agents/spec-master/agent.md  custom agent Antigravity (agy)
 .qwen/commands/spec-master.md        entrypoint Qwen-compatible shells
-.gemini/ .cursor/ .bob/ .trae/ ...   entrypoints gerados para os demais 30+ agentes
-                                      do Spec Kit (ver spec-master/lib/adapters_gen.py)
 
 init.sh                         instalador global (~/.spec-master-engine +
                                  entrypoint global para os 4 agentes confirmados,
@@ -392,11 +391,11 @@ Nenhum diretório de plataforma contém Python, template ou protocolo próprio
 — cada um é um arquivo fino que diz "leia `spec-master/PROTOCOL.md`, chame
 `spec-master/lib/cli.py`, e aqui está como *esta* plataforma pergunta ao
 usuário / resolve seu argumento de invocação". Um único core testado, quatro
-adapters escritos à mão (Claude, Copilot, Codex, Qwen) e mais 30+ adapters
-gerados a partir de uma única tabela — e, depois de `./init.sh`, um registro
-verdadeiramente global nos quatro agentes com convenção pessoal confirmada
-(veja [Instalação global](#instalação-global-todos-os-projetos)), não só no
-Claude Code.
+adapters escritos à mão (Claude, Copilot, Codex, Qwen), um custom agent local
+para Antigravity, e mais 30+ adapters gerados sob demanda a partir de uma
+única tabela. Depois de `./init.sh`, há registro global nos agentes com
+convenção pessoal confirmada; depois de `./init.sh link <projeto>`, os
+entrypoints da longa cauda são materializados no projeto alvo.
 
 ## Estrutura do repositório
 
@@ -410,8 +409,7 @@ Claude Code.
 ├── .claude/                    entrypoints Claude Code
 ├── .github/                    entrypoint GitHub Copilot
 ├── .agents/                    entrypoint OpenAI Codex CLI + custom agent Antigravity
-├── .qwen/                      entrypoint Qwen-compatible shells
-└── .gemini/ .cursor/ .bob/ ... entrypoints gerados p/ os 30+ demais agentes do Spec Kit
+└── .qwen/                      entrypoint Qwen-compatible shells
 ```
 
 Para o detalhamento completo de cada arquivo do core (`state.py`,

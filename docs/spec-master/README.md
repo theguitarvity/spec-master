@@ -141,7 +141,6 @@ spec-master/                         neutral, top-level package — NOT inside .
 .agents/skills/spec-master/SKILL.md  OpenAI Codex CLI entrypoint ($spec-master)
 .agents/agents/spec-master/agent.md  Antigravity (agy) custom agent, selected through /agents
 .qwen/commands/spec-master.md        Qwen-compatible adapter pointer — pointer only
-.gemini/ .cursor/ .bob/ .trae/ ...   generated entrypoints for the 30+ other Spec Kit agents
 ```
 
 None of the platform directories contain Python, templates, or
@@ -153,12 +152,13 @@ real, working files (not placeholders): they follow the exact
 for each of those agents. Antigravity (`agy`) also gets a dedicated custom
 agent at `.agents/agents/spec-master/agent.md`, because Antigravity can
 route that through `/agents` even when it ignores a slash-command-style
-skill. So do the 30+ generated ones — they're rendered
-directly from Spec Kit's own integration registry (see
-`spec-master/adapters/generic.md`), not placeholders either. That's what
-"model-agnostic core" (CLAUDE.md §2) means in practice here: one tested
-Python core living outside every platform's own directory, thin platform
-pointers for every agent Spec Kit supports.
+skill. The 30+ long-tail entrypoints are not kept in the source repo root
+anymore; they are rendered directly from Spec Kit's own integration registry
+(see `spec-master/adapters/generic.md`) when `init.sh link <project>` or
+`adapters_gen.py generate` targets a project. That's what "model-agnostic
+core" (CLAUDE.md §2) means in practice here: one tested Python core living
+outside every platform's own directory, thin platform pointers where the
+target agent actually needs them.
 
 The split matters: everything **structural** (state transitions, staleness,
 dependency ordering, git-strategy idempotency, which build/test/lint command

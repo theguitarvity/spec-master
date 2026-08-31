@@ -1,1 +1,34 @@
 CLAUDE.md
+
+# Generated long-tail agent entrypoints belong in target projects via
+# `./init.sh link`, not in this source repo root.
+.agents/commands/
+.alquimia/
+.augment/
+.bob/
+.clinerules/
+.codebuddy/
+.commandcode/
+.cursor/
+.devin/
+.factory/
+.firebender/
+.forge/
+.gemini/
+.goose/
+.grok/
+.junie/
+.kilo/
+.kimi-code/
+.kiro/
+.lingma/
+.omp/
+.opencode/
+.pi/
+.qoder/
+.rovodev/
+.shai/
+.tabnine/
+.trae/
+.vibe/
+.zcode/

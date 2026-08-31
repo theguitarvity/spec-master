@@ -418,9 +418,11 @@ Forge, Kimi Code, and more) gets a *generated* entrypoint instead, rendered
 by `spec-master/lib/adapters_gen.py` from a table transcribed from Spec
 Kit's own integration registry — same four points above (argument
 resolution, this protocol, the deterministic core, turn-taking in place of
-`AskUserQuestion`), same stopping conditions, just written into each agent's
-own real install directory and file format. See `adapters/generic.md` for
-the full rationale and the regeneration command.
+`AskUserQuestion`), same stopping conditions, just written into each target
+project's agent-specific install directory and file format when `init.sh
+link <project>` or `adapters_gen.py generate` runs. The source repo keeps the
+generator table, not every generated directory at its root. See
+`adapters/generic.md` for the full rationale and the regeneration command.
 
 None of these platform directories contain any Python, templates, or
 protocol content of their own — everything structural or semantic-but-shared
