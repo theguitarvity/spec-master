@@ -18,6 +18,16 @@ import json
 import sys
 from pathlib import Path
 
+from graph import ontology as graph_ontology
+from graph import maps as graph_maps
+from graph import health as graph_health
+from graph.store import FileGraphStore
+from graph.validation import validate_graph
+
+from knowledge.manifest import KnowledgeManifest
+from knowledge.router import KnowledgeRouter
+from knowledge.validation import validate_manifest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import constitution_diff  # noqa: E402
@@ -197,6 +207,118 @@ def cmd_metrics(args: argparse.Namespace) -> int:
     raise SystemExit(f"unknown metrics action: {args.metrics_action}")
 
 
+def cmd_graph(args: argparse.Namespace) -> int:
+    store = FileGraphStore(project_root=args.path)
+    if args.graph_action == "validate":
+        graph = store.load()
+        report = validate_graph(graph)
+        _print_json(report)
+        return 0
+    if args.graph_action == "stats":
+        graph = store.load()
+        _print_json(graph.stats())
+        return 0
+    if args.graph_action == "neighbors":
+        graph = store.load()
+        rels = args.relations.split(",") if args.relations else None
+        edges = graph.neighbors(args.node_id, relations=rels, direction="both")
+        _print_json([e.to_dict() for e in edges])
+        return 0
+    if args.graph_action == "stale":
+        graph = store.load()
+        from graph.validation import find_stale_nodes
+        stale = find_stale_nodes(graph)
+        _print_json({"stale_nodes": stale})
+        return 0
+    if args.graph_action == "rebuild":
+        stats = store.rebuild_manifest()
+        _print_json(stats)
+        return 0
+    if args.graph_action == "health":
+        graph = store.load()
+        report = graph_health.compute_health(graph)
+        md = graph_health.render_health_report(report)
+        health_path = Path(args.path) / "graph-health.md"
+        health_path.write_text(md, encoding="utf-8")
+        _print_json({"path": str(health_path), "score": report["score"], "grade": report["grade"]})
+        return 0
+    if args.graph_action == "maps":
+        graph = store.load()
+        if args.map_type == "system":
+            print(graph_maps.render_system_map(graph))
+            return 0
+        if args.map_type == "node":
+            if not args.node_id:
+                raise SystemExit("graph maps node requires --node-id")
+            print(graph_maps.render_node_map(graph, args.node_id, depth=args.depth))
+            return 0
+        if args.map_type == "dependencies":
+            print(graph_maps.render_dependency_map(graph, relation=args.relation))
+            return 0
+        raise SystemExit(f"unknown map type: {args.map_type}")
+    raise SystemExit(f"unknown graph action: {args.graph_action}")
+
+
+def cmd_knowledge(args: argparse.Namespace) -> int:
+    manifest = KnowledgeManifest(knowledge_root=args.knowledge_root)
+
+    if args.knowledge_action == "list":
+        modules = manifest.all_modules()
+        if args.role:
+            modules = [m for m in modules if m.is_applicable_to(args.role)]
+        if args.category:
+            modules = [m for m in modules if m.category == args.category]
+        if args.tag:
+            modules = [m for m in modules if args.tag in m.tags]
+        _print_json([m.to_dict() for m in sorted(modules, key=lambda m: m.id)])
+        return 0
+
+    if args.knowledge_action == "get":
+        module = manifest.get(args.id)
+        if module is None:
+            raise SystemExit(f"unknown knowledge module: {args.id}")
+        payload = module.to_dict()
+        payload["content"] = module.content
+        _print_json(payload)
+        return 0
+
+    if args.knowledge_action == "search":
+        results = manifest.search(args.query)
+        _print_json([m.to_dict() for m in results])
+        return 0
+
+    if args.knowledge_action == "for-role":
+        router = KnowledgeRouter(manifest)
+        modules = router.for_role(args.role, limit=args.limit)
+        _print_json({
+            "modules": [m.to_dict() for m in modules],
+            "budget": router.budget_summary(modules),
+        })
+        return 0
+
+    if args.knowledge_action == "route":
+        router = KnowledgeRouter(manifest)
+        keywords = args.keywords.split(",") if args.keywords else None
+        tech_stacks = args.tech_stacks.split(",") if args.tech_stacks else None
+        modules = router.for_context(args.role, keywords=keywords,
+                                      tech_stacks=tech_stacks, limit=args.limit)
+        _print_json({
+            "modules": [m.to_dict() for m in modules],
+            "budget": router.budget_summary(modules),
+        })
+        return 0
+
+    if args.knowledge_action == "stats":
+        _print_json(manifest.stats())
+        return 0
+
+    if args.knowledge_action == "validate":
+        _print_json(validate_manifest(manifest))
+        return 0
+
+    raise SystemExit(f"unknown knowledge action: {args.knowledge_action}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spec-master-cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -316,6 +438,75 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_record.add_argument("--notes", default=None)
     metrics_summary = metrics_sub.add_parser("summarize")
     metrics_summary.add_argument("--file", required=True, help="JSON file: list of round metrics")
+
+    p_graph = sub.add_parser("graph")
+    p_graph.set_defaults(func=cmd_graph)
+    graph_sub = p_graph.add_subparsers(dest="graph_action", required=True)
+    
+    g_validate = graph_sub.add_parser("validate")
+    g_validate.add_argument("--path", default=".")
+    
+    g_stats = graph_sub.add_parser("stats")
+    g_stats.add_argument("--path", default=".")
+    
+    g_neighbors = graph_sub.add_parser("neighbors")
+    g_neighbors.add_argument("node_id")
+    g_neighbors.add_argument("--depth", type=int, default=2)
+    g_neighbors.add_argument("--relations", default=None)
+    g_neighbors.add_argument("--path", default=".")
+    
+    g_stale = graph_sub.add_parser("stale")
+    g_stale.add_argument("--path", default=".")
+    
+    g_rebuild = graph_sub.add_parser("rebuild")
+    g_rebuild.add_argument("--path", default=".")
+    
+    g_health = graph_sub.add_parser("health")
+    g_health.add_argument("--path", default=".")
+
+    g_maps = graph_sub.add_parser("maps")
+    g_maps.add_argument("--path", default=".")
+    g_maps.add_argument("--map-type", dest="map_type", default="system",
+                         choices=["system", "node", "dependencies"])
+    g_maps.add_argument("--node-id", dest="node_id", default=None)
+    g_maps.add_argument("--depth", type=int, default=2)
+    g_maps.add_argument("--relation", default="DEPENDS_ON")
+
+    p_knowledge = sub.add_parser("knowledge")
+    p_knowledge.set_defaults(func=cmd_knowledge)
+    knowledge_sub = p_knowledge.add_subparsers(dest="knowledge_action", required=True)
+
+    k_list = knowledge_sub.add_parser("list")
+    k_list.add_argument("--role", default=None)
+    k_list.add_argument("--category", default=None)
+    k_list.add_argument("--tag", default=None)
+    k_list.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    k_get = knowledge_sub.add_parser("get")
+    k_get.add_argument("id")
+    k_get.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    k_search = knowledge_sub.add_parser("search")
+    k_search.add_argument("query")
+    k_search.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    k_for_role = knowledge_sub.add_parser("for-role")
+    k_for_role.add_argument("--role", required=True)
+    k_for_role.add_argument("--limit", type=int, default=8)
+    k_for_role.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    k_route = knowledge_sub.add_parser("route")
+    k_route.add_argument("--role", required=True)
+    k_route.add_argument("--keywords", default=None, help="comma-separated")
+    k_route.add_argument("--tech-stacks", dest="tech_stacks", default=None, help="comma-separated")
+    k_route.add_argument("--limit", type=int, default=8)
+    k_route.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    k_stats = knowledge_sub.add_parser("stats")
+    k_stats.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    k_validate = knowledge_sub.add_parser("validate")
+    k_validate.add_argument("--knowledge-root", dest="knowledge_root", default=None)
 
     return parser
 

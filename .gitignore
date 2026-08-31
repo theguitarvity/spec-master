@@ -32,3 +32,8 @@ CLAUDE.md
 .trae/
 .vibe/
 .zcode/
+
+# Python bytecode / pytest cache
+__pycache__/
+*.pyc
+.pytest_cache/

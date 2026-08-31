@@ -1,0 +1,97 @@
+# Spec Master Knowledge Ontology
+# Source of truth for all entity and relation types.
+# Agents may NOT invent new types. Unknown types become UNRESOLVED_RELATION.
+schema_version: "1.0"
+
+entity_types:
+  - Project
+  - Domain
+  - Subdomain
+  - BoundedContext
+  - Feature
+  - Requirement
+  - Component
+  - Service
+  - Module
+  - Package
+  - Class
+  - Interface
+  - API
+  - Endpoint
+  - Event
+  - Topic
+  - Queue
+  - Database
+  - Table
+  - Collection
+  - Cache
+  - ExternalSystem
+  - Dependency
+  - Deployment
+  - Container
+  - KubernetesResource
+  - Test
+  - ADR
+  - Risk
+  - Vulnerability
+  - Pattern
+  - AntiPattern
+  - Principle
+  - Technology
+  - Framework
+  - Library
+  - Agent
+  - Task
+  - Artifact
+  - QualityAttribute
+  - Policy
+
+relation_types:
+  - CONTAINS
+  - BELONGS_TO
+  - DEPENDS_ON
+  - CALLS
+  - READS_FROM
+  - WRITES_TO
+  - PUBLISHES
+  - CONSUMES
+  - IMPLEMENTS
+  - SATISFIES
+  - TESTED_BY
+  - DEPLOYED_ON
+  - USES
+  - GOVERNED_BY
+  - DECIDED_BY
+  - VIOLATES
+  - MITIGATES
+  - EXPOSES
+  - AUTHENTICATES_WITH
+  - AUTHORIZES_WITH
+  - OWNED_BY
+  - RELATED_TO
+  - REQUIRES
+  - PROVIDES
+  - CONFLICTS_WITH
+  - SUPERSEDES
+  - INFLUENCES
+  - DERIVED_FROM
+  - UNRESOLVED_RELATION
+
+provenance_types:
+  - EXPLICIT
+  - DISCOVERED_FROM_CODEBASE
+  - DISCOVERED_FROM_CONFIG
+  - DISCOVERED_FROM_SPEC
+  - DISCOVERED_FROM_ADR
+  - DISCOVERED_FROM_TEST
+  - INFERRED
+  - GENERATED
+  - USER_CONFIRMED
+  - UNRESOLVED
+
+confidence_levels:
+  deterministic: 1.00
+  project_evidence: 0.90
+  strong_inference_min: 0.70
+  hypothesis_min: 0.50
+  unresolved_max: 0.49
