@@ -48,6 +48,70 @@ def enrich_from_discovery(discovery_result: dict,
         content=f"# {project_name}\n\nDiscovered project root.",
     ))
 
+    # --- Repository artifacts that matter even for manifest-light skill repos ---
+    if discovery_result.get("readme_present"):
+        readme_id = "artifact.readme"
+        nodes.append(GraphNode(
+            id=readme_id,
+            type="Artifact",
+            name="README",
+            source=DISCOVERED_FROM_CONFIG,
+            confidence=1.0,
+            tags=["documentation"],
+            raw_frontmatter={"evidence": {"file": "README.md"}},
+            content="# README\n\nRepository README discovered at project root.",
+        ))
+        edges.append(GraphEdge(
+            source=project_id,
+            relation="CONTAINS",
+            target=readme_id,
+            provenance=DISCOVERED_FROM_CONFIG,
+            confidence=1.0,
+            evidence={"file": "README.md"},
+        ))
+
+    if discovery_result.get("docs_present"):
+        docs_id = "artifact.docs"
+        nodes.append(GraphNode(
+            id=docs_id,
+            type="Artifact",
+            name="Documentation",
+            source=DISCOVERED_FROM_CONFIG,
+            confidence=0.95,
+            tags=["documentation"],
+            raw_frontmatter={"evidence": {"file": "docs/"}},
+            content="# Documentation\n\nDocumentation directory discovered.",
+        ))
+        edges.append(GraphEdge(
+            source=project_id,
+            relation="CONTAINS",
+            target=docs_id,
+            provenance=DISCOVERED_FROM_CONFIG,
+            confidence=0.95,
+            evidence={"file": "docs/"},
+        ))
+
+    if (root / "spec-master").is_dir():
+        package_id = "package.spec-master"
+        nodes.append(GraphNode(
+            id=package_id,
+            type="Package",
+            name="Spec Master Engine Package",
+            source=DISCOVERED_FROM_CODEBASE,
+            confidence=1.0,
+            tags=["harness", "engine"],
+            raw_frontmatter={"evidence": {"file": "spec-master/"}},
+            content="# spec-master\n\nCore Spec Master package discovered.",
+        ))
+        edges.append(GraphEdge(
+            source=project_id,
+            relation="CONTAINS",
+            target=package_id,
+            provenance=DISCOVERED_FROM_CODEBASE,
+            confidence=1.0,
+            evidence={"file": "spec-master/"},
+        ))
+
     # --- Technology nodes from stacks ---
     for stack in discovery_result.get("stacks", []):
         lang = stack.get("language", "unknown")

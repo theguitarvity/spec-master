@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0",
+  "nodes": [
+    {
+      "id": "artifact.docs",
+      "type": "Artifact",
+      "name": "Documentation",
+      "status": "active",
+      "source": "DISCOVERED_FROM_CONFIG",
+      "confidence": 0.95,
+      "tags": [],
+      "aliases": [],
+      "first_seen": {},
+      "last_verified": {}
+    },
+    {
+      "id": "artifact.readme",
+      "type": "Artifact",
+      "name": "README",
+      "status": "active",
+      "source": "DISCOVERED_FROM_CONFIG",
+      "confidence": 1.0,
+      "tags": [],
+      "aliases": [],
+      "first_seen": {},
+      "last_verified": {}
+    },
+    {
+      "id": "package.spec-master",
+      "type": "Package",
+      "name": "Spec Master Engine Package",
+      "status": "active",
+      "source": "DISCOVERED_FROM_CODEBASE",
+      "confidence": 1.0,
+      "tags": [],
+      "aliases": [],
+      "first_seen": {},
+      "last_verified": {}
+    },
+    {
+      "id": "project.spec-master",
+      "type": "Project",
+      "name": "spec-master",
+      "status": "active",
+      "source": "DISCOVERED_FROM_CONFIG",
+      "confidence": 1.0,
+      "tags": [],
+      "aliases": [],
+      "first_seen": {},
+      "last_verified": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "project.spec-master",
+      "relation": "CONTAINS",
+      "target": "artifact.readme",
+      "provenance": "DISCOVERED_FROM_CONFIG",
+      "confidence": 1.0,
+      "evidence": {
+        "file": "README.md"
+      },
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
+    },
+    {
+      "source": "project.spec-master",
+      "relation": "CONTAINS",
+      "target": "artifact.docs",
+      "provenance": "DISCOVERED_FROM_CONFIG",
+      "confidence": 0.95,
+      "evidence": {
+        "file": "docs/"
+      },
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
+    },
+    {
+      "source": "project.spec-master",
+      "relation": "CONTAINS",
+      "target": "package.spec-master",
+      "provenance": "DISCOVERED_FROM_CODEBASE",
+      "confidence": 1.0,
+      "evidence": {
+        "file": "spec-master/"
+      },
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
+    }
+  ]
+}

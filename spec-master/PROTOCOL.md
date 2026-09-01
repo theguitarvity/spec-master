@@ -64,7 +64,9 @@ given machine; every adapter, in every project, reads from it.
   state machine, context fingerprint/staleness, dependency ordering,
   git-strategy planning, quality-gate command detection, constitution
   structural diff, traceability rendering, Team Mode roles, guided-intake
-  questions, and workstream/review assignment. The agent calls it via `Bash`
+  questions, workstream/review assignment, context budget accounting,
+  command policy preflight, graph snapshots/drift checks, runtime capability
+  contracts, and deterministic harness evals. The agent calls it via `Bash`
   for every structural decision — never re-derive these by hand.
 - **Agent (you, running this skill)**: reading and semantically understanding
   the user's context file and the repository, writing the normalized context
@@ -339,17 +341,36 @@ a `FAILED` condition (§29).
 
 ### Step 7 — Quality gates (CLAUDE.md §28)
 
-`gates detect --path .` — never hardcode a command family. Run each returned
-`command` via `Bash`, record
+`gates detect --path .` — never hardcode a command family. Before running any
+returned shell command, call `policy preflight "<command>"`; execute only
+commands classified as `allowed: true`. Commands classified as blocked or
+requiring approval must be reported to the user instead of bypassed. Run each
+allowed `command` via `Bash`, record
 `{name, command, result, exit_code, blocking}`; a failing `blocking: true`
 gate prevents `SUCCESS` (see stopping conditions).
+
+For prompts that include generated context, preflight the assembled context
+with `budget file --files <comma-separated-files> --token-budget <budget>`.
+If relevant context is omitted, list the omitted IDs/files in the phase notes
+instead of silently exceeding budget.
 
 ### Step 8 — Report & traceability (CLAUDE.md §35-36)
 
 `traceability render --path .spec-master/state.json >
 .spec-master/reports/traceability.md`. Fill
-`templates/final-report.md` → `.spec-master/reports/final-report.md` and
-print it to the user. Determine final status per §29:
+`templates/final-report.md` → `.spec-master/reports/final-report.md`.
+Before printing the final status, run:
+
+1. `graph enrich-discovery --path .`
+2. `graph validate --path .`
+3. `graph snapshot --path . --name final`
+4. `graph health --path .`
+5. `evals run`
+6. `runtime contract --runtime-type hybrid`
+
+Print the report to the user only when graph validation and deterministic
+harness evals pass, or clearly classify the result as `PARTIAL`/`BLOCKED`.
+Determine final status per §29:
 
 - `SUCCESS`: constitution valid AND all selected features implemented AND all
   acceptance criteria mapped in traceability AND analyze has no blocking

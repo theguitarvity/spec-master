@@ -11,12 +11,15 @@ def test_enrich_from_discovery_empty(tmp_path):
 def test_enrich_from_discovery_full(tmp_path):
     discovery_res = {
         "ci_present": True,
+        "readme_present": True,
+        "docs_present": True,
         "stacks": [
             {"language": "Python", "manifest": "requirements.txt", "commands": {"test": "pytest"}}
         ]
     }
     
     (tmp_path / "adr").mkdir()
+    (tmp_path / "spec-master").mkdir()
     (tmp_path / "openapi.yaml").write_text("")
 
     nodes, edges = enrich_from_discovery(discovery_res, project_root=str(tmp_path))
@@ -28,8 +31,10 @@ def test_enrich_from_discovery_full(tmp_path):
     assert "Test" in types
     assert "ADR" in types
     assert "API" in types
+    assert "Artifact" in types
+    assert "Package" in types
     
-    assert len(edges) == 5
+    assert len(edges) == 8
     relations = {e.relation for e in edges}
     assert "USES" in relations
     assert "TESTED_BY" in relations

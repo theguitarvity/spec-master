@@ -21,7 +21,7 @@ from pathlib import Path
 from graph import ontology as graph_ontology
 from graph import maps as graph_maps
 from graph import health as graph_health
-from graph.store import FileGraphStore
+from graph.store import FileGraphStore, graph_from_dict
 from graph.validation import validate_graph
 
 from knowledge.manifest import KnowledgeManifest
@@ -31,7 +31,9 @@ from knowledge.validation import validate_manifest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import constitution_diff  # noqa: E402
+import context_budget  # noqa: E402
 import discovery  # noqa: E402
+import evals  # noqa: E402
 import feature_model  # noqa: E402
 import fingerprint  # noqa: E402
 import git_strategy  # noqa: E402
@@ -39,7 +41,9 @@ import metrics  # noqa: E402
 import quality_gates  # noqa: E402
 import state as state_mod  # noqa: E402
 import team_model  # noqa: E402
+import tool_policy  # noqa: E402
 import traceability  # noqa: E402
+import runtime_contract  # noqa: E402
 
 
 def _print_json(payload) -> None:
@@ -234,11 +238,31 @@ def cmd_graph(args: argparse.Namespace) -> int:
         stats = store.rebuild_manifest()
         _print_json(stats)
         return 0
+    if args.graph_action == "enrich-discovery":
+        from graph.enrichment import enrich_from_discovery
+        info = discovery.scan(args.path)
+        nodes, edges = enrich_from_discovery(info, project_root=args.path)
+        for node in nodes:
+            store.save_node(node)
+        for edge in edges:
+            store.save_edge(edge)
+        _print_json({"nodes_saved": len(nodes), "edges_saved": len(edges), "stats": store.load().stats()})
+        return 0
+    if args.graph_action == "snapshot":
+        _print_json(store.snapshot(args.name))
+        return 0
+    if args.graph_action == "drift":
+        from graph import drift
+        previous = graph_from_dict(_load_json_file(args.previous))
+        current = store.load()
+        _print_json(drift.detect_structural_drift(previous, current))
+        return 0
     if args.graph_action == "health":
         graph = store.load()
         report = graph_health.compute_health(graph)
         md = graph_health.render_health_report(report)
-        health_path = Path(args.path) / "graph-health.md"
+        health_path = Path(args.path) / ".spec-master" / "reports" / "graph-health.md"
+        health_path.parent.mkdir(parents=True, exist_ok=True)
         health_path.write_text(md, encoding="utf-8")
         _print_json({"path": str(health_path), "score": report["score"], "grade": report["grade"]})
         return 0
@@ -257,6 +281,38 @@ def cmd_graph(args: argparse.Namespace) -> int:
             return 0
         raise SystemExit(f"unknown map type: {args.map_type}")
     raise SystemExit(f"unknown graph action: {args.graph_action}")
+
+
+def cmd_policy(args: argparse.Namespace) -> int:
+    if args.policy_action == "preflight":
+        commands = args.command if isinstance(args.command, list) else [args.command]
+        _print_json(tool_policy.preflight(commands))
+        return 0
+    raise SystemExit(f"unknown policy action: {args.policy_action}")
+
+
+def cmd_budget(args: argparse.Namespace) -> int:
+    if args.budget_action == "estimate":
+        _print_json({"estimated_tokens": context_budget.estimate_tokens(args.text)})
+        return 0
+    if args.budget_action == "file":
+        items = []
+        for path in args.files.split(","):
+            p = Path(path)
+            items.append({"id": str(p), "content": p.read_text(encoding="utf-8") if p.exists() else ""})
+        _print_json(context_budget.budget_items(items, token_budget=args.token_budget))
+        return 0
+    raise SystemExit(f"unknown budget action: {args.budget_action}")
+
+
+def cmd_runtime(args: argparse.Namespace) -> int:
+    _print_json(runtime_contract.describe(args.runtime_type))
+    return 0
+
+
+def cmd_evals(args: argparse.Namespace) -> int:
+    _print_json(evals.run())
+    return 0
 
 
 def cmd_knowledge(args: argparse.Namespace) -> int:
@@ -460,6 +516,17 @@ def build_parser() -> argparse.ArgumentParser:
     
     g_rebuild = graph_sub.add_parser("rebuild")
     g_rebuild.add_argument("--path", default=".")
+
+    g_enrich = graph_sub.add_parser("enrich-discovery")
+    g_enrich.add_argument("--path", default=".")
+
+    g_snapshot = graph_sub.add_parser("snapshot")
+    g_snapshot.add_argument("--path", default=".")
+    g_snapshot.add_argument("--name", default="latest")
+
+    g_drift = graph_sub.add_parser("drift")
+    g_drift.add_argument("--path", default=".")
+    g_drift.add_argument("--previous", required=True)
     
     g_health = graph_sub.add_parser("health")
     g_health.add_argument("--path", default=".")
@@ -507,6 +574,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     k_validate = knowledge_sub.add_parser("validate")
     k_validate.add_argument("--knowledge-root", dest="knowledge_root", default=None)
+
+    p_policy = sub.add_parser("policy")
+    p_policy.set_defaults(func=cmd_policy)
+    policy_sub = p_policy.add_subparsers(dest="policy_action", required=True)
+    policy_preflight = policy_sub.add_parser("preflight")
+    policy_preflight.add_argument("command", nargs="+")
+
+    p_budget = sub.add_parser("budget")
+    p_budget.set_defaults(func=cmd_budget)
+    budget_sub = p_budget.add_subparsers(dest="budget_action", required=True)
+    budget_estimate = budget_sub.add_parser("estimate")
+    budget_estimate.add_argument("text")
+    budget_file = budget_sub.add_parser("file")
+    budget_file.add_argument("--files", required=True, help="comma-separated paths")
+    budget_file.add_argument("--token-budget", type=int, default=context_budget.DEFAULT_TOKEN_BUDGET)
+
+    p_runtime = sub.add_parser("runtime")
+    p_runtime.set_defaults(func=cmd_runtime)
+    runtime_sub = p_runtime.add_subparsers(dest="runtime_action", required=True)
+    runtime_contract_parser = runtime_sub.add_parser("contract")
+    runtime_contract_parser.add_argument("--runtime-type", choices=["hosted", "hybrid"], default="hybrid")
+
+    p_evals = sub.add_parser("evals")
+    p_evals.set_defaults(func=cmd_evals)
+    evals_sub = p_evals.add_subparsers(dest="evals_action", required=True)
+    evals_sub.add_parser("run")
 
     return parser
 

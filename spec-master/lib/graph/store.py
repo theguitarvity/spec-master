@@ -256,3 +256,35 @@ class FileGraphStore(GraphStore):
         graph = self.load()
         self._update_manifest()
         return graph.stats()
+
+    def snapshot(self, name: str = "latest") -> dict:
+        """Persist a full graph snapshot for later drift comparison."""
+        graph = self.load()
+        snapshot_dir = self._knowledge_dir / "snapshots"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        path = snapshot_dir / f"{name}.json"
+        payload = {
+            "schema_version": "1.0",
+            "nodes": [n.to_dict() for n in graph.nodes.values()],
+            "edges": [e.to_dict() for e in graph.edges],
+        }
+        tmp = str(path) + ".tmp"
+        Path(tmp).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+        return {"path": str(path), "total_nodes": len(graph.nodes), "total_edges": len(graph.edges)}
+
+
+def graph_to_dict(graph: Graph) -> dict:
+    return {
+        "nodes": [n.to_dict() for n in graph.nodes.values()],
+        "edges": [e.to_dict() for e in graph.edges],
+    }
+
+
+def graph_from_dict(data: dict) -> Graph:
+    graph = Graph()
+    for node_data in data.get("nodes", []):
+        graph.add_node(GraphNode.from_dict(node_data))
+    for edge_data in data.get("edges", []):
+        graph.add_edge(GraphEdge.from_dict(edge_data))
+    return graph

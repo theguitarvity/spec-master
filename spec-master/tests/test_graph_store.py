@@ -2,7 +2,7 @@ import pytest
 import json
 import _pathfix
 from graph.model import GraphNode, GraphEdge
-from graph.store import InMemoryGraphStore, FileGraphStore
+from graph.store import InMemoryGraphStore, FileGraphStore, graph_from_dict
 
 def test_in_memory_store():
     store = InMemoryGraphStore()
@@ -70,3 +70,17 @@ def test_file_store_rebuild_manifest(tmp_path):
     manifest_p = tmp_path / "knowledge/graph-manifest.json"
     manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
     assert manifest["total_nodes"] == 1
+
+def test_file_store_snapshot_round_trips_graph(tmp_path):
+    store = FileGraphStore(project_root=tmp_path, knowledge_subdir="knowledge")
+    store.save_node(GraphNode(id="a", type="Component", name="A"))
+    store.save_node(GraphNode(id="b", type="Component", name="B"))
+    store.save_edge(GraphEdge(source="a", relation="DEPENDS_ON", target="b"))
+
+    result = store.snapshot("baseline")
+    snapshot = json.loads((tmp_path / "knowledge/snapshots/baseline.json").read_text(encoding="utf-8"))
+    graph = graph_from_dict(snapshot)
+
+    assert result["total_nodes"] == 2
+    assert "a" in graph.nodes
+    assert graph.edges[0].relation == "DEPENDS_ON"

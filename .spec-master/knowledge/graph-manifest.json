@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "total_nodes": 4,
+  "total_edges": 3,
+  "nodes": [
+    {
+      "id": "project.spec-master",
+      "type": "Project",
+      "name": "spec-master",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "project"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "artifact.readme",
+      "type": "Artifact",
+      "name": "README",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "documentation"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "artifact.docs",
+      "type": "Artifact",
+      "name": "Documentation",
+      "status": "active",
+      "confidence": 0.95,
+      "tags": [
+        "documentation"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "package.spec-master",
+      "type": "Package",
+      "name": "Spec Master Engine Package",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "harness",
+        "engine"
+      ],
+      "aliases": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "project.spec-master",
+      "relation": "CONTAINS",
+      "target": "artifact.readme",
+      "provenance": "DISCOVERED_FROM_CONFIG",
+      "confidence": 1.0,
+      "evidence": {
+        "file": "README.md"
+      },
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
+    },
+    {
+      "source": "project.spec-master",
+      "relation": "CONTAINS",
+      "target": "artifact.docs",
+      "provenance": "DISCOVERED_FROM_CONFIG",
+      "confidence": 0.95,
+      "evidence": {
+        "file": "docs/"
+      },
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
+    },
+    {
+      "source": "project.spec-master",
+      "relation": "CONTAINS",
+      "target": "package.spec-master",
+      "provenance": "DISCOVERED_FROM_CODEBASE",
+      "confidence": 1.0,
+      "evidence": {
+        "file": "spec-master/"
+      },
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
+    }
+  ],
+  "types": [
+    "Artifact",
+    "Package",
+    "Project"
+  ],
+  "aliases": {},
+  "tags": [
+    "documentation",
+    "engine",
+    "harness",
+    "project"
+  ]
+}
