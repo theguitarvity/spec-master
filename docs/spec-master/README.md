@@ -193,6 +193,17 @@ decomposition, file/package ownership, code-conflict resolution, and final
 integration approval. Dev agents implement assigned packages only, and every
 package requires review by a different dev agent before QA validation.
 
+Each role has a dedicated playbook at
+`spec-master/knowledge/playbooks/<role>.md`: mandate, decision rights,
+concrete must-do/must-avoid practices (unit/integration test conventions,
+package layout, stack-specific tooling like WireMock/Cypress/Terraform/
+Kubernetes-Helm), and escalation triggers — e.g. a dev agent that spots an
+architecture inconsistency escalates to the Architect Agent, who scopes it
+to the Tech Lead, who creates an owned remediation package, which the Scrum
+Master folds into the visible plan and metrics. The Knowledge Router
+(`knowledge for-role` / `for-context`) ranks a role's own playbook first
+before any other concept module — see PROTOCOL.md §Step 6.
+
 For a project that already has `.spec-master/state.json`, Team Mode adoption
 is state-preserving and additive. `team adopt` produces the checklist for
 mapping existing specs/tasks into `.spec-master/workstreams.json` without

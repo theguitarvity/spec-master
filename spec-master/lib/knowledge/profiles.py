@@ -35,19 +35,19 @@ DEFAULT_MODULE_BUDGET = 8
 # otherwise tied (no keyword/tag match to break the tie on). Categories not
 # listed for a role are still eligible, just ranked after the listed ones.
 CATEGORY_WEIGHTS_BY_ROLE: dict[str, list[str]] = {
-    "architect": ["architecture", "distributed-systems", "design", "foundations", "anti-patterns"],
-    "tech-lead": ["architecture", "foundations", "design", "distributed-systems", "anti-patterns"],
-    "backend-dev": ["design", "foundations", "distributed-systems", "architecture", "security"],
-    "frontend-dev": ["foundations", "design", "architecture"],
-    "fullstack-dev": ["foundations", "design", "architecture", "distributed-systems"],
-    "qa": ["foundations", "anti-patterns", "security"],
-    "devops": ["distributed-systems", "security", "architecture"],
-    "infrastructure": ["distributed-systems", "security", "architecture"],
-    "security": ["security", "architecture", "distributed-systems"],
-    "product-owner": ["agile", "foundations"],
-    "scrum-master": ["agile"],
-    "ux": ["foundations", "design"],
-    "spec-master": ["foundations", "architecture", "agile", "distributed-systems", "security", "design"],
+    "architect": ["playbooks", "architecture", "distributed-systems", "design", "foundations", "anti-patterns"],
+    "tech-lead": ["playbooks", "architecture", "foundations", "design", "distributed-systems", "anti-patterns"],
+    "backend-dev": ["playbooks", "design", "foundations", "distributed-systems", "architecture", "security"],
+    "frontend-dev": ["playbooks", "foundations", "design", "architecture"],
+    "fullstack-dev": ["playbooks", "foundations", "design", "architecture", "distributed-systems"],
+    "qa": ["playbooks", "foundations", "anti-patterns", "security"],
+    "devops": ["playbooks", "distributed-systems", "security", "architecture"],
+    "infrastructure": ["playbooks", "distributed-systems", "security", "architecture"],
+    "security": ["playbooks", "security", "architecture", "distributed-systems"],
+    "product-owner": ["playbooks", "agile", "foundations"],
+    "scrum-master": ["playbooks", "agile"],
+    "ux": ["playbooks", "foundations", "design"],
+    "spec-master": ["playbooks", "foundations", "architecture", "agile", "distributed-systems", "security", "design"],
 }
 
 # Maps discovery.py's detected stack "language" values to the knowledge base's

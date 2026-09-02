@@ -44,13 +44,62 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
         except Exception:
             pass
 
-    # Minimal fallback: parse simple key: value pairs
+    return _parse_simple_yaml(fm_text), body
+
+
+def _strip_scalar(raw: str) -> str:
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1]
+    return value
+
+
+def _parse_simple_yaml(fm_text: str) -> dict:
+    """Minimal indent-based parser for the frontmatter subset this repo uses:
+    scalar values, block lists (`- item`), and one level of nested mapping
+    (e.g. `depth:` -> `role: L4` lines). Used only when PyYAML is absent.
+    """
+    lines = [line for line in fm_text.splitlines() if line.strip() != "" and not line.strip().startswith("#")]
     fm: dict = {}
-    for line in fm_text.splitlines():
-        if ":" in line and not line.startswith(" ") and not line.startswith("-"):
-            key, _, value = line.partition(":")
-            fm[key.strip()] = value.strip()
-    return fm, body
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        indent = len(line) - len(line.lstrip(" "))
+        if indent != 0 or ":" not in line or line.lstrip().startswith("-"):
+            i += 1
+            continue
+        key, _, rest = line.partition(":")
+        key = key.strip()
+        rest = rest.strip()
+        i += 1
+        if rest:
+            fm[key] = _strip_scalar(rest)
+            continue
+
+        # Look ahead for an indented block (list or nested mapping).
+        block: list[str] = []
+        while i < n:
+            nxt = lines[i]
+            nxt_indent = len(nxt) - len(nxt.lstrip(" "))
+            if nxt_indent <= indent:
+                break
+            block.append(nxt)
+            i += 1
+
+        if not block:
+            fm[key] = ""
+        elif block[0].lstrip().startswith("- "):
+            fm[key] = [_strip_scalar(entry.lstrip()[2:]) for entry in block]
+        else:
+            nested: dict = {}
+            for entry in block:
+                if ":" not in entry:
+                    continue
+                nkey, _, nval = entry.strip().partition(":")
+                nested[nkey.strip()] = _strip_scalar(nval)
+            fm[key] = nested
+    return fm
 
 
 def extract_wikilinks(text: str) -> list[str]:

@@ -268,25 +268,57 @@ existing project adopted Team Mode:
    roles. The Spec Master remains the orchestrator; the Tech Lead Agent owns
    technical decomposition, internal code conflicts, and integration
    approval.
-2. During/after `tasks`, call `python3 spec-master/lib/cli.py team
+2. Before instantiating any role for a package, review, or gate decision,
+   load its binding playbook — never improvise a role's practices from
+   general knowledge: `python3 spec-master/lib/cli.py knowledge get --id
+   playbook.<role-id>` (resolve team_model.py ids like `po`, `infra`,
+   `ui-ux-brand` to their knowledge-base ids `product-owner`,
+   `infrastructure`, `ux` first — `knowledge for-role` does this
+   resolution automatically). Pull additional budgeted context for the
+   specific task with `knowledge for-context --role <role-id> --keywords
+   "<feature/task keywords>" --tech-stacks "<detected stack>"`. Playbooks
+   define each role's concrete must-do/must-avoid practices, testing
+   conventions, stack/tooling defaults, and escalation triggers — see
+   `spec-master/knowledge/playbooks/*.md` (or `playbook.spec-master` for
+   the orchestrator's own escalation-routing rules).
+3. During/after `tasks`, call `python3 spec-master/lib/cli.py team
    workstreams --file <features-with-tasks.json>` and write the result to
    `.spec-master/workstreams.json`.
-3. The workstream plan may expose safe parallel work, but each package must
+4. The workstream plan may expose safe parallel work, but each package must
    still respect feature dependencies, Spec Kit phase gates, and analyze
    repair rules.
-4. Dev agents implement only assigned packages:
+5. Dev agents implement only assigned packages, per their playbook:
    - Backend Dev Agent: APIs, persistence, business rules, backend tests,
-     integrations.
+     integrations (`playbook.backend-dev`).
    - Frontend Dev Agent: screens, components, forms, UI state,
-     accessibility, responsive behavior, UI tests.
-   - Fullstack Dev Agent: thin vertical slices and front/back integration.
-5. Every implementation package requires peer review by a different dev
+     accessibility, responsive behavior, UI tests (`playbook.frontend-dev`).
+   - Fullstack Dev Agent: thin vertical slices and front/back integration
+     (`playbook.fullstack-dev`).
+   When a dev agent finds an architecture inconsistency or a candidate
+   design-pattern decision that crosses its package (see
+   `design.gof-patterns`), it does not resolve this unilaterally — it
+   escalates to the Architect Agent per its playbook's Escalation
+   Triggers, which routes to the Tech Lead to create a scoped, owned
+   remediation package (see `playbook.architect`, `playbook.tech-lead`).
+   The Scrum Master Agent folds that new package into the visible plan and
+   metrics (`playbook.scrum-master`).
+6. Every implementation package requires peer review by a different dev
    agent (`reviewer_agent`) before QA validation. The reviewer cannot be the
-   package owner.
-6. QA validates behavior against acceptance criteria. The Tech Lead resolves
-   code conflicts, shared-file ownership, contract ordering, and final
-   integration readiness. Spec Master records the result and controls
-   workflow status.
+   package owner, and checks conformance against the owner's playbook, not
+   just correctness.
+7. QA validates behavior against acceptance criteria using its own test
+   pyramid rules (`playbook.qa`: unit owned by the dev agent, backend
+   integration tests stub external systems with WireMock, frontend
+   component/E2E tests use Cypress). The Tech Lead resolves code conflicts,
+   shared-file ownership, contract ordering, and final integration
+   readiness. Spec Master records the result and controls workflow status.
+8. When discovery or the feature set implies more than one independently
+   deployable service, the Architect Agent proposes containerization and
+   Kubernetes/Helm; the DevOps and Infrastructure Agents own the concrete
+   CI/CD pipeline (any of GitHub Actions, Jenkins, Azure DevOps, Spinnaker,
+   Nexus — pick from evidence, not default) and Terraform provisioning
+   (`playbook.devops`, `playbook.infrastructure`). Do not propose this
+   tooling for a single deployable service.
 
 At the end of every meaningful round (guided intake batch, phase execution,
 workstream package, peer review, QA validation, or quality gate run), record

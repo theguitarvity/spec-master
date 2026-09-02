@@ -342,6 +342,20 @@ forma incremental: preserva estado, constitution, decisões e fases já
 concluídas, cria `.spec-master/workstreams.json` e aplica os novos gates só
 daquele ponto em diante.
 
+### Playbooks de agente
+
+Cada papel do Team Mode tem um playbook próprio em
+`spec-master/knowledge/playbooks/<papel>.md`: mandato, direitos de decisão,
+práticas obrigatórias (convenção de testes unitários e de integração, layout
+de pacotes hexagonal, WireMock/Cypress, IaC/CI-CD por tecnologia), o que
+evitar, e para quem escalar cada tipo de decisão (ex.: Backend Dev detecta
+inconsistência arquitetural → Architect Agent → Tech Lead cria o pacote de
+remediação → Scrum Master registra métricas e replaneja). O Knowledge Router
+(`knowledge for-role` / `knowledge for-context`) prioriza o playbook do papel
+antes de qualquer outro módulo de conhecimento — ver §6 do `PROTOCOL.md`.
+GoF design patterns (quando usar cada um, por sintoma no código) ficam em
+`knowledge/design/gof-patterns.md`.
+
 ## Métricas de entrega
 
 Ao final de cada rodada significativa, Spec Master registra métricas em:
