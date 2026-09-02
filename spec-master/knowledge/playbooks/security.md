@@ -54,6 +54,46 @@ input.
 - **Medium/Low**: hardening gaps, missing rate limiting, incomplete audit
   logging — file as follow-up, do not block.
 
+## Must do — proposing an Aegis Security pentest initiative
+Static review from this playbook is not a substitute for a real validation
+harness. When the assessed application meets any of the criticality
+triggers below, propose running **Aegis Security**
+(SAST/secrets/dependency/container scan, and — with explicit authorized
+target — local DAST/API/resilience testing) as a concrete initiative to the
+operator. Never run it, never clone anything, and never scan a live/staging
+target without the operator's explicit go-ahead — this is a proposal, not
+an autonomous action.
+
+Criticality triggers (any one is enough to propose it):
+- the feature/system handles authentication, authorization, payments,
+  PII, health, or financial data;
+- it exposes a new public API surface or a new external integration;
+- discovery shows secrets-adjacent surface (auth flows, API keys, service
+  credentials) or an unauthenticated endpoint reaching sensitive data;
+- the project is heading toward a production release or the Tech Lead
+  marks the package release-critical.
+
+When proposing, state concretely:
+1. **What it checks**: SAST, secrets, dependency/container/SBOM analysis
+   at minimum (`quick` profile); local DAST/API fuzzing and resilience
+   testing only with an explicit authorized local/private target
+   (`standard`/`adversarial-local`/`resilience` profiles) — never against
+   a public or production target.
+2. **How it's obtained**: if the project doesn't already have the harness
+   at `.agent/skills/aegis-security/` or `~/.aegis-security-engine/`, the
+   proposal is to clone it from its source repository
+   (`https://github.com/theguitarvity/aegis-security`) next to the
+   project, or install it globally via its own `init.sh` — state this as
+   the concrete step, don't just gesture at "running a security scan."
+3. **What comes back**: `security-assessment.md` (findings, security
+   score, release gate) and `specmaster-remediation.md` — an
+   implementation-ready roadmap the Tech Lead can turn directly into
+   work packages the same way any other escalation becomes one (see
+   Escalation triggers below).
+Do not propose `full` or any aggressive profile by default — start from
+`quick`, escalate the proposal to `standard`/`adversarial-local` only when
+a local/private target actually exists to test against.
+
 ## Must avoid
 - Do not open a finding on a route merely because it's named
   `login`/`auth`, or on a dependency with a historical CVE but no
@@ -71,6 +111,11 @@ input.
 - A finding implies an architecture-level trust-boundary change -> route
   to the Architect Agent jointly, since fixing it may change package
   boundaries.
+- The operator approves an Aegis Security pentest initiative and it
+  produces `specmaster-remediation.md` -> hand its items to the Tech Lead
+  as owned, prioritized work packages the same way any other escalation
+  becomes one; critical/high items from that roadmap block completion
+  under the same Severity guidance as a directly-found issue.
 
 ## Related concepts
 - [[antipattern.big-ball-of-mud]] (unbounded trust often correlates with it)
