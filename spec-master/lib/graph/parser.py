@@ -6,6 +6,7 @@ Extracts [[wikilinks]] from content and converts them to GraphEdge objects.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -47,8 +48,14 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
     return _parse_simple_yaml(fm_text), body
 
 
-def _strip_scalar(raw: str) -> str:
+def _strip_scalar(raw: str):
     value = raw.strip()
+    # store.py writes first_seen/last_verified as inline JSON (valid YAML flow style).
+    if value[:1] in ("{", "[") and value[-1:] in ("}", "]"):
+        try:
+            return json.loads(value)
+        except ValueError:
+            pass
     if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
         value = value[1:-1]
     return value

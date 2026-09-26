@@ -111,7 +111,14 @@ the context/normalized documents against the one stored at the last run:
 ├── team/{roles,adoption-report}.json|md
 ├── metrics/rounds.json
 ├── state.json                                            # persistent checkpoint
-├── reports/{discovery,traceability,final-report}.md
+├── traceability/features/<feature-id>.json               # traceability rows, one file per feature
+├── delta/snapshot.json                                   # baseline for `delta report`
+├── hooks.json, hooks/firings.jsonl                       # declarative hooks + firing log
+├── reports/{discovery,traceability,delta,final-report}.md
+├── reports/pr-<feature-id>.md                            # PR body (Git Flow, only when asked)
+├── reports/dashboard.html                                # self-contained execution dashboard
+├── bundles/                                              # web bundles for chat UIs
+├── adr/                                                  # ADRs when the repo has no ADR dir
 └── logs/workflow.md
 
 .specify/memory/constitution.md   # produced by the real Spec Kit, not reimplemented
@@ -127,12 +134,25 @@ spec-master/                         neutral, top-level package — NOT inside .
 ├── adapters/{claude-code,copilot,codex,qwen,generic}.md
 ├── templates/                       normalized-doc templates + per-phase prompt skeletons
 ├── lib/                             deterministic core, Python 3 stdlib, zero dependencies
-│   ├── cli.py                       state | fingerprint | discovery | features | git-strategy | gates | constitution | traceability | team | metrics
+│   ├── cli.py                       every command group below, JSON on stdout
 │   ├── adapters_gen.py              generates entrypoints for every non-bespoke Spec Kit agent
-│   ├── team_model.py                Team Mode roles, guided intake, adoption plan, workstreams, peer review
-│   ├── metrics.py                   round token usage and delivery-speed calculations
+│   ├── team_model.py                Team Mode roles, guided intake, adoption plan, workstreams, peer review, escalation routes
+│   ├── decision_memory.py           resolved escalations as graph Decision nodes + ADRs
+│   ├── metrics.py, calibration.py   round metrics, per-tier calibration of risk profiles
+│   ├── metrics_export.py            OpenTelemetry-shaped metrics export + schema validation
+│   ├── traceability.py              per-feature traceability store + Markdown render
+│   ├── context_delta.py             spec/plan/tasks delta between runs
+│   ├── hooks.py                     declarative event hooks (.spec-master/hooks.json)
+│   ├── risk_profile.py              risk tiers (intake + pre-implement), work packages per tier
+│   ├── sast_gates.py                SAST/secrets scanners detected as blocking gates
+│   ├── tracker_orchestration.py     Spec Kit tracker extensions (Jira, Azure DevOps, Linear, GitHub Issues)
+│   ├── pr_step.py, ears.py          PR plan at feature end, EARS requirement lint
+│   ├── dashboard.py                 self-contained HTML execution dashboard
+│   ├── web_bundle.py                single-file bundle of normalized docs for chat UIs
 │   ├── state.py, fingerprint.py, discovery.py, feature_model.py,
-│   │   git_strategy.py, quality_gates.py, constitution_diff.py, traceability.py
+│   │   git_strategy.py, quality_gates.py, constitution_diff.py, controller.py, phase_runner.py
+├── mcp/spec_master_mcp.py           stdio MCP server exposing every cli.py command as a tool
+├── schemas/                         JSON schema of the metrics round record
 └── tests/                           unittest suite, no LLM required
 
 .claude/commands/spec-master.md      Claude Code entrypoint ($ARGUMENTS, AskUserQuestion) — pointer only
@@ -163,7 +183,8 @@ target agent actually needs them.
 The split matters: everything **structural** (state transitions, staleness,
 dependency ordering, git-strategy idempotency, which build/test/lint command
 actually exists in this repo, constitution heading diff, traceability
-rendering, team roles/workstreams/adoption, and delivery metrics) lives in
+store and rendering, spec deltas, hooks, risk tiers, team
+roles/workstreams/adoption/escalations, and delivery metrics) lives in
 `spec-master/lib/` and is unit-tested. Everything
 **semantic** (reading the user's context, writing spec/plan/tasks content,
 resolving business ambiguity) stays in the agent's prompt, driven by
@@ -300,8 +321,13 @@ escalated to the user instead of looping forever or masking the problem.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s spec-master/tests -v
+python3 -m pytest spec-master/tests -q
 ```
+
+The core is stdlib-only. The test suite needs `pytest`, and `PyYAML` is
+optional for the graph/knowledge tests. Without pytest, `python3 -m unittest
+discover -s spec-master/tests` runs the `unittest` suites, but the modules that
+import `pytest` show up as import errors.
 
 The tests cover state transitions (including the 3-cycle repair cap and the
 rule that a phase can't start before its predecessor `PASSED`), fingerprint
@@ -341,10 +367,16 @@ not a bug.
 
 ## Limitations (this increment)
 
-- Features execute sequentially even when independent; the dependency graph
-  already supports future parallelization but nothing parallel is wired up.
-- No Jira/Azure DevOps/GitHub Issues integration, no dashboard/UI, no
-  dedicated MCP — out of scope per the CLAUDE.md FUTURE list.
+- Independent features can run in parallel git worktrees (`worktree
+  waves|plan|conflicts|aggregate`), but the agent still drives each wave;
+  the core only plans waves, predicts file conflicts and aggregates results.
+- Issue trackers (Jira, Azure DevOps, Linear, GitHub Issues) are reached only
+  through Spec Kit tracker extensions already installed in the target repo
+  (`tracker orchestrate`); Spec Master has no tracker client of its own.
+- The dashboard (`.spec-master/reports/dashboard.html`) is a static page
+  regenerated by hooks and polled by the browser, not a live server. The MCP
+  server (`spec-master/mcp/`) runs each call as a CLI subprocess, so it is
+  exactly as capable as the CLI and no more.
 - `constitution diff` and the analyze/repair loop give structural signals
   (heading-level diff, cycle counting); the semantic judgment of whether a
   MODIFICATION is actually safe still belongs to the agent, not the core.

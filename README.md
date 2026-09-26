@@ -9,7 +9,7 @@ ciclo *Specification-Driven Development*: `constitution → specify → clarify
 não tem contexto, `/spec-master new` guia a descoberta da ideia por chat e
 gera o contexto inicial.
 
-`55 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
+`631 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
 
 </div>
 
@@ -24,6 +24,7 @@ gera o contexto inicial.
   - [Instalação global (todos os projetos)](#instalação-global-todos-os-projetos)
 - [Uso rápido](#uso-rápido)
 - [Referência de comandos](#referência-de-comandos)
+  - [Servidor MCP](#servidor-mcp)
 - [Estratégias de Git](#estratégias-de-git)
 - [Retomada e idempotência](#retomada-e-idempotência)
 - [Team Mode](#team-mode)
@@ -143,7 +144,7 @@ Clone (ou já estando neste repo) — nada para instalar, é tudo Python 3
 stdlib:
 
 ```bash
-python3 -m unittest discover -s spec-master/tests -v   # 55 testes, ~10ms
+python3 -m pytest spec-master/tests -q   # 631 testes, ~2s
 ```
 
 Os entrypoints locais mantidos na raiz deste repositório são só os que
@@ -274,11 +275,23 @@ tanto pelo agente quanto por você, para depurar ou inspecionar o estado:
 | `discovery scan` | varre o repositório (linguagem, build/test/lint, CI, Spec Kit, constitution) sem alterar nada |
 | `features order` | ordenação topológica de features por dependência, com detecção de ciclo |
 | `git-strategy plan` | decide branch/idempotência para Git Flow vs Trunk-Based |
-| `gates detect` | detecta os comandos reais de build/test/lint/coverage do projeto |
+| `gates detect` | detecta os comandos reais de build/test/lint/coverage do projeto, e scanners SAST/secrets já configurados (Semgrep, Bandit, Gitleaks, CodeQL) como gates bloqueantes |
 | `constitution diff` | diff estrutural (heading a heading) entre constitution existente e proposta |
-| `traceability add\|render` | acumula e renderiza a matriz de rastreabilidade |
-| `team roles\|intake\|adopt\|workstreams` | define papeis multiagente, perguntas guiadas, adoção incremental e work packages com peer review |
+| `traceability add\|render\|migrate` | matriz de rastreabilidade gravada por feature (`.spec-master/traceability/features/<id>.json`); o relatório é só render |
+| `delta snapshot\|report` | delta ADDED/MODIFIED/REMOVED de spec/plan/tasks (e constitution/contexto) entre execuções, com fases que ficaram stale |
+| `hooks init\|list\|validate\|emit\|firings` | hooks declarativos por evento (`.spec-master/hooks.json`): gate falhou → repair, contrato mudou → revalidar constitution, escalonamentos, sensibilidade de risco |
+| `team roles\|intake\|adopt\|workstreams\|escalate\|resolve\|decisions\|routes` | papeis multiagente, intake guiado, adoção incremental, work packages com peer review, rotas de escalonamento e memória de decisão (nós `Decision` + ADR) |
 | `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada |
+| `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature = max(escopo, sensibilidade via hooks, override); decide se clarify é pulável, profundidade do analyze, revisores e work packages por papel em L/XL; reclassifica antes do implement |
+| `metrics calibrate` | compara custo real × orçamento de cada tier, detecta drift e propõe (ou, com `--apply`, grava) novos limites em `.spec-master/risk/thresholds.json` |
+| `metrics validate\|export` | valida `rounds.json` contra `schemas/metrics-round.schema.json` e exporta como OTLP/JSON (`/v1/metrics`) ou JSONL; nunca envia nada sozinho |
+| `bundle build` | gera um único Markdown colável (prompt da fase + artefatos + contexto, dentro do orçamento de tokens) para chats sem acesso a arquivos |
+| `worktree waves\|plan\|conflicts\|aggregate` | execução paralela de features independentes em git worktrees |
+| `workstreams review\|integrate\|aggregate` | vereditos de peer review/integração dos work packages do Team Mode executados em paralelo |
+| `tracker orchestrate` | detecta extensões de tracker do Spec Kit já instaladas (Jira, Azure DevOps, Linear, GitHub Issues) e diz qual invocar |
+| `dashboard render\|model` | dashboard HTML autocontido (`.spec-master/reports/dashboard.html`), re-renderizado por hook a cada fase; recarrega sozinho enquanto o ciclo roda |
+| `pr plan` | passo opcional de PR no fim de uma feature Git Flow: gera o corpo em `.spec-master/reports/pr-<id>.md` e só devolve o comando `gh`/`glab`/`az` depois de confirmação explícita; nunca executa nada |
+| `ears check` | lint opcional de critérios de aceite no formato EARS (EN/PT), consultivo por padrão; `--strict` quando a constitution exigir |
 
 ```bash
 python3 spec-master/lib/cli.py discovery scan --path .
@@ -289,6 +302,28 @@ python3 spec-master/lib/cli.py team adopt
 ```
 
 Referência completa de cada subcomando: [`spec-master/lib/cli.py`](spec-master/lib/cli.py) (docstring de topo) e [`spec-master/PROTOCOL.md`](spec-master/PROTOCOL.md) §0.
+
+### Servidor MCP
+
+Agentes que falam MCP podem chamar o core como tools, sem shell:
+[`spec-master/mcp/spec_master_mcp.py`](spec-master/mcp/spec_master_mcp.py) é um
+servidor MCP stdio (só stdlib) que expõe **todos** os comandos do `cli.py`. A lista
+de tools é introspectada do parser — `state show` vira `state_show`,
+`traceability render` vira `traceability_render` — então um grupo novo da CLI
+aparece no MCP sem mudar o servidor. Cada chamada roda o próprio `cli.py` em
+subprocesso: mesmo JSON, mesmos códigos de saída, mesmas regras do protocolo.
+
+O repositório não cria `.mcp.json` sozinho; para registrar no projeto:
+
+```json
+{"mcpServers": {"spec-master": {"type": "stdio", "command": "python3",
+  "args": ["spec-master/mcp/spec_master_mcp.py"],
+  "env": {"SPEC_MASTER_MCP_TIMEOUT": "120"}}}}
+```
+
+Com o engine global, aponte para `~/.spec-master-engine/mcp/spec_master_mcp.py`
+e passe `--project <repo>` (ou `SPEC_MASTER_PROJECT`). `--list-tools` imprime o
+catálogo. Detalhes em [`spec-master/mcp/README.md`](spec-master/mcp/README.md).
 
 ## Estratégias de Git
 
@@ -407,14 +442,27 @@ spec-master/                    engine neutro, na raiz — fora de .claude/, .gi
 ├── adapters/{claude-code,copilot,codex,qwen,generic}.md
 ├── templates/                  templates dos 3 docs normalizados + prompts por fase
 ├── lib/                        core determinístico, Python 3 stdlib, zero deps
-│   ├── cli.py                  state · fingerprint · discovery · features ·
-│   │                           git-strategy · gates · constitution ·
-│   │                           traceability · team
+│   ├── cli.py                  todos os grupos de comando, JSON no stdout
 │   ├── team_model.py           Team Mode: papeis, intake, adoção, workstreams,
-│   │                           Tech Lead ownership e peer review
+│   │                           Tech Lead ownership, peer review e escalonamento
+│   ├── decision_memory.py      decisões de escalonamento no grafo + ADR
 │   ├── metrics.py              rodadas, tokens e velocidade de entrega
+│   ├── calibration.py          calibração dos tiers de risco a partir das rodadas
+│   ├── metrics_export.py       export OpenTelemetry/JSON das métricas
+│   ├── risk_profile.py         tiers de ceremônia por escopo × sensibilidade
+│   ├── hooks.py                hooks declarativos por evento
+│   ├── context_delta.py        delta de spec/plan/tasks entre execuções
+│   ├── traceability.py         rastreabilidade por feature + render
+│   ├── worktree.py             ondas paralelas em git worktrees
+│   ├── sast_gates.py           scanners SAST/secrets como gate
+│   ├── tracker_orchestration.py  extensões de tracker do Spec Kit
+│   ├── pr_step.py · ears.py    PR opcional (Git Flow) · lint EARS
+│   ├── dashboard.py            dashboard HTML autocontido
+│   ├── web_bundle.py           bundle de arquivo único para chat UIs
 │   └── adapters_gen.py         gera os entrypoints dos 30+ agentes não-bespoke
 │                                (tabela == registro de integrações do Spec Kit)
+├── mcp/spec_master_mcp.py      servidor MCP stdio (todos os comandos como tools)
+├── schemas/                    JSON schema do registro de rodada de métricas
 └── tests/                      suíte unittest, sem LLM
 
 .claude/commands/spec-master.md      entrypoint Claude Code — $ARGUMENTS, AskUserQuestion
@@ -454,18 +502,21 @@ entrypoints da longa cauda são materializados no projeto alvo.
 └── .qwen/                      entrypoint Qwen-compatible shells
 ```
 
-Para o detalhamento completo de cada arquivo do core (`state.py`,
-`fingerprint.py`, `discovery.py`, `feature_model.py`, `git_strategy.py`,
-`quality_gates.py`, `constitution_diff.py`, `traceability.py`), veja
+Para o detalhamento completo de cada arquivo do core, veja
 [`docs/spec-master/README.md`](docs/spec-master/README.md).
 
 ## Testes
 
 ```bash
-python3 -m unittest discover -s spec-master/tests -v
+python3 -m pytest spec-master/tests -q
 ```
 
-55 testes, sem depender de nenhum LLM: transições de estado (incluindo o
+O core é stdlib pura, mas a suíte usa `pytest` (e `PyYAML`, opcional, nos
+testes de grafo/knowledge). Sem pytest, `python3 -m unittest discover -s
+spec-master/tests` roda as suítes `unittest`, e os módulos que importam
+`pytest` aparecem como erro de import.
+
+631 testes, sem depender de nenhum LLM: transições de estado (incluindo o
 teto de 3 ciclos de repair e a regra de que uma fase não começa antes da
 anterior ter `PASSED`), propagação de staleness por fingerprint, discovery
 de repositório (nunca inventa comando para uma stack sem manifest),
@@ -473,7 +524,10 @@ ordenação de dependências (com detecção de ciclo), idempotência e
 preservação de identificador na estratégia de git, detecção de quality gate
 por stack, diff estrutural de constitution, renderização de rastreabilidade,
 Team Mode com intake guiado, adoção incremental, papeis, workstreams e peer
-review, além de métricas de tokens e velocidade de entrega.
+review, métricas de tokens e velocidade de entrega, e cada item do roadmap:
+SAST/secrets, dashboard, servidor MCP, delta entre execuções, hooks, memória
+de decisão, PR opcional, EARS, export OpenTelemetry, web bundle,
+rastreabilidade por feature, tiers de risco e calibração.
 
 ## Condições de parada
 
@@ -528,12 +582,19 @@ saída dela), mas são diretórios diferentes.
 
 ## Roadmap
 
-- Paralelização real de features independentes (o grafo de dependências já
-  suporta; a execução hoje é sequencial).
-- Execução real dos workstreams do Team Mode por subagentes conectados aos
-  adapters, usando `.spec-master/workstreams.json` como contrato.
-- Integrações Jira / Azure DevOps / GitHub Issues.
-- Dashboard/UI e MCP dedicado.
+O roadmap de benchmark de mercado
+([`docs/market-benchmark-roadmap.md`](docs/market-benchmark-roadmap.md), itens
+1–16) está implementado: worktrees paralelos, workstreams do Team Mode,
+trackers via extensões do Spec Kit, SAST como gate, dashboard, MCP, delta por
+resume, hooks, memória de decisão, PR opcional, EARS, export de métricas, web
+bundle, rastreabilidade por feature, ceremônia adaptativa por risco e
+calibração por tier. A tabela de status com módulo e comando de cada item fica
+no próprio documento.
+
+Próximos passos:
+
+- Validar ponta a ponta num projeto real com Spec Kit inicializado (hoje a
+  cobertura é de core, testes unitários e smoke tests de CLI).
 - Acompanhar mudanças nos diretórios globais de Copilot CLI/Codex CLI (ainda
   evoluindo rápido nesses agentes) e ajustar `init.sh` se algum deles mudar
   de convenção.
@@ -560,7 +621,7 @@ Este repositório é a fonte de um único artefato: a skill `/spec-master`.
 Depois de qualquer mudança:
 
 ```bash
-python3 -m unittest discover -s spec-master/tests -v
+python3 -m pytest spec-master/tests -q
 ```
 
 ## Créditos

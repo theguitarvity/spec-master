@@ -40,6 +40,10 @@ FEATURE_PHASES = [
     "validate",
 ]
 PHASE_STATUSES = ["PENDING", "RUNNING", "PASSED", "FAILED", "BLOCKED", "SKIPPED"]
+# Phases the risk-adaptive ceremony (risk_profile.py) may skip for XS/S
+# features. A SKIPPED phase satisfies the next phase's prerequisite like PASSED.
+SKIPPABLE_PHASES = ("clarify",)
+DONE_PHASE_STATUSES = ("PASSED", "SKIPPED")
 
 MAX_ANALYZE_REPAIR_CYCLES = 3
 
@@ -155,14 +159,18 @@ def transition_phase(state: dict, feature_id: str, phase: str, status: str) -> d
         raise InvalidTransitionError(f"unknown phase: {phase}")
     if status not in PHASE_STATUSES:
         raise InvalidTransitionError(f"unknown phase status: {status}")
+    if status == "SKIPPED" and phase not in SKIPPABLE_PHASES:
+        raise InvalidTransitionError(
+            f"phase '{phase}' cannot be SKIPPED (skippable: {', '.join(SKIPPABLE_PHASES)})"
+        )
     feature = find_feature(state, feature_id)
     phase_idx = FEATURE_PHASES.index(phase)
-    if status in ("RUNNING", "PASSED") and phase_idx > 0:
+    if status in ("RUNNING", "PASSED", "SKIPPED") and phase_idx > 0:
         prev_phase = FEATURE_PHASES[phase_idx - 1]
         prev_status = feature["phases"].get(prev_phase, "PENDING")
-        if prev_status != "PASSED":
+        if prev_status not in DONE_PHASE_STATUSES:
             raise InvalidTransitionError(
-                f"cannot start/pass '{phase}' before '{prev_phase}' has PASSED "
+                f"cannot start/pass '{phase}' before '{prev_phase}' has PASSED or been SKIPPED "
                 f"(currently {prev_status})"
             )
     feature["phases"][phase] = status

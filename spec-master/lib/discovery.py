@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import os
 
+import sast_gates
+import tracker_orchestration
+
 # Each entry: manifest file (relative to scan root) -> language + candidate
 # commands to report *only if the manifest file exists*.
 _NODE_SCRIPT_MAP = {
@@ -169,6 +172,8 @@ def scan(root: str = ".") -> dict:
 
     is_git_repo = os.path.isdir(os.path.join(root, ".git"))
 
+    tracker_extensions = tracker_orchestration.detect_tracker_extensions(root)
+
     return {
         "stacks": stacks,
         "ci_present": ci_present,
@@ -183,4 +188,6 @@ def scan(root: str = ".") -> dict:
         "claude_md_present": claude_md_present,
         "agents_md_present": agents_md_present,
         "is_git_repo": is_git_repo,
+        "tracker_extensions": tracker_extensions,
+        "sast_scanners": sast_gates.summarize(root),
     }

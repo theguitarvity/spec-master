@@ -32,6 +32,7 @@ entity_types:
   - KubernetesResource
   - Test
   - ADR
+  - Decision
   - Risk
   - Vulnerability
   - Pattern

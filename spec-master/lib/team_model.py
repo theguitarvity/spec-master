@@ -230,6 +230,136 @@ GUIDED_INTAKE_QUESTIONS = [
 IMPLEMENTATION_AGENTS = ("backend-dev", "frontend-dev", "fullstack-dev")
 
 
+# Escalation routing transcribed from the role playbooks
+# (knowledge/playbooks/*.md "Escalation triggers" and
+# playbook.spec-master "escalation routing"). `chain` is the ordered list of
+# hops: the first hop decides/scopes, "tech-lead" turns it into an owned work
+# package, "scrum-master" folds that package into the visible plan. `raisers`
+# documents who the playbooks expect to raise it; other roles may still use
+# the route (flagged `raiser_expected: false`).
+ESCALATION_ROUTES = {
+    "architecture_inconsistency": {
+        "raisers": IMPLEMENTATION_AGENTS,
+        "chain": ["architect", "tech-lead", "scrum-master"],
+        "source": "playbook.spec-master#escalation-routing",
+    },
+    "structural_pattern": {
+        "raisers": IMPLEMENTATION_AGENTS,
+        "chain": ["architect", "tech-lead", "scrum-master"],
+        "source": "playbook.backend-dev#escalation-triggers",
+    },
+    "ownership_conflict": {
+        "raisers": IMPLEMENTATION_AGENTS + ("qa",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.spec-master#escalation-routing",
+    },
+    "shared_contract_change": {
+        "raisers": ("backend-dev", "fullstack-dev"),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.backend-dev#escalation-triggers",
+    },
+    "api_contract_change": {
+        "raisers": ("frontend-dev",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.frontend-dev#escalation-triggers",
+    },
+    "slice_too_large": {
+        "raisers": ("fullstack-dev",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.fullstack-dev#escalation-triggers",
+    },
+    "design_gap": {
+        "raisers": ("frontend-dev",),
+        "chain": ["ui-ux-brand"],
+        "source": "playbook.frontend-dev#escalation-triggers",
+    },
+    "sensitive_data": {
+        "raisers": ("backend-dev", "devops"),
+        "chain": ["security", "tech-lead"],
+        "source": "playbook.backend-dev#escalation-triggers",
+    },
+    "security_finding": {
+        "raisers": ("security",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.security#escalation-triggers",
+    },
+    "trust_boundary": {
+        "raisers": ("security", "infra"),
+        "chain": ["architect", "tech-lead", "scrum-master"],
+        "source": "playbook.security#escalation-triggers",
+    },
+    "product_ambiguity": {
+        "raisers": ("qa", "ui-ux-brand"),
+        "chain": ["po"],
+        "source": "playbook.qa#escalation-triggers",
+    },
+    "integration_regression": {
+        "raisers": ("qa",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.qa#escalation-triggers",
+    },
+    "new_infrastructure": {
+        "raisers": ("devops",),
+        "chain": ["infra"],
+        "source": "playbook.devops#escalation-triggers",
+    },
+    "architecture_resource": {
+        "raisers": ("infra",),
+        "chain": ["architect"],
+        "source": "playbook.infrastructure#escalation-triggers",
+    },
+    "unowned_blocker": {
+        "raisers": ("scrum-master",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.scrum-master#escalation-triggers",
+    },
+    "scope_blocker": {
+        "raisers": ("scrum-master",),
+        "chain": ["po", "scrum-master"],
+        "source": "playbook.scrum-master#escalation-triggers",
+    },
+    "priority_conflict": {
+        "raisers": ("po",),
+        "chain": ["architect", "tech-lead"],
+        "source": "playbook.product-owner#escalation-triggers",
+    },
+    "delivery_risk": {
+        "raisers": ("po",),
+        "chain": ["scrum-master"],
+        "source": "playbook.product-owner#escalation-triggers",
+    },
+    "systemic_violation": {
+        "raisers": ("architect",),
+        "chain": ["tech-lead", "scrum-master"],
+        "source": "playbook.architect#detecting-and-escalating-inconsistency",
+        "adr_candidate": True,
+    },
+}
+
+_ROLE_IDS = {role["id"] for role in AGENT_ROLES} | {"spec-master"}
+
+
+def escalation_route(kind: str, raised_by: str) -> dict:
+    """Resolve who handles an escalation, per the playbooks' routing rules."""
+    route = ESCALATION_ROUTES.get(kind)
+    if route is None:
+        raise ValueError(f"unknown escalation kind: {kind} (known: {', '.join(sorted(ESCALATION_ROUTES))})")
+    if raised_by not in _ROLE_IDS:
+        raise ValueError(f"unknown role: {raised_by}")
+    chain = [hop for hop in route["chain"] if hop != raised_by] or ["tech-lead"]
+    return {
+        "kind": kind,
+        "raised_by": raised_by,
+        "raiser_expected": raised_by in route["raisers"],
+        "chain": chain,
+        "decided_by": chain[0],
+        "package_owner": "tech-lead" if "tech-lead" in chain else None,
+        "plan_owner": "scrum-master" if "scrum-master" in chain else None,
+        "adr_candidate": bool(route.get("adr_candidate")),
+        "source": route["source"],
+    }
+
+
 @dataclass(frozen=True)
 class WorkPackage:
     id: str

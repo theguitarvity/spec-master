@@ -24,7 +24,7 @@ _EMBEDDED_ENTITY_TYPES = {
     "Class", "Interface", "API", "Endpoint", "Event", "Topic",
     "Queue", "Database", "Table", "Collection", "Cache",
     "ExternalSystem", "Dependency", "Deployment", "Container",
-    "KubernetesResource", "Test", "ADR", "Risk", "Vulnerability",
+    "KubernetesResource", "Test", "ADR", "Decision", "Risk", "Vulnerability",
     "Pattern", "AntiPattern", "Principle", "Technology", "Framework",
     "Library", "Agent", "Task", "Artifact", "QualityAttribute", "Policy",
 }

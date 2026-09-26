@@ -28,8 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import execution_mode  # noqa: E402
 import fingerprint  # noqa: E402
+import hooks  # noqa: E402
 import phase_contracts  # noqa: E402
 import phase_runner  # noqa: E402
+import risk_profile  # noqa: E402
 import state as state_mod  # noqa: E402
 
 PHASES = ("constitution", "specify", "clarify", "plan", "tasks", "analyze", "implement", "validate")
@@ -55,6 +57,20 @@ def _state_path(project: Path) -> Path:
 
 def _lock_path(project: Path) -> Path:
     return project / LOCK_RELATIVE_PATH
+
+
+def _emit(project: Path, event_type: str, payload: dict) -> None:
+    """Hook events are advisory: a broken hooks.json never stops a run."""
+    hooks.safe_emit(project, event_type, payload)
+
+
+def _emit_gate_results(project: Path, feature_id: str | None, gates) -> None:
+    for gate in gates or []:
+        if isinstance(gate, dict) and gate.get("result"):
+            _emit(project, "gate.result", {
+                "gate": gate.get("name"), "category": gate.get("category"), "tool": gate.get("tool"),
+                "result": gate.get("result"), "blocking": bool(gate.get("blocking")), "feature": feature_id,
+            })
 
 
 class ControllerError(Exception):
@@ -173,6 +189,34 @@ def _promote_feature_phase(state: dict, feature_id: str | None, phase: str) -> N
         pass  # no matching feature/phase in the per-feature loop — standalone run
 
 
+def _skip_by_risk_profile(state: dict, feature_id: str | None, phase: str) -> bool:
+    """Roadmap item 15: honor a recorded `SKIPPED` for a skippable phase, or record
+    one when the feature's saved risk tier (`risk classify --save`) makes the
+    phase skippable. Only `state_mod.SKIPPABLE_PHASES` (clarify) is ever skipped;
+    any doubt (no feature, no tier, refused transition) means "run the phase".
+    """
+    if not feature_id or phase not in state_mod.SKIPPABLE_PHASES:
+        return False
+    try:
+        feature = state_mod.find_feature(state, feature_id)
+    except state_mod.StateError:
+        return False
+    if feature["phases"].get(phase) == "SKIPPED":
+        return True
+    risk = feature.get("risk")
+    try:
+        profile = risk_profile.profile_for(risk.get("tier") if isinstance(risk, dict) else None)
+    except ValueError:
+        return False
+    if profile.get(phase) != "skippable":
+        return False
+    try:
+        state_mod.transition_phase(state, feature_id, phase, "SKIPPED")
+    except state_mod.StateError:
+        return False
+    return True
+
+
 def _try_contract_revalidation(project: Path, phase: str, attempts: list[dict],
                                 context_hash: str | None) -> dict | None:
     """NPV-010 / spec.md §11: a cheap, no-subprocess re-check of a
@@ -251,6 +295,8 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
                 state["constitution"] = {"status": "VALIDATED", "path": expected_artifacts[0]}
             _promote_feature_phase(state, feature_id, phase)
             state_mod.save(str(_state_path(project)), state)
+            _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "PASSED",
+                                                "source": "contract_revalidation"})
             return "PASSED"
 
     # Every call grants a fresh budget of up to `max_attempts` *new*
@@ -266,6 +312,7 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
         _acquire_lock(project, phase)
         started_at = _now_iso()
         print(f"[Spec Master] {phase} attempt {used + 1}/{max_attempts} started ({execution['active_mode']}).")
+        _emit(project, "phase.started", {"feature": feature_id, "phase": phase, "attempt": attempt_number})
         last_attempt = attempts[-1] if attempts else None
         prompt = _render_prompt(phase, attempt_number, last_attempt, allowed_writes, expected_artifacts)
         try:
@@ -297,6 +344,7 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
         }
         attempts.append(record)
         state_mod.save(str(_state_path(project)), state)
+        _emit_gate_results(project, feature_id, record.get("quality_gates"))
 
         if result["reason"] == "user_decision_required":
             try:
@@ -305,6 +353,7 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
                 pass
             state_mod.save(str(_state_path(project)), state)
             print(f"[Spec Master] {phase} paused: user decision required.")
+            _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "PAUSED"})
             checks = (record.get("structured_result") or {}).get("checks")
             if checks:
                 print(f"[Spec Master] {phase} checks: {checks}")
@@ -322,12 +371,15 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
                 state["constitution"] = {"status": "VALIDATED", "path": expected_artifacts[0]}
             _promote_feature_phase(state, feature_id, phase)
             state_mod.save(str(_state_path(project)), state)
+            _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "PASSED"})
             return "PASSED"
 
         print(f"[Spec Master] {phase} failed: {result['reason']}.")
 
     _preserve_failed_attempt(project, phase, attempts[-1])
     print(f"[Spec Master] {phase} attempts exhausted ({max_attempts}/{max_attempts}) — BLOCKED.")
+    _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "BLOCKED",
+                                        "reason": attempts[-1].get("reason")})
     return "BLOCKED"
 
 
@@ -341,7 +393,15 @@ def _drive_workflow(state: dict, project: Path, feature_id: str | None) -> int:
 
     blocked_phase = None
     paused_phase = None
+    skipped_phases = []
     for phase in PHASES:
+        if _skip_by_risk_profile(state, feature_id, phase):
+            skipped_phases.append(phase)
+            state_mod.save(str(_state_path(project)), state)
+            print(f"[Spec Master] {phase} SKIPPED — the feature's risk tier makes it skippable.")
+            _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "SKIPPED",
+                                                "source": "risk_profile"})
+            continue
         status = _run_phase_with_attempts(state, project, phase, feature_id)
         if status == "BLOCKED":
             blocked_phase = phase
@@ -366,7 +426,11 @@ def _drive_workflow(state: dict, project: Path, feature_id: str | None) -> int:
         except state_mod.InvalidTransitionError:
             pass
 
-    phases_summary = {phase: _phase_status(state, phase) for phase in PHASES}
+    _emit(project, "workflow.status", {"status": workflow_status, "feature": feature_id,
+                                       "blocked_phase": blocked_phase, "paused_phase": paused_phase})
+
+    phases_summary = {phase: "SKIPPED" if phase in skipped_phases else _phase_status(state, phase)
+                      for phase in PHASES}
     attempts_summary = {phase: len(attempts) for phase, attempts in state["attempts"].items()}
     outcomes = {
         phase: (attempts[-1].get("outcome") if attempts else None)

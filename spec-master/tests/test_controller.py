@@ -474,6 +474,43 @@ class TestCompatibilityWithFeature1Only(ControllerTestCase):
         )
 
 
+class TestRiskProfileSkip(ControllerTestCase):
+    # roadmap item 15: an XS/S feature's clarify is skippable in guarded mode too.
+    def _drive(self, tier, steps):
+        state = self._new_state()
+        state_mod.upsert_feature(state, {"id": "001-demo", "name": "Demo", "risk": {"tier": tier}})
+        state_mod.save(str(self.tmp / ".spec-master" / "state.json"), state)
+        with patch("phase_runner.subprocess.run", side_effect=fake_subprocess_run(steps, self.tmp)):
+            with patch("builtins.print") as mocked_print:
+                exit_code = controller._drive_workflow(state, self.tmp, "001-demo")
+        return exit_code, state, json.loads(mocked_print.call_args.args[0])
+
+    def test_skippable_tier_records_clarify_skipped_without_running_it(self):
+        steps = [_happy_step(phase) for phase in controller.PHASES if phase != "clarify"]
+        exit_code, state, report = self._drive("XS", steps)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["workflow_status"], "COMPLETED")
+        self.assertEqual(report["phases"]["clarify"], "SKIPPED")
+        self.assertNotIn("clarify", state["attempts"])
+        phases = state_mod.find_feature(state, "001-demo")["phases"]
+        self.assertEqual(phases["clarify"], "SKIPPED")
+        self.assertEqual(phases["plan"], "PASSED")
+        self.assertEqual(phases["validate"], "PASSED")
+
+    def test_required_tier_still_runs_clarify(self):
+        steps = [_happy_step(phase) for phase in controller.PHASES]
+        exit_code, state, report = self._drive("M", steps)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["phases"]["clarify"], "PASSED")
+        self.assertEqual(state_mod.find_feature(state, "001-demo")["phases"]["clarify"], "PASSED")
+
+    def test_feature_without_risk_tier_runs_clarify(self):
+        self.assertFalse(controller._skip_by_risk_profile(
+            {"features": [{"id": "x", "phases": {"specify": "PASSED", "clarify": "PENDING"}}]}, "x", "clarify"))
+        self.assertFalse(controller._skip_by_risk_profile(
+            {"features": [{"id": "x", "risk": {"tier": "XS"}, "phases": {"specify": "PASSED"}}]}, "x", "plan"))
+
+
 class TestStatus(ControllerTestCase):
     def test_status_with_no_state_file_returns_empty_payload(self):
         args = controller.build_parser().parse_args(["status", "--project", str(self.tmp)])

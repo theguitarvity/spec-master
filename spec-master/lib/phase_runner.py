@@ -65,6 +65,11 @@ def _run_quality_gates(project: Path) -> list[dict]:
     gates = quality_gates.detect(str(project))
     results = []
     for gate in gates:
+        if gate.get("execution") == "ci" or not gate.get("command"):
+            # CI-only scanner (e.g. CodeQL): nothing to run locally; the
+            # orchestrator confirms the CI check before declaring SUCCESS.
+            results.append({**gate, "result": "DEFERRED_TO_CI", "exit_code": None})
+            continue
         try:
             completed = subprocess.run(
                 gate["command"], shell=True, cwd=project, text=True,
@@ -84,7 +89,9 @@ def _run_quality_gates(project: Path) -> list[dict]:
     if not results:
         lines.append("No quality gates detected for this project.")
     for gate in results:
-        lines.append(f"- **{gate['name']}** (`{gate['command']}`): {gate['result']} "
+        where = f"`{gate['command']}`" if gate.get("command") else \
+            "CI: " + ", ".join(gate.get("evidence") or [])
+        lines.append(f"- **{gate['name']}** ({where}): {gate['result']} "
                       f"(exit {gate['exit_code']}, blocking={gate['blocking']})")
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return results

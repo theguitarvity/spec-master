@@ -46,3 +46,10 @@ def test_parse_node_file_no_id(tmp_path):
     
     node = parse_node_file(f)
     assert node is None
+
+def test_simple_yaml_fallback_reads_inline_json_written_by_store():
+    from graph.parser import _parse_simple_yaml
+    fm = _parse_simple_yaml('id: decision.x\nfirst_seen: {"run": "r1", "at": "2026-09-26"}\ntags: ["a", "b"]\nname: "{curly}"')
+    assert fm["first_seen"] == {"run": "r1", "at": "2026-09-26"}
+    assert fm["tags"] == ["a", "b"]
+    assert fm["name"] == "{curly}"

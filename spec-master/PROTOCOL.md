@@ -63,11 +63,15 @@ given machine; every adapter, in every project, reads from it.
 - **Core (`spec-master/lib/cli.py`, pure Python, tested without an LLM)**:
   state machine, context fingerprint/staleness, dependency ordering,
   git-strategy planning, quality-gate command detection, constitution
-  structural diff, traceability rendering, Team Mode roles, guided-intake
-  questions, workstream/review assignment, context budget accounting,
-  command policy preflight, graph snapshots/drift checks, runtime capability
-  contracts, and deterministic harness evals. The agent calls it via `Bash`
-  for every structural decision — never re-derive these by hand.
+  structural diff, per-feature traceability store and rendering, spec delta
+  between runs, declarative event hooks, Team Mode roles, guided-intake
+  questions, workstream/review assignment, escalation routing and decision
+  memory, risk tiers, worktree waves, SAST/secrets gate detection, tracker
+  extension detection, PR planning, EARS lint, execution dashboard, metrics
+  export, web bundles, context budget accounting, command policy preflight,
+  graph snapshots/drift checks, runtime capability contracts, and
+  deterministic harness evals. The agent calls it via `Bash` (or the MCP
+  server, §5) for every structural decision — never re-derive these by hand.
 - **Agent (you, running this skill)**: reading and semantically understanding
   the user's context file and the repository, writing the normalized context
   documents, generating each `speckit.*` prompt from the templates in
@@ -138,6 +142,17 @@ usual clarification gates later.
      compare` need to be redone if the user resumes; never blindly redo
      everything, and never treat `implement` as auto-invalidated — assess
      impact instead (§33).
+4. Whenever state exists (resume either way), show the user what changed in
+   the feature artifacts since the last run:
+   `delta report --path . --format markdown --output
+   .spec-master/reports/delta.md`. It lists ADDED/MODIFIED/REMOVED entries for
+   each `spec.md`/`plan.md`/`tasks.md` (sections, task ids, checkbox flips) plus
+   the constitution and `.spec-master/context/*.md`, and the phases each change
+   makes stale — the same style as `constitution diff`. After a phase finishes
+   (or at the end of the session), refresh the baseline with
+   `delta snapshot --path .` so the next resume diffs against it. A missing
+   snapshot is not an error: the report comes back with `baseline: false`
+   and nothing to show — take the snapshot and move on.
 
 If state exists and the user asks to adopt Team Mode in an already-running
 project, run `python3 spec-master/lib/cli.py team adopt` and follow its
@@ -332,6 +347,33 @@ not expose token accounting; never invent token counts. Append each row to
 packages/hour, features/hour, and per-round speed in
 `.spec-master/reports/final-report.md`.
 
+Every row in `rounds.json` must match `spec-master/schemas/metrics-round.schema.json`
+(JSON Schema 2020-12: one row at the root, the array at `#/$defs/rounds`; the
+optional keys are `notes`, `feature_id` and `tier`, and any other key is rejected).
+Before the final report, run `python3 spec-master/lib/cli.py metrics validate
+--path .`. It exits 1 and lists `{index, path, message}` for each error. Fix the
+rows it names; do not delete them to make the check pass. Its warnings, such as
+`total_tokens != input + output`, a reversed interval or a duplicate `round_id`,
+do not block anything, but mention them in the report.
+
+When the user wants the metrics in an observability stack, run
+`python3 spec-master/lib/cli.py metrics export --path . --format otlp --output
+.spec-master/metrics/rounds.otlp.json`. This produces an OTLP/JSON
+`ExportMetricsServiceRequest` that can be POSTed to a collector's
+`/v1/metrics` endpoint:
+
+- `spec_master.round.duration` is a Gauge in `s`.
+- `spec_master.tokens.input`, `spec_master.tokens.output`,
+  `spec_master.work_packages.completed` and `spec_master.features.completed`
+  are monotonic DELTA Sums with one data point per round.
+- Each data point carries the attributes `spec_master.round_id` and
+  `spec_master.phase`, plus `spec_master.feature_id` and `spec_master.tier`
+  when the row has them.
+
+Use `--format jsonl` for log pipelines. The export validates the rows first and
+writes nothing if they are invalid. Spec Master never sends the file anywhere
+itself: shipping it to a collector is a separate action the user must confirm.
+
 For each feature id in the resolved order, drive:
 
 ```
@@ -352,8 +394,13 @@ for Claude, `.github/skills/speckit-<phase>/SKILL.md` for Copilot,
 prompt as its effective input; if that command/skill doesn't exist, this is
 a `FAILED` condition (§29).
 
+- **risk tier**: classify each feature at intake (before `clarify`) and again
+  before `implement`, and apply the resulting ceremony profile. See
+  "Risk-adaptive ceremony" below.
 - **clarify**: batch every `USER_DECISION_REQUIRED` question into one message
   (§21); never ask one at a time; resume automatically after the answer.
+  Skip it only when the feature's profile says `clarify: skippable`, and
+  record the skip with `--status SKIPPED`.
 - **analyze**: never skip it, never go straight from `tasks` to `implement`
   (§24). On findings, don't implement — repair the responsible artifact
   (spec/plan/tasks) and re-run analyze. Track cycles with
@@ -369,7 +416,175 @@ a `FAILED` condition (§29).
 - **traceability**: as requirements get covered by spec/plan/tasks/tests, call
   `traceability add --row-json '{"requirement": "...", "source": "...",
   "feature": "...", "spec": "...", "plan": "...", "task": "...", "test":
-  "...", "status": "..."}'`.
+  "...", "status": "..."}'`. Rows go to one file per feature,
+  `.spec-master/traceability/features/<feature-id>.json` (`state init` enables
+  this store for new states; for a state created before it existed, run
+  `traceability migrate` once — idempotent — to move the legacy inline array
+  out of `state.json`).
+  Never edit those files or the rendered report by hand.
+
+#### Risk-adaptive ceremony (tiers XS–XL) and calibration
+
+Ceremony scales with risk. Every feature gets a tier. The tier picks a ceremony profile: how deep the pipeline goes, who reviews, and whether work is split into role packages. The core is deterministic (stdlib only). The orchestrator records decisions but never invents a tier.
+
+##### Tier = max(scope, sensitivity floors, override)
+
+- **Scope** is measured against `.spec-master/risk/thresholds.json`. If that file is absent, the built-in defaults apply. The signals are:
+  - acceptance criteria
+  - words in the description
+  - tasks
+  - files touched
+  - architectural layers
+- A feature's scope tier is the first tier whose limits hold every signal. The output's `scope.binding` shows which signals pushed it higher.
+  - **At intake** these are estimates from the spec text plus any `--paths` hints.
+  - **At `pre_implement`** the tasks come from `<spec_directory>/tasks.md`: the task count, plus the files and layers cited in the tasks.
+- **Sensitivity** comes from the hook events `feature.intake` and `feature.pre_implement`. The default `sensitivity-*` hooks use `raise_tier` with these floors:
+  - auth, payment, secrets: floor **L**
+  - schema, public_contract, external_provider: floor **M**
+  - Project hooks in `.spec-master/hooks.json` can disable a default hook or add new floors.
+- An **override** can only raise the tier. See the override rules below.
+
+##### Ceremony profiles (`risk profiles`)
+
+| Tier | clarify   | analyze | work packages | ADR check | review                   |
+|------|-----------|---------|---------------|-----------|--------------------------|
+| XS   | skippable | light   | no            | no*       | self                     |
+| S    | skippable | light   | no            | no*       | peer                     |
+| M    | required  | deep    | no            | no*       | peer                     |
+| L    | required  | deep    | yes           | yes       | peer + tech-lead         |
+| XL   | required  | deep    | yes           | yes       | peer + tech-lead + architect |
+
+\* The ADR check is forced on at any tier when sensitivity includes auth, payment, secrets or external_provider (see `profile.adr_reason`).
+
+Only `clarify` may be skipped. Record a skip with `state transition --feature ID --phase clarify --status SKIPPED`. The state machine refuses SKIPPED for every other phase. It does not check the profile itself, so the orchestrator must skip clarify only when `profile.clarify == "skippable"`. In guarded mode, `controller.py run --feature ID` does this on its own: when the saved `feature.risk.tier` makes clarify skippable, it records `SKIPPED`, emits `phase.transition` with `source: risk_profile`, and never starts a clarify session. The next phase then accepts `SKIPPED` as the previous status, the same as `PASSED`.
+
+For L/XL features, `risk work-packages --feature ID --tier L` returns role packages in this order: contract → data-model → backend → frontend → e2e → docs. Each package carries an owner, a peer reviewer and `depends_on`. Register them with the workstreams, and do not create new speckit steps.
+
+##### When the orchestrator MUST classify
+
+1. **Intake.** Run this before `speckit.clarify`:
+   `python3 spec-master/lib/cli.py risk classify --path . --feature ID --stage intake --save [--paths a,b]`
+   - It persists `feature.risk` and emits `feature.intake`. The firings go to `.spec-master/hooks/firings.jsonl`.
+   - It returns `context`: the change delta since the last snapshot, plus prior decisions for this feature. Show these to the agents at intake.
+   - Apply `profile` to decide whether clarify is skippable, how deep analyze goes, and who reviews.
+2. **Pre-implement.** Run this after `speckit.tasks` and before `speckit.implement`:
+   `python3 spec-master/lib/cli.py risk classify --path . --feature ID --stage pre_implement --save`
+   - If `escalated` is true, stop. Announce `added_obligations`, then re-run every phase in `rerun_phases` before implementing: `analyze` always, and `clarify` if it did not PASS.
+   - If `deescalated` is true, report it, but keep the obligations already met.
+   - If `warnings` includes "tasks.md not found", the tier is still the intake estimate.
+
+`risk classify` without `--save` is a dry run. It writes nothing and emits nothing.
+
+##### Override rules
+
+`python3 spec-master/lib/cli.py risk override --path . --feature ID --tier L --reason "..." [--by user]`
+
+- A reason is mandatory. The command fails if the reason is empty.
+- Overrides can only go **up**. A request below the current tier is refused (exit 1). It is still appended to `.spec-master/risk/overrides.jsonl` with `accepted: false`, for audit.
+- An accepted override sets `feature.risk.override` and `feature.risk.tier`. It is logged with `accepted: true`, and it survives later reclassification. The command returns `added_obligations` and the new `profile` and `work_packages`.
+- Every accepted override is a calibration signal. It means the computed tier was too low.
+- Never lower a tier to save time. If a sensitivity floor looks wrong, change the project hooks config and record why.
+
+##### Calibration (`metrics calibrate`)
+
+Attribute every round so calibration can use it:
+
+`python3 spec-master/lib/cli.py metrics record-round ... --feature-id ID --tier <feature.risk.tier>`
+
+Rows without these two flags are counted in `ignored_rounds` and are not used.
+
+`python3 spec-master/lib/cli.py metrics calibrate --path . [--rounds FILE] [--window 3] [--state PATH] [--apply]`
+
+- For each completed feature, calibration compares the actual cost with its tier's budget. The cost basis is tokens, falling back to duration ≥ 60 s, then round count. Each feature is then marked:
+  - `under`: it cost more than its tier's budget
+  - `over`: it cost less than 75% of the budget of the tier below
+  - `ok`
+  - `pending`: not yet completed
+- A feature whose tier came from sensitivity or an override is never counted as `over`.
+- **Drift** means the last `--window` features of a tier went the same way. It is reported as, for example, "XS está custando como S há 3 features seguidas".
+  - Drift `under` tightens that tier's thresholds (×0.8).
+  - Drift `over` loosens the tier below (×1.25), so cheap features move down.
+  - The monotonic order of tiers is always preserved.
+- Without `--apply`, calibration only reports. `proposed_thresholds` shows the result.
+- With `--apply`:
+  - It writes `.spec-master/risk/thresholds.json` and appends to `.spec-master/risk/calibration-log.jsonl`.
+  - Evidence that was already used (`consumed_until`) never fires the same drift again.
+  - Run it only with the user's agreement, at a retrospective or a milestone.
+
+#### Optional EARS acceptance criteria
+
+Acceptance criteria *may* use EARS-like syntax (EN or PT). Supported patterns:
+ubiquitous (`The <system> shall <response>` / `O <sistema> deve <resposta>`),
+event (`When`/`Quando`), state (`While`/`Enquanto`), unwanted
+(`If … then`/`Se … então`), optional (`Where`/`Onde`), and complex
+(several preconditions). The modal is `shall` (EN) or `deve`/`deverá` (PT).
+`must`/`should`/`will` are only flagged with a `weak_modal` hint.
+
+- `ears check --path . [--feature <id>]` checks the criteria stored in
+  `state.json`. `ears check --text "<criterion>" [--text …]` checks draft text
+  before `state upsert-feature`.
+- The check is **advisory by default**: it always exits 0 and reports
+  `coverage`, per-criterion `pattern`/`clauses`, and `hints`, such as
+  `no_modal`, `weak_modal`, `missing_system`, `missing_comma`, `missing_then`,
+  `vague_term` and `multiple_shall`. Use the hints to tighten wording during
+  `/speckit.clarify`. Never rewrite criteria silently. Propose the rewrite and
+  keep the user's meaning.
+- `--strict` is opt-in. Use it only when the constitution or the user requires
+  EARS. With `--strict`, any non-EARS criterion makes `valid: false` and the
+  command exits 1. Treat that as a clarify issue, not a blocker for other
+  features.
+
+#### Event hooks (declarative automation)
+
+`state transition` and the guarded-mode controller emit events
+(`phase.started`, `phase.transition`, `gate.result`, `workflow.status`, …);
+`.spec-master/hooks.json` maps them to actions. The built-in defaults cover
+the recurring rules — `hooks list --path .` shows the effective set, `hooks
+init --path .` writes an editable config (a project hook with the same `id`
+overrides a default; `disabled: [ids]` turns one off), `hooks validate` checks
+it.
+
+- **Directives** (`repair`, `revalidate`, `escalate`, `raise_tier`, `block`,
+  `notify`) are instructions for *you*: `state transition` prints them under
+  `hook_directives`, and `hooks emit --event <type> --payload-json '{...}'`
+  returns them for events you raise yourself (`analyze.findings` with the
+  finding counts after every analyze, `package.contract_changed` when a
+  package changes a public contract, `gate.result` for each gate you run by
+  hand). Follow them: `repair` → repair the named phase/artifact (analyze
+  repair rules still apply), `revalidate` → re-run `constitution diff`,
+  `escalate` → hand the issue to the returned `route.chain` (the first hop
+  decides), `block` → transition the feature to `BLOCKED` and tell the user.
+- **Internal actions** (`render_dashboard`, `record_decision`) are executed by
+  the core itself and never stop a run if they fail.
+- Every firing is appended to `.spec-master/hooks/firings.jsonl` (`hooks
+  firings --limit N`). Hooks are advisory plumbing: a broken `hooks.json` is
+  reported by `hooks validate` but never breaks `state transition` or the
+  controller.
+
+#### Escalations and decision memory
+
+When a role hits one of its playbook's escalation triggers, don't route it by
+hand: `team escalate --path . --kind <kind> --raised-by <role> [--feature
+<id>] [--summary "..."]` returns the playbook route (`chain`, `decided_by`,
+`package_owner`, `adr_candidate`); `team routes` lists every kind. Once the
+deciding role has decided, record it:
+
+```
+team resolve --path . --kind <kind> --raised-by <role> --decision "<what was decided>"
+  [--decided-by <role>] [--rationale "..."] [--feature <id>] [--title "..."]
+  [--alternative "<rejected option>" ...] [--adr-trigger <trigger> ...]
+```
+
+This writes a `Decision` node to the knowledge graph (`DECIDED_BY` the
+deciding agent, `INFLUENCES` the feature node when it exists) — re-recording
+the same decision is idempotent. ADR triggers (`new_external_provider`,
+`new_core_data_model`, `security_privacy_change`, `boundary_change`,
+`infra_change`, `rejected_alternatives`; `systemic_violation` escalations add
+one automatically) also write an ADR file into the repository's existing ADR
+directory (`docs/adr`, `docs/decisions`, …), or `.spec-master/adr/` when the
+repository has none. Before a role acts, load its past decisions together
+with its playbook: `knowledge for-role --role <role> --path .` (adds a
+`decisions` list), or `team decisions --path . --role <role> | --feature <id>`.
 
 ### Step 7 — Quality gates (CLAUDE.md §28)
 
@@ -381,6 +596,18 @@ allowed `command` via `Bash`, record
 `{name, command, result, exit_code, blocking}`; a failing `blocking: true`
 gate prevents `SUCCESS` (see stopping conditions).
 
+Security scanners follow the same evidence rule. `gates detect` also returns
+SAST/secret-scanning gates (`category: "sast"` or `"secrets"`) — but only for
+scanners the repository already opted into (a Semgrep/Bandit/Gitleaks config,
+a pre-commit hook, a package script, or a CI workflow running CodeQL/Semgrep);
+no evidence means no gate, never a failure. These gates are always
+`blocking: true`. A gate with `execution: "ci"` has `command: null`: don't
+invent a local equivalent — record it as `DEFERRED_TO_CI` (the guarded-mode
+controller does this automatically) and confirm the CI check result before
+declaring `SUCCESS`. A failing security gate escalates to the Security Agent
+through the `escalate-security-gate-failure` hook. `discovery scan` reports
+the same evidence under `sast_scanners`.
+
 For prompts that include generated context, preflight the assembled context
 with `budget file --files <comma-separated-files> --token-budget <budget>`.
 If relevant context is omitted, list the omitted IDs/files in the phase notes
@@ -388,8 +615,10 @@ instead of silently exceeding budget.
 
 ### Step 8 — Report & traceability (CLAUDE.md §35-36)
 
-`traceability render --path .spec-master/state.json >
-.spec-master/reports/traceability.md`. Fill
+`traceability render --path .spec-master/state.json --output
+.spec-master/reports/traceability.md` (add `--feature <id>` for a single
+feature's matrix). The report is always a render of the per-feature store —
+never the source of truth, never edited by hand. Fill
 `templates/final-report.md` → `.spec-master/reports/final-report.md`.
 Before printing the final status, run:
 
@@ -418,6 +647,63 @@ Determine final status per §29:
   acceptance criteria, or critical tests remain failing.
 - `PARTIAL`: some features `SUCCESS`, others `BLOCKED`/`FAILED` — report per
   feature.
+
+#### Local dashboard
+
+`.spec-master/reports/dashboard.html` is a static, self-contained page: inline CSS only, no CDN, fonts or network requests. It follows light or dark mode from the OS and works on narrow screens. It is a **render**, never a source of truth. Open it with `file://` in any browser.
+
+```bash
+python3 spec-master/lib/cli.py dashboard render --path . [--output PATH] [--refresh N]
+# -> {"output": "<abs path>", "features": 10, "completeness": 30.0, "active": false}
+python3 spec-master/lib/cli.py dashboard model --path .    # the read-only JSON model the page is built from
+```
+
+- **When it updates.** The default `dashboard-refresh` hook re-renders the page on `phase.started`, `phase.transition` and `workflow.status`. Hook failures are swallowed and never block a transition. Run `dashboard render` to refresh it on demand.
+- **Read-only.** Rendering never writes `state.json` or any other source. The only thing it creates is the output file and its parent directory. The write is atomic: a temp file in the same directory, then `os.replace`. The knowledge graph is read only if `.spec-master/knowledge/graph` already exists.
+- **Graceful degradation.** Each source is optional: state, `workstreams.json`, `metrics/rounds.json`, `hooks/firings.jsonl`, traceability rows, decision memory and the graph.
+  - A missing source shows an empty section.
+  - A corrupt source is listed under "Some sources could not be read".
+  - A missing `state.json` renders a "Not initialized" page instead of failing.
+- **Completeness.** A phase counts as done when it is `PASSED` or `SKIPPED`. Per-feature % is done/phases. Global % is weighted by phase count across all features.
+- **Refresh rule.** The page is static, so its run state is decided when it is rendered:
+  - `running`: `.spec-master/run.lock` is fresh (not older than `execution.phase_timeout_seconds`, default 600s), or some feature phase is `RUNNING`. The page gets a spinner and `<meta http-equiv="refresh" content="N">`. N comes from `--refresh` and defaults to 5.
+  - `settling`: not running, but `state.json` or the firings log changed in the last 120s, and the workflow is not terminal (`COMPLETED/BLOCKED/FAILED/PAUSED`) or the last logged lifecycle event is `phase.started`. There is no meta refresh. A tiny inline script reloads every N seconds until 120s after generation. This bridges the gap between phases, where the controller has already released the lock.
+  - `idle`: everything else. No refresh and no script.
+  - `--refresh 0` disables both the meta refresh and the settling script.
+  - This rule is a heuristic over files on disk. A crashed agent that leaves a phase `RUNNING` keeps the page in `running` until the state is corrected.
+
+#### Optional PR step (Git Flow only — never automatic)
+
+At the end of a Git Flow feature, after `validate` is `PASSED` and the
+final report is filled, you *may* offer to open a pull request:
+
+1. `pr plan --path . --feature <id> [--base <branch>] [--draft]`. This renders
+   the PR description (summary, acceptance criteria, phases, the feature's
+   traceability matrix and the final report) to
+   `.spec-master/reports/pr-<id>.md` and returns an `action`:
+   - `noop`: the workflow is trunk-based or not chosen. Do nothing.
+   - `blocked`: there is no recorded `feature.branch`, `validate` is not
+     `PASSED`, or head equals base. Report the `reason` and don't open a PR.
+   - `confirm_required`: show the user the `title`, `head → base`,
+     `provider`, and `body_path`, and **ask explicitly** whether to open the
+     PR. If the answer is no, stop there. The body file stays as an artifact.
+2. Only after an explicit "yes" in chat, re-run with `--confirm`. The result
+   is `action: open_pr` with `pre_directives` and a `directive`:
+   - Execute each `pre_directives[].argv` first. This is `git push -u <remote>
+     <head>`, emitted only when the remote-tracking ref is missing.
+   - Then execute `directive.argv` (`gh pr create …`, `glab mr create …` or
+     `az repos pr create …`, depending on the provider detected from the
+     remote URL). If `directive.argv` is `null` (unknown provider), show the
+     user `directive.manual` and the body file instead.
+   - If `tool_available` is false, tell the user which CLI is missing. Don't
+     install it.
+3. Record the PR URL printed by the tool in the final report and the feature
+   notes.
+
+The core never runs `git push`/`gh`/`glab`/`az` itself. It only emits
+directives with `requires: ["user_confirmed"]`. One confirmation covers one
+PR. Don't reuse it for other features. `pr plan` exits 0 for
+`noop`/`blocked`/`confirm_required`, so always branch on `action`.
 
 ## 3. Idempotency & staleness (CLAUDE.md §32-33)
 
@@ -480,3 +766,72 @@ generator table, not every generated directory at its root. See
 None of these platform directories contain any Python, templates, or
 protocol content of their own — everything structural or semantic-but-shared
 lives only in `spec-master/`.
+
+### MCP server (dedicated, stdio)
+
+Agents that speak MCP can call the deterministic core as tools instead of
+shelling out: `spec-master/mcp/spec_master_mcp.py` is a stdlib-only stdio MCP
+server that exposes **every** `cli.py` command. The tool list is introspected
+from `cli.build_parser()` at startup — `<group> <action>` becomes the tool
+`<group>_<action>` (dashes as underscores: `state_show`, `git_strategy_plan`,
+`traceability_render`, `graph_neighbors`, `hooks_emit`, `team_decisions`, ...),
+so a new CLI group is available over MCP with no server change. Arguments are
+the argparse `dest` names (`{"feature": "001-auth", "phase": "plan", "status":
+"PASSED"}` for `state_transition`).
+
+Each call runs `python3 spec-master/lib/cli.py ...` in a subprocess (argv
+list, no shell) with `cwd` fixed to the project root, so the MCP path and the
+shell path share the same code, JSON output and exit codes: `structuredContent`
+carries the CLI's JSON object, `isError: true` mirrors a non-zero exit (e.g.
+`{"error": "state file not found: ..."}`). Tools annotated
+`readOnlyHint: true` never write (`*_show`, `*_list`, `*_validate`,
+`graph_stats`, `graph_neighbors`, `gates_detect`, ...); every other tool may
+update `.spec-master/` exactly like its CLI command — the protocol rules above
+(when to transition, when to record traceability) apply unchanged.
+
+Register it per project in `.mcp.json` (Claude Code starts stdio servers in
+the project root):
+
+```json
+{"mcpServers": {"spec-master": {"type": "stdio", "command": "python3",
+  "args": ["spec-master/mcp/spec_master_mcp.py"]}}}
+```
+
+With the global engine, use `~/.spec-master-engine/mcp/spec_master_mcp.py`
+and pass `--project <repo>` (or `SPEC_MASTER_PROJECT`) if the client does not
+start servers in the repository root. `SPEC_MASTER_MCP_TIMEOUT` (default 120 s)
+bounds each call; `--list-tools` prints the tool catalog for debugging. See
+`mcp/README.md`.
+
+### Web bundle (chat UIs without tools)
+
+`python3 spec-master/lib/cli.py bundle build --path . --feature <id>
+[--phase <phase>] [--budget 12000] [--output FILE | --stdout] [--no-timestamp]`
+writes one Markdown file to `.spec-master/bundles/<feature>-<phase>.md`. You
+can paste that file into a chat assistant that has no file-system or shell
+access. When `--phase` is omitted, the phase is the feature's first one that is
+not `PASSED` or `SKIPPED`. `--phase constitution` works without `--feature`.
+
+The bundle contains, in order:
+
+1. Usage steps for the user and hard rules for the assistant:
+   - it has no tool access;
+   - it must return every deliverable in full, preceded by `File: <path>`;
+   - it must never invent sources, and must ask for anything left out.
+2. The phase prompt, rendered from `templates/prompts/<phase>.md`:
+   - placeholders are filled from `state.json` and the project files;
+   - anything that cannot be filled stays visible as `{{name}}` and is listed
+     under "Unresolved placeholders".
+3. The feature record.
+4. The prior artifacts, constitution and normalized context for that phase, in
+   priority order, trimmed as whole files by `context_budget.budget_items()`.
+5. A **Not included** list of every file dropped for the budget or not found.
+
+The deliverable paths come from `phase_contracts.PHASE_ARTIFACTS`. The
+`validate` phase has no template, so it gets a built-in prompt that marks
+every quality gate `NOT RUN`.
+
+The bundle is a convenience for people outside an agent runtime. It does not
+replace the guarded flow. Once the user has saved the returned files, record
+the outcome with the normal CLI (`state transition`, `traceability add`, and so
+on). A bundle is never evidence that a phase passed.

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:spec-master:schemas:metrics-round:1.0.0",
+  "title": "Spec Master metrics round",
+  "description": "One delivery-round row as produced by metrics.record_round(). The ROOT of this schema describes ONE row; the file .spec-master/metrics/rounds.json is a JSON array of rows and is described by '#/$defs/rounds'. Validated in-repo by spec-master/lib/metrics_export.py (stdlib subset validator: $ref (local), type, required, properties, additionalProperties, enum, minimum, minLength, pattern, format=date-time, items).",
+  "$comment": "Rates (tokens_per_minute, packages_per_hour, features_per_hour) and total_tokens are derived by metrics.record_round(); metrics_export.validate_rounds() additionally reports consistency warnings (e.g. total_tokens != input_tokens + output_tokens) that JSON Schema cannot express.",
+  "type": "object",
+  "required": [
+    "round_id",
+    "phase",
+    "started_at",
+    "ended_at",
+    "duration_seconds",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "work_packages_completed",
+    "features_completed",
+    "tokens_per_minute",
+    "packages_per_hour",
+    "features_per_hour"
+  ],
+  "properties": {
+    "round_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique id of the round (e.g. r3-plan-parallel-worktree-execution)."
+    },
+    "phase": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Workflow phase the round covered (specify, clarify, plan, tasks, analyze, implement, validate, ...). Free string: record_round does not restrict it."
+    },
+    "started_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "ISO 8601 start time; 'Z' or an explicit offset (a naive value is read as UTC, like metrics._parse_iso)."
+    },
+    "ended_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "ISO 8601 end time."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "minimum": 0,
+      "description": "ended_at - started_at in seconds (clamped at 0, rounded to 3 decimals)."
+    },
+    "input_tokens": {"$ref": "#/$defs/count", "description": "Prompt/input tokens consumed in the round."},
+    "output_tokens": {"$ref": "#/$defs/count", "description": "Completion/output tokens produced in the round."},
+    "total_tokens": {"$ref": "#/$defs/count", "description": "input_tokens + output_tokens."},
+    "work_packages_completed": {"$ref": "#/$defs/count", "description": "Team Mode work packages completed in the round."},
+    "features_completed": {"$ref": "#/$defs/count", "description": "Features completed in the round."},
+    "tokens_per_minute": {"$ref": "#/$defs/rate"},
+    "packages_per_hour": {"$ref": "#/$defs/rate"},
+    "features_per_hour": {"$ref": "#/$defs/rate"},
+    "notes": {
+      "type": "string",
+      "description": "Optional free-text note (never exported as a metric attribute)."
+    },
+    "feature_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional id of the feature the round worked on (state.json features[].id)."
+    },
+    "tier": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional sizing/complexity tier label attached to the round."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "rounds": {
+      "description": "Top-level form of .spec-master/metrics/rounds.json: an array of round rows.",
+      "type": "array",
+      "items": {"$ref": "#"}
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})?$",
+      "format": "date-time"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rate": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Derived throughput rate; 0.0 when the round has zero duration."
+    }
+  }
+}

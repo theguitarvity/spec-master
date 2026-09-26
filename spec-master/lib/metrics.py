@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+# Ceremony tiers (mirrors risk_profile / hooks.TIER_ORDER; kept local so this
+# module stays dependency-free).
+TIERS = ("XS", "S", "M", "L", "XL")
+
 
 def _parse_iso(value: str) -> datetime:
     normalized = value.replace("Z", "+00:00")
@@ -23,8 +27,18 @@ def record_round(
     work_packages_completed: int = 0,
     features_completed: int = 0,
     notes: str | None = None,
+    feature_id: str | None = None,
+    tier: str | None = None,
 ) -> dict:
-    """Create a deterministic metrics row for one delivery round."""
+    """Create a deterministic metrics row for one delivery round.
+
+    `feature_id` / `tier` are optional attribution for per-tier calibration
+    (`calibration.py`); the keys are only written when given, so rows without
+    them are unchanged."""
+    if tier:
+        tier = str(tier).strip().upper()
+        if tier not in TIERS:
+            raise ValueError(f"unknown tier: {tier} (known: {', '.join(TIERS)})")
     if input_tokens < 0 or output_tokens < 0:
         raise ValueError("token counts cannot be negative")
     if work_packages_completed < 0 or features_completed < 0:
@@ -57,6 +71,10 @@ def record_round(
     }
     if notes:
         payload["notes"] = notes
+    if feature_id:
+        payload["feature_id"] = feature_id
+    if tier:
+        payload["tier"] = tier
     return payload
 
 
