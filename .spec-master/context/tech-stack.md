@@ -2,264 +2,153 @@
 
 ## Architecture Overview
 
-Motor de orquestração Python stdlib (`spec-master/lib/`) exposto via uma
-CLI (`spec-master/lib/cli.py`, hoje com grupos `state`, `fingerprint`,
-`discovery`, `features`, `git-strategy`, `gates`, `constitution`,
-`traceability`). O agente (skill Claude Code / Copilot / Codex / OpenCode)
-chama essa CLI para toda decisão estrutural e executa as fases reais do
-Spec Kit. A feature guarded-mode adiciona uma segunda forma de condução:
-um controlador determinístico (`controller.py`) que substitui o agente
-como condutor de transições de fase, delegando a execução de cada fase a
-um processo externo isolado (inicialmente `opencode run`) em vez de deixar
-o próprio agente conduzir livremente.
+Núcleo determinístico Python stdlib puro (`spec-master/lib/`) exposto via
+CLI (`cli.py`, JSON em stdout), orquestrado por um agente (Claude Code /
+Copilot / Codex / Qwen) que segue `spec-master/PROTOCOL.md`. Camada
+semântica (specify/clarify/plan/tasks/analyze/implement) delegada aos
+comandos/skills nativos do GitHub Spec Kit instalado no projeto-alvo.
 
 ## Languages
 
-- Python 3 (stdlib apenas, sem dependências externas — `spec-master/lib/`,
-  `spec-master/tests/`).
-- Bash (`init.sh`, scripts de instalação global).
+- Python (stdlib, sem dependências externas obrigatórias no core) —
+  `DISCOVERED_FROM_CODEBASE`, `spec-master/lib/*.py`.
 
 ## Frameworks
 
-- Nenhum framework externo — `unittest` da stdlib para testes
-  (`python3 -m unittest discover -s spec-master/tests -v`).
+- Nenhum framework externo no core — módulos próprios (`state.py`,
+  `feature_model.py`, `git_strategy.py`, `quality_gates.py`,
+  `graph/`, `knowledge/`, `controller.py`, `phase_runner.py`, etc.).
 
 ## Runtime
 
-- Executado localmente via `python3`, sem servidor persistente.
-- Integração externa opcional: `opencode` CLI (subprocess), `ollama`
-  (modelo local, referenciado via `--model ollama-neon/...` no exemplo da
-  CLI determinística).
+- Python 3 (ambiente local: 3.14.6) — `DISCOVERED_FROM_CODEBASE`.
+- Execução via `Bash` + `python3 spec-master/lib/cli.py <comando>`.
 
 ## Infrastructure
 
-- Nenhuma infraestrutura de nuvem — ferramenta local/CLI.
-- Estado persistido em arquivo: `.spec-master/state.json` (por projeto).
+- Nenhuma infraestrutura de CI configurada neste repositório
+  (`ci_present: false` na última `discovery scan`).
+- Execução local; estado persistido em `.spec-master/` (git-tracked).
 
 ## Components
 
-### `controller.py` (novo)
+### spec-master/lib/ (core determinístico)
 
 Responsibilities:
 
-- Orquestrar o loop determinístico do modo `guarded`/`auto`: ler estado,
-  confirmar fase anterior `PASSED`, criar snapshot, renderizar prompt,
-  invocar o runner da integração escolhida, validar artefatos, promover ou
-  registrar falha, aplicar timeout/limite de tentativas.
-- Expor subcomandos `run`, `resume`, `status`.
+- State machine (`state.py`), fingerprint/staleness (`fingerprint.py`),
+  ordenação de dependências (`feature_model.py`), git strategy
+  (`git_strategy.py`), quality gates (`quality_gates.py`), diff de
+  constitution (`constitution_diff.py`), rastreabilidade
+  (`traceability.py`), Team Mode (`team_model.py`), execution mode/guarded
+  controller (`execution_mode.py`, `controller.py`, `phase_runner.py`,
+  `phase_contracts.py`, `phase_result.py`), knowledge graph (`graph/`),
+  concept knowledge base (`knowledge/`), métricas (`metrics.py`), policy
+  preflight (`tool_policy.py`), context budget (`context_budget.py`),
+  contrato de runtime (`runtime_contract.py`), harness evals (`evals.py`),
+  adapters gerados (`adapters_gen.py`), runner específico OpenCode
+  (`opencode_runner.py`).
 
 Affected areas:
 
-- `.spec-master/state.json` (leitura/escrita atômica via `state.py`
-  existente, estendido com o bloco `execution`).
-- `.spec-master/logs/`, `.spec-master/failed-attempts/`.
+- As 10 novas features (Tier 1/Tier 2) adicionam módulos/comandos novos
+  neste diretório, seguindo o padrão já estabelecido — nunca reescrevendo
+  módulos existentes fora do necessário.
 
-### `execution_mode.py` (novo)
+### spec-master/tests/ (suíte determinística)
 
 Responsibilities:
 
-- Parsing e validação dos três modos (`native`/`guarded`/`auto`).
-- Política de migração automática `native -> guarded` (eventos críticos vs.
-  recuperáveis, acumulação de dois eventos recuperáveis).
-
-Affected areas:
-
-- `state["execution"]` (`requested_mode`, `active_mode`,
-  `mode_transitions`).
-
-### `phase_contracts.py` (novo)
-
-Responsibilities:
-
-- Contrato por fase: artefatos obrigatórios, allowlist de escrita,
-  validações gerais e estruturais (tabela §6 e §7 da spec original).
-- Detecção de placeholder, detecção de ferramenta simulada como texto,
-  detecção de implementação antecipada, verificação de caminhos dentro do
-  projeto.
-
-Affected areas:
-
-- Todas as fases `constitution`..`validate`; somente leitura fora da
-  allowlist da fase corrente.
-
-### `phase_runner.py` (novo)
-
-Responsibilities:
-
-- Executar uma fase isolada: sessão nova sem histórico, timeout, coleta de
-  transcript/ferramentas/alterações de filesystem, aplicação das
-  validações de `phase_contracts.py`.
-
-Affected areas:
-
-- Delegação ao adaptador de integração (`opencode_runner.py` inicialmente).
-
-### `phase_result.py` (novo, Feature 2)
-
-Responsibilities:
-
-- Parser seguro do bloco `phase_result` estruturado emitido como texto
-  no transcript (JSON inválido rejeitado com segurança; nunca executa
-  conteúdo do transcript); extrai o último bloco válido.
-
-Affected areas:
-
-- Consumido por `phase_runner.py` para decidir `valid_noop` vs.
-  `phase_result_missing`/`phase_result_invalid`, nunca substitui as
-  verificações de filesystem já existentes.
-
-### `phase_contracts.py` e `phase_runner.py` (Feature 2 — modificação)
-
-Responsibilities:
-
-- `phase_contracts.py` ganha uma política explícita por fase
-  (`produce-or-update`/`inspect-or-update`/`execute`) e a resolução
-  segura do artefato ativo via `.specify/feature.json` (rejeitando `..`,
-  path absoluto, symlink que escape do projeto).
-- `phase_runner.py` deixa de exigir `required_artifact_changed`
-  incondicionalmente para toda fase; passa a decidir por política:
-  `inspect-or-update` pode aprovar um `valid_noop` sob as condições
-  determinísticas de `clarify`/`analyze`; `produce-or-update` continua
-  exigindo alteração; `execute` usa critério próprio.
-
-Affected areas:
-
-- Não pode regredir nenhuma proteção/teste já entregue pela Feature 1
-  (allowlist, snapshot, detecção de ferramenta simulada, timeout).
-
-### `opencode_runner.py` (já existente, não commitado)
-
-Responsibilities:
-
-- Invocar `opencode run --pure --format json --dir <project> --agent
-  spec-phase --model <model> --command speckit.<phase> <phase-prompt>` e
-  capturar saída estruturada.
-
-Affected areas:
-
-- A integrar ao novo contrato de fases (`phase_runner.py`) conforme §19
-  passo 2 da spec original.
-
-### `discovery.py` (já estendido, não commitado)
-
-Responsibilities:
-
-- Descobrir comandos `speckit.*` por integração (`claude`, `opencode`,
-  `qwen`), expondo `speckit_command_paths`.
-
-Affected areas:
-
-- Usado pela CLI determinística e potencialmente pelo controlador para
-  resolver o comando `speckit.<phase>` correto por integração.
+- Um arquivo de teste por módulo do core (`test_<module>.py`), sem
+  dependência de LLM — `python3 -m unittest discover -s spec-master/tests`.
 
 ## Integration Points
 
-- GitHub Spec Kit (`specify` CLI / `.specify/`) — já inicializado neste
-  repositório com integração `claude` (Skills em `.claude/skills/`).
-- OpenCode CLI (`opencode run`) — adaptador inicial do modo guarded.
-- Modelo local via Ollama, referenciado por nome de modelo na CLI
-  determinística (não gerenciado por este projeto — fora do escopo baixar
-  ou escolher modelos).
+- GitHub Spec Kit instalado no projeto-alvo (`.specify/`) — comandos
+  `speckit.<phase>` executados via o layout de skills do Claude Code
+  (`.claude/skills/speckit-<phase>/SKILL.md`, ver nota de discovery).
+- 30+ adapters de agente (Claude Code, Copilot CLI, Codex CLI, Qwen +
+  gerados) — nenhuma das novas features deve quebrar esse contrato.
 
 ## Configuration
 
-- `--mode {native,guarded,auto}` no comando principal `/spec-master`.
-- `--integration`, `--model` na CLI determinística
-  (`spec-master/lib/controller.py run`).
-- Defaults de política: `max_attempts_per_phase = 2`,
-  `phase_timeout_seconds = 600`, `max_analyze_repair_cycles = 3`
-  (este último já existente no protocolo atual, reafirmado pela spec).
+- Nenhum arquivo de configuração externo identificado além de
+  `.specify/memory/constitution.md` e `.spec-master/state.json`.
 
 ## Technical Constraints
 
-- Stdlib-only sempre que possível.
-- Testes unitários não podem depender de rede, Ollama ou OpenCode reais —
-  processos externos mockáveis.
-- Snapshots devem ignorar `.venv`, caches, dependências instaladas e logs
-  do próprio controlador.
-- `--mode native` deve permanecer comportamentalmente inalterado.
+- Core permanece Python stdlib puro; qualquer dependência nova (ex.:
+  eventual servidor MCP da Feature 6) deve ficar isolada e opcional, nunca
+  no caminho crítico do core existente.
+- Nenhum comando de build/test/lint/security hardcoded — sempre
+  auto-detectado a partir do repositório-alvo (`quality_gates.py` como
+  precedente).
 
 ## Architectural Principles
 
-- Core determinístico e testável sem LLM (mesma divisão de
-  responsabilidade já documentada no `PROTOCOL.md` §0 — Core vs. Agente —
-  estendida agora para "Core vs. Agente vs. Controlador guarded").
-- Escritas no estado devem ser atômicas.
-- O controlador nunca marca uma fase como concluída apenas porque o
-  processo do agente retornou código zero — validação de artefato é
-  sempre necessária.
+- Núcleo determinístico e testável sem LLM; camada semântica delegada ao
+  agente.
+- Nunca reimplementar um comando `speckit.*` já existente.
+- Toda proveniência de fato classificada (`EXPLICIT`/`INFERRED`/
+  `DISCOVERED_FROM_CODEBASE`/`UNRESOLVED`).
 
 ## Testing Strategy
 
 ### Unit
 
-14 casos listados em `docs/spec-master/guarded-mode-spec.md` §16 (parsing
-de modos, modo padrão, transições, allowlist, placeholder, ferramenta
-simulada, implementação antecipada, timeout, limite de tentativas,
-retomada, lock stale, snapshot ignorando caches, escrita atômica de
-estado).
+Um `test_<module>.py` por módulo novo do core, seguindo o padrão de
+`spec-master/tests/test_*.py` existente.
 
 ### Component
 
-Testes de cada módulo novo (`execution_mode.py`, `phase_contracts.py`,
-`phase_runner.py`) isoladamente, seguindo o padrão já usado em
-`spec-master/tests/` (ex.: `test_opencode_runner.py`, `test_discovery.py`).
+Cobertura de comandos CLI novos via chamada direta ao `cli.py` nos testes
+(mesmo padrão dos comandos existentes).
 
 ### Integration
 
-8 casos de integração com agente falso (§16): constituição válida, sucesso
-sem alterar artefato, código criado durante `constitution`, `<tool_call>`
-como texto, escrita fora do projeto, retry que passa na segunda tentativa,
-esgotamento de tentativas → `BLOCKED`, workflow completo simulado →
-`COMPLETED`.
+Cenários de ponta a ponta dentro da suíte determinística existente, sem
+LLM (ex.: `test_controller.py`, `test_phase_runner.py` como precedente).
 
 ### E2E
 
-Smoke test opcional, não bloqueante, com modelo real: case `qwen-todo-api`
-em modo `guarded`, preservando transcripts.
+Fora de escopo automatizado nesta rodada — validação manual via execução
+real do `/spec-master` neste próprio repositório (dogfooding).
 
 ## Quality Gates
 
-- `python3 -m unittest discover -s spec-master/tests -v` (gate bloqueante,
-  citado explicitamente como critério de aceite 1 da spec original).
+- build: não aplicável a um pacote Python stdlib puro sem etapa de build
+- lint: a detectar via `gates detect` no projeto-alvo
+- tests: `python3 -m unittest discover -s spec-master/tests`
+- coverage: a detectar via `gates detect`
+- architecture checks: `graph validate`
+- security checks: novo gate SAST auto-detectado (Feature 4)
 
 ## Repository Conventions
 
-- Módulos novos em `spec-master/lib/`, testes espelhados em
-  `spec-master/tests/test_<module>.py` (padrão já observado em
-  `discovery.py`/`test_discovery.py`, `opencode_runner.py`/
-  `test_opencode_runner.py`).
-- Estrutura sugerida (§18 da spec original, não obrigatória tal qual):
-  `spec-master/templates/prompts/guarded/` para os prompts curtos por fase.
+- Specs em `specs/<NNN-feature-id>/`.
+- Contexto normalizado em `.spec-master/context/`.
+- Relatórios em `.spec-master/reports/`.
 
 ## CI/CD
 
-- Nenhuma CI configurada neste repositório (`ci_present: false` na
-  discovery).
+- Não configurado neste repositório (`ci_present: false`).
 
 ## Technical Non-goals
 
-Ver `[[app-features]]` — idêntico ao `## Fora do escopo` da spec original.
+- Adicionar dependências externas obrigatórias ao core determinístico.
+- Reimplementar qualquer comando `speckit.*`.
 
 ## Open Technical Questions
 
-- Formato exato do "prompt curto e específico da fase" (§8) além de
-  conteúdo mínimo listado (causa da falha anterior, allowlist, artefatos
-  esperados, contexto mínimo da fase) — a ser resolvido na fase `clarify`
-  se necessário.
-- Mecanismo exato de "sessão nova, sem histórico" para a integração
-  OpenCode — se via novo processo `opencode run` por fase (mais provável,
-  dado que cada `opencode run` já é uma invocação isolada) ou outro
-  mecanismo — a confirmar durante `plan`.
+- Feature 6 (servidor MCP): linguagem/runtime do servidor e se ele pode
+  reutilizar o mesmo processo Python do core ou precisa de um processo
+  separado — a resolver na fase `clarify` dessa feature especificamente.
 
 ## Source Traceability
 
 | Decision / Constraint | Source | Classification |
 |---|---|---|
-| Estrutura sugerida de módulos (§18) | guarded-mode-spec.md §18 | EXPLICIT |
-| Comando de invocação OpenCode (§11) | guarded-mode-spec.md §11 | EXPLICIT |
-| Requisitos não funcionais (§15) | guarded-mode-spec.md §15 | EXPLICIT |
-| Testes obrigatórios (§16) | guarded-mode-spec.md §16 | EXPLICIT |
-| `opencode_runner.py`/`discovery.py` já existentes | leitura do repositório | DISCOVERED_FROM_CODEBASE |
-| Nenhuma CI configurada | `discovery scan` (`ci_present: false`) | DISCOVERED_FROM_CODEBASE |
-| Formato do prompt curto por fase, mecanismo exato de isolamento OpenCode | inferência a partir de texto geral da spec | UNRESOLVED |
+| Core Python stdlib puro, zero dependência | DISCOVERED_FROM_CODEBASE (spec-master/lib/) | DISCOVERED_FROM_CODEBASE |
+| Layout de módulos existentes (state.py, git_strategy.py, etc.) | DISCOVERED_FROM_CODEBASE | DISCOVERED_FROM_CODEBASE |
+| Nenhuma dependência nova obrigatória no core | docs/market-benchmark-roadmap.md | EXPLICIT |
+| CI não configurado | DISCOVERED_FROM_CODEBASE (discovery scan) | DISCOVERED_FROM_CODEBASE |

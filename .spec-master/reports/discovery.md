@@ -1,66 +1,66 @@
 # Discovery Report
 
-Data: 2026-08-17
+Run: 2026-09-26 (restart, context = `docs/market-benchmark-roadmap.md`)
 
-## Repositório
+## `discovery scan` output
 
-- `spec-master` (este próprio repositório) — motor de orquestração do
-  GitHub Spec Kit, Python 3 stdlib, zero dependências.
-- Linguagem/framework: Python (CLI, `lib/`), Bash (`init.sh`).
-- CI: não detectada (`ci_present: false`).
-- Git: repositório git válido, branch `main`.
+- `spec_kit_present`: true (`.specify/`)
+- `constitution_present`: true (`.specify/memory/constitution.md`)
+- `specs_dir_present`: true — existing: `001-guarded-mode-controller`,
+  `002-guarded-noop-phase-validation`
+- `ci_present`: false
+- `docs_present`, `readme_present`: true
+- `claude_md_present`, `agents_md_present`: false
+- `is_git_repo`: true
+- `speckit_commands`: `[]` (see note below)
 
-## Spec Kit
+## Note — Spec Kit command layout drift (real finding, not from context file)
 
-- `spec_kit_present`: `false` no início do run → inicializado nesta sessão
-  com `specify init --here --integration claude --script sh --force`.
-- Integração instalada: Claude Code, via **Skills** (não commands):
-  `.claude/skills/speckit-constitution`, `speckit-specify`,
-  `speckit-clarify`, `speckit-plan`, `speckit-tasks`, `speckit-analyze`,
-  `speckit-implement`, `speckit-checklist`, `speckit-converge`,
-  `speckit-taskstoissues`.
-- `constitution_present`: `true` (template padrão copiado por
-  `specify init`, ainda com placeholders — a preencher na fase
-  `constitution`).
-- `specs_dir_present`: `false` — nenhuma feature spec existente ainda.
-- Nota de compatibilidade: a versão instalada do Spec Kit usa Skills com
-  nomes em kebab-case (`speckit-<fase>`), não commands em dot-case
-  (`speckit.<fase>`) como o `PROTOCOL.md` assume como exemplo para Claude
-  Code. As fases deste workflow serão executadas invocando a Skill
-  correspondente (ex.: `speckit-constitution`) via `Skill` tool.
+`discovery.py` only scans `.claude/commands/speckit.*.md`,
+`.opencode/commands/`, `.qwen/commands/` for `speckit.<phase>` command files.
+This repository's actual Spec Kit install uses the newer skills layout
+instead: `.claude/skills/speckit-{constitution,specify,clarify,plan,tasks,
+analyze,implement,checklist,converge,taskstoissues}/SKILL.md`. Confirmed
+present by direct listing. Per `adapters/claude-code.md` §"Executing an
+actual Spec Kit phase", each phase in this run will be executed by reading
+the corresponding `.claude/skills/speckit-<phase>/SKILL.md` file directly
+(functionally equivalent to the `.claude/commands/speckit.<phase>.md` the
+adapter doc describes — this project's Spec Kit installer just emitted the
+newer convention). This does not block execution; it is the same drift
+already anticipated by the project's own roadmap item about Copilot/Codex
+CLI directory conventions changing — it turns out Claude Code's own Spec Kit
+integration drifted too. Worth a follow-up fix to `discovery.py` later
+(out of scope for this run; not one of the requested Tier 1-3 items).
 
-## Documentação existente
+## Existing normalized context (from the prior, now-superseded workflow)
 
-- `README.md` presente (documenta o próprio Spec Master).
-- `docs/spec-master/guarded-mode-spec.md` — contexto desta execução:
-  especificação de um modo de execução "guarded" (controlador
-  determinístico de fases para modelos locais menos robustos), com modos
-  `native | guarded | auto`.
-- Sem `CLAUDE.md`/`AGENTS.md` na raiz (o `CLAUDE.md` do protocolo do Spec
-  Master vive no motor global, não neste repositório-alvo).
+`.spec-master/context/{app-features,project-goals,tech-stack}.md` exist from
+the previous (restarted) run. They will be regenerated in Step 3 from the new
+context file (`docs/market-benchmark-roadmap.md`).
 
-## Código relevante já presente (pré-existente a este workflow)
+## Git strategy (already known, not re-asked)
 
-- `spec-master/lib/discovery.py`: já modificado (não commitado) para
-  descobrir comandos `speckit.*` em `.claude/commands`, `.opencode/commands`
-  e `.qwen/commands`, e expor `speckit_command_paths` por integração.
-- `spec-master/lib/opencode_runner.py` (novo, não commitado, 191 linhas) +
-  `spec-master/tests/test_opencode_runner.py` (novo, 53 linhas): runner
-  inicial para invocar `opencode run` — infraestrutura prévia relevante
-  para o requisito GM-012 (adaptador OpenCode) da spec guarded-mode.
-- `init.sh`: já modificado (não commitado) para instalar um entrypoint
-  global do Spec Master para OpenCode (`~/.config/opencode/commands`).
-- Não existem ainda: `controller.py`, `execution_mode.py`,
-  `phase_contracts.py`, `phase_runner.py` (estrutura sugerida na §18 da
-  spec guarded-mode) — este é o trabalho principal desta feature.
+Prior committed state (`git log -- .spec-master/state.json`) recorded
+`workflow: trunk`, all features with `branch: null`, single branch (`main`).
+Repository still has only `main`. Per CLAUDE.md §38 (never ask what's already
+determined by the repository), `state init` for this restart uses
+`--workflow trunk` directly, without re-asking.
 
-## Estratégia de Git
+## Feature discovery & ordering (Step 5)
 
-- Definida pelo usuário: **Trunk-Based Development**. Nenhuma branch de
-  feature será criada; o trabalho ocorre em `main`, com a feature separada
-  logicamente em `specs/<feature>/`.
+10 features upserted from `app-features.md` (all `EXPLICIT`, source
+`docs/market-benchmark-roadmap.md`). `features order` (input ordered by
+Tier priority as tie-break for independent nodes) resolved:
 
-## Quality gates candidatos (a confirmar na fase de gates)
+1. `parallel-worktree-execution`
+2. `team-mode-parallel-workstreams` (depends on 1)
+3. `speckit-tracker-orchestration`
+4. `sast-quality-gate`
+5. `local-dashboard`
+6. `dedicated-mcp-server`
+7. `context-delta-reporting`
+8. `declarative-event-hooks`
+9. `role-decision-memory`
+10. `optional-pr-open-step`
 
-- `python3 -m unittest discover -s spec-master/tests -v` (suíte existente,
-  citada explicitamente como critério de aceite na spec guarded-mode).
+No cycle detected. This is the execution order for Step 6.

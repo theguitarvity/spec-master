@@ -48,6 +48,30 @@ explicitly scoped and documented. `--mode native` in particular is the
 baseline behavior every other mode is defined relative to, and its tests
 must keep passing unmodified when new modes are added.
 
+### VII. Reuse the Ecosystem Before Reimplementing It
+The principle that Spec Master never reimplements a `speckit.*` command,
+only orchestrates it, extends to third-party integrations the Spec Kit
+ecosystem already covers (issue trackers, extensions, presets). Before
+adding a new integration (e.g. Jira, Azure DevOps, Linear, GitHub Issues),
+an existing Spec Kit extension/skill that already provides it MUST be
+reused or extended instead of building a parallel implementation from
+scratch.
+
+### VIII. Auto-Detected Quality Gates, Never Hardcoded
+The auto-detection precedent already used for build/test/lint gates
+(`quality_gates.py`) applies to every quality gate the core adds,
+including security/SAST gates: a gate's underlying command MUST be
+detected from the target repository's own configuration/tooling, never
+hardcoded into `spec-master/lib/`.
+
+### IX. Scoped, Documented Dependency Exceptions
+Where an isolated component needs a runtime a stdlib-only implementation
+cannot reasonably provide (e.g. a dedicated protocol server), Principle II
+may be relaxed only for that component: the exception MUST be isolated to
+its own module, MUST NOT be imported by the always-loaded core path, and
+MUST be documented at the point of introduction with the reason stdlib was
+insufficient.
+
 ## Execution Modes & Safety
 
 Spec Master supports multiple execution modes (`native`, and — where a
@@ -60,6 +84,13 @@ than allowed to run unbounded. A controller MUST distinguish, in its
 final report, the workflow's own result from the contribution of the
 model it drove — a project completed by fallback/controller logic is
 never presented as a pass for the model under evaluation.
+
+### X. Irreversible Publishing Actions Require Explicit Confirmation
+Any action that publishes or shares work outside the local repository
+(e.g. opening a pull request) MUST NEVER be taken automatically as part
+of a workflow. It MUST be offered as an explicit, separately confirmed
+step, and the resulting description MUST include the traceability matrix
+and final report so the reviewer has full context.
 
 ## Development Workflow
 

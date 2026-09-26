@@ -2,319 +2,425 @@
 
 ## Context
 
-O Spec Master hoje delega ao agente toda a condução semântica e operacional
-do fluxo `constitution → specify → clarify → plan → tasks → analyze →
-implement → validate`. Modelos robustos sustentam esse comportamento
-agentic, mas modelos locais menores ou menos confiáveis podem implementar
-antes da fase `implement`, ignorar comandos `speckit.*`, imprimir chamadas
-de ferramenta como texto, reentrar no skill, criar artefatos em caminhos
-errados, declarar sucesso sem produzir o artefato obrigatório, perder a fase
-atual após compactação, ou travar sem progresso.
+Benchmark competitivo do mercado de spec-driven development (GitHub Spec Kit,
+BMAD-METHOD, AWS Kiro, OpenSpec, Spec Kitty, Tessl, GSD, runtimes com
+worktrees nativos) mapeado contra o roadmap e as limitações já declaradas
+pelo próprio Spec Master (`README.md` §Roadmap,
+`docs/spec-master/README.md` §"Limitations (this increment)"). Este
+documento normaliza os 10 itens de Tier 1/Tier 2 do benchmark
+(`docs/market-benchmark-roadmap.md`) como features candidatas a este
+workflow. Os 3 itens de Tier 3 e o item explicitamente descartado (modelo
+"spec-as-source" da Tessl) ficam em Non-goals, não como features.
 
 ## Scope
 
-Ver `## Escopo` (Incluído/Fora do escopo) em
-`docs/spec-master/guarded-mode-spec.md` — reproduzido nas seções abaixo.
+Evoluir o próprio pacote `spec-master/` (este repositório) — núcleo
+determinístico Python (`spec-master/lib/`), templates, knowledge base e
+adapters. Nenhuma mudança de escopo fora deste pacote foi solicitada.
 
 ## Features
 
-### Feature 1 — guarded-mode-controller
+### Feature 1 — parallel-worktree-execution
 
 #### Objective
 
-Adicionar três modos de execução (`native`, `guarded`, `auto`, padrão
-`auto`) e um controlador determinístico que, em modo `guarded`, conduza
-todas as transições de fase e entregue ao modelo apenas uma fase por
-sessão, validando artefatos antes de promover o estado.
+Executar features independentes do grafo de dependências em paralelo via git
+worktrees, em vez de sequencialmente.
 
 #### Expected behavior
 
-- `--mode native` preserva o comportamento agentic atual, sem alterações.
-- `--mode guarded`: para cada fase, o controlador lê `.spec-master/state.json`,
-  confirma que a fase anterior está `PASSED`, cria snapshot dos arquivos
-  relevantes, renderiza um prompt curto específico da fase, inicia uma sessão
-  nova sem histórico de fases anteriores, desabilita skills/subagentes/
-  continuação automática, executa somente o comando `speckit.<fase>`
-  correspondente, aplica timeout, coleta transcript/ferramentas/alterações no
-  filesystem, valida os artefatos obrigatórios e só então promove a fase para
-  `PASSED`; se inválido, registra a causa e repete até o limite de
-  tentativas, marcando `BLOCKED` ao esgotar.
-- `--mode auto` começa em `native` e migra irreversivelmente para `guarded`
-  ao detectar qualquer evento crítico ou dois eventos recuperáveis (lista em
-  `project-goals.md`/spec original §9), registrando `mode_transition` no
-  estado e retomando da primeira fase ainda não validada.
-- Allowlist de escrita por fase (tabela §6 da spec original) é aplicada:
-  apenas os caminhos definidos por fase podem ser escritos; motor global,
-  credenciais, arquivos fora do projeto, `.git/`, `.spec-master/state.json` e
-  transcripts de tentativas anteriores são sempre protegidos.
-- O adaptador inicial do modo guarded usa OpenCode (`opencode run --pure
-  --format json --dir <project> --agent spec-phase --model <model> --command
-  speckit.<phase> <phase-prompt>`), com um agente dedicado `spec-phase` sem
-  skill loading, sem auto-continue, web desabilitada por padrão, uma fase por
-  sessão, modelo explícito, filesystem/shell disponíveis, diretório do
-  projeto fixado, saída JSONL arquivada.
-- CLI determinística exposta via `python3 spec-master/lib/controller.py run
-  --project . --context <arquivo> --mode guarded --integration opencode
-  --model <modelo>`, mais `resume --project .` e `status --project .`.
-- Retomada idempotente: fases `PASSED` com fingerprint válido não são
-  repetidas; execução interrompida retoma da primeira fase não validada;
-  `run.lock` abandonado é reconhecido como stale após o timeout configurado;
-  artefatos de tentativa inválida vão para `.spec-master/failed-attempts/`
-  ou são revertidos por estratégia recuperável — nunca `git reset --hard` ou
-  apagar trabalho não atribuído à tentativa atual.
-- Observabilidade: eventos curtos por tentativa/fase e relatório final que
-  separa resultado do workflow, resultado de cada quality gate, contribuição
-  efetiva do modelo, tentativas rejeitadas, mudança de modo e arquivos
-  preservados para diagnóstico — nunca apresentar um projeto implementado
-  por fallback/controlador como aprovação do modelo avaliado.
+- Dado um conjunto de features com dependências resolvidas
+  (`features order`), features sem dependência mútua entre si podem ser
+  executadas em worktrees isolados simultaneamente.
+- Cada worktree roda seu próprio ciclo `specify -> clarify -> plan -> tasks
+  -> analyze -> implement -> validate` isoladamente.
+- Ao final, os resultados de cada worktree são integrados (merge) de volta
+  ao branch de trabalho, com detecção de conflito reportada, nunca
+  resolvida silenciosamente.
+- Quando o git-strategy for `trunk`, a paralelização via worktree continua
+  válida (worktrees não exigem branches de feature no Spec Kit); quando for
+  `git-flow`, cada worktree usa o branch já planejado por `git-strategy
+  plan`.
 
 #### Acceptance criteria
 
-- [ ] `--mode` aceita exatamente `native`, `guarded`, `auto`; ausência de
-      `--mode` resolve para `auto` (GM-001, GM-002).
-- [ ] Em modo `guarded`, cada fase roda em uma sessão isolada, sem histórico
-      de fases anteriores (GM-003).
-- [ ] Nenhuma fase é promovida a `PASSED` sem validação de artefato
-      obrigatório presente e não vazio, e sem placeholders de template
-      restantes (GM-004).
-- [ ] Escrita fora da allowlist da fase corrente é rejeitada e a tentativa
-      falha com causa registrada (GM-005).
-- [ ] Código criado antes da fase `implement` é detectado e rejeita a
-      tentativa (GM-006).
-- [ ] Chamadas de ferramenta impressas como texto (`<function=`,
-      `<tool_call>` ou equivalentes) são detectadas e rejeitam a tentativa
-      (GM-007).
-- [ ] Timeout (`phase_timeout_seconds`, padrão 600) e limite de tentativas
-      (`max_attempts_per_phase`, padrão 2) são aplicados; ao esgotar
-      tentativas a fase fica `BLOCKED` e o workflow para (GM-008).
-- [ ] Modo `auto` migra irreversivelmente para `guarded` conforme a política
-      de eventos críticos/recuperáveis definida, sem retorno automático a
-      `native` no mesmo workflow (GM-009).
-- [ ] `resume` retoma um workflow protegido sem repetir fases já `PASSED`
-      com fingerprint válido (GM-010).
-- [ ] Transcripts e causas de falha de cada tentativa são preservados
-      (GM-011).
-- [ ] O adaptador OpenCode funciona fim a fim sem quebrar `--mode native`
-      nem os adaptadores já existentes (GM-012).
-- [ ] `python3 -m unittest discover -s spec-master/tests -v` passa
-      integralmente, incluindo os novos testes unitários e de integração
-      com agente falso listados na spec original (§16).
-- [ ] Um agente falso não consegue marcar `constitution` como `PASSED`
-      mantendo o template original (critério de aceite 3 da spec original).
-- [ ] Um agente falso não consegue criar código durante `constitution`,
-      `specify`, `clarify`, `plan`, `tasks` ou `analyze` sem a tentativa ser
-      rejeitada (critério de aceite 4).
-- [ ] O relatório final diferencia claramente `workflow SUCCESS` de `model
-      FAILED` (critério de aceite 8).
+- [ ] Uma nova função determinística decide, a partir do grafo de
+      dependências já existente (`features order`), quais features do
+      lote atual podem rodar em paralelo (nenhuma depende de outra ainda
+      não `PASSED`/`COMPLETED`).
+- [ ] Um novo comando do core (`git-strategy` ou grupo próprio) cria e
+      remove worktrees isolados por feature, sem exigir dependências novas.
+- [ ] A execução paralela nunca promove uma fase antes de sua dependência
+      estar `PASSED`, preservando a guarda de state machine existente.
+- [ ] Falha ou conflito em um worktree não derruba os demais worktrees em
+      execução.
+- [ ] O relatório final distingue quais features rodaram em paralelo e
+      quais sequencialmente.
+- [ ] Suíte de testes determinística cobrindo a nova lógica de agrupamento
+      paralelo, sem depender de LLM.
 
 #### Test scenarios
 
-Ver `## Testes obrigatórios` da spec original
-(`docs/spec-master/guarded-mode-spec.md` §16): 14 casos unitários, 8 casos
-de integração com agente falso, e um smoke test opcional não bloqueante com
-`qwen-todo-api`.
+- Duas features sem dependência entre si → ambas elegíveis para execução
+  paralela simultânea.
+- Feature B depende de feature A ainda não concluída → B não entra no grupo
+  paralelo com A.
+- Conflito de merge ao integrar dois worktrees → reportado, não resolvido
+  automaticamente.
 
-### Feature 2 — guarded-noop-phase-validation
+### Feature 2 — team-mode-parallel-workstreams
 
 #### Objective
 
-Corrigir o controlador guarded para que fases de inspeção (`clarify`,
-`analyze`) possam ser aprovadas sem alterar arquivo quando o artefato
-preexistente já satisfizer validações determinísticas específicas da
-fase — sem enfraquecer nenhuma proteção existente contra falso sucesso.
-Bug real encontrado ao rodar o case `qwen-greeting-api` em modo `guarded`:
-`clarify` foi incorretamente bloqueado (`missing_artifact`) mesmo com um
-`spec.md` completo e sem ambiguidades, porque o controlador hoje exige
-`required_artifact_changed` para toda fase, sem distinguir "falso
-sucesso" de "no-op válido".
+Executar de fato, em paralelo, os workstreams do Team Mode usando o mesmo
+mecanismo de worktrees da Feature 1, em vez de apenas planejá-los em
+`.spec-master/workstreams.json` sem execução real.
 
 #### Expected behavior
 
-- Cada fase ganha uma política explícita em `phase_contracts.py`:
-  `produce-or-update` (`constitution`, `specify`, `plan`, `tasks`,
-  `validate` — exige alteração), `inspect-or-update` (`clarify`,
-  `analyze` — pode concluir sem alteração sob condições determinísticas),
-  `execute` (`implement` — critérios próprios, não a regra genérica).
-- `clarify` só passa sem alteração quando TODAS as 11 condições da spec
-  original §5 forem verdadeiras (sem timeout, exit 0, sem escrita
-  proibida, sem ferramenta simulada, exatamente uma feature ativa
-  resolvida via `.specify/feature.json`, `spec.md` existe/preenchido/sem
-  placeholder/sem `[NEEDS CLARIFICATION`, resultado estruturado
-  reconhecível de "nenhuma mudança necessária", sem pedido de decisão do
-  usuário, sem erro/bloqueio declarado).
-- `analyze` só passa sem alteração quando spec/plan/tasks da feature
-  ativa existirem/estiverem preenchidos, sem placeholders bloqueantes,
-  sem timeout/erro/escrita proibida/ferramenta simulada, resultado
-  estruturado `no_changes_required` com zero achados `CRITICAL`/`HIGH` e
-  sem `USER_DECISION_REQUIRED`/`SPEC_DRIFT` aberto.
-- Resultado estruturado obrigatório para promover um no-op: bloco JSON
-  `{"phase_result": ..., ...}` emitido como texto comum no transcript,
-  com valores aceitos `artifact_updated | no_changes_required |
-  user_decision_required | failed`; o controlador extrai o último bloco
-  válido — texto fora dele nunca promove uma fase; o bloco é evidência
-  complementar, nunca substitui as verificações de filesystem.
-- Resolução do artefato ativo por `.specify/feature.json`
-  (`feature_directory`), não por glob `specs/*/spec.md`: validar que é
-  relativo ao projeto, rejeitar `..`/caminho absoluto/symlink que escape,
-  resolver `<feature_directory>/spec.md`. Ausente/inválido →
-  `active_feature_unresolved`.
-- Fases produtoras continuam exigindo criação/alteração na primeira
-  execução válida; só podem passar sem alteração numa tentativa
-  subsequente se os artefatos já existentes forem integralmente
-  validados, associados ao mesmo fingerprint de contexto, e sem evidência
-  de terem vindo de uma tentativa rejeitada por escrita proibida ou
-  escape de diretório.
-- Motivos de resultado padronizados (`missing_artifact`,
-  `placeholder_artifact`, `unchanged_artifact`, `valid_noop`,
-  `phase_result_missing`, `phase_result_invalid`,
-  `user_decision_required`, `forbidden_write`, `fake_tool_marker`,
-  `timeout`, `tool_error`). `valid_noop` é sucesso;
-  `user_decision_required` pausa o workflow (`PAUSED`) sem consumir uma
-  nova tentativa automaticamente.
-- `resume` reavalia (sem apagar histórico) uma última tentativa
-  bloqueada quando a versão do contrato de fase mudou, o motivo anterior
-  foi `missing_artifact`/`unchanged_artifact`, o artefato existe, e o
-  fingerprint do contexto não mudou — registrando uma nova entrada de
-  tentativa (`source: contract_revalidation`) sem reescrever a antiga.
-- Estado de tentativa ganha `contract_version`, `policy`, `outcome`,
-  `active_artifacts`, `artifact_hashes_before/after`, `structured_result`.
+- Cada workstream com pacotes independentes entre si roda em seu próprio
+  worktree, seguindo o dono (dev agent/role) já atribuído por `team
+  workstreams`.
+- Revisão por par (peer review) e validação de QA continuam obrigatórias
+  antes da integração pelo Tech Lead, mesmo em execução paralela.
 
 #### Acceptance criteria
 
-- [ ] NPV-001: cada fase é classificada como `produce-or-update`,
-      `inspect-or-update` ou `execute`.
-- [ ] NPV-002: `clarify` pode passar sem alteração quando o spec ativo
-      estiver completo e sem ambiguidades.
-- [ ] NPV-003: `analyze` pode passar sem alteração quando não houver
-      achados bloqueantes.
-- [ ] NPV-004: resultado estruturado é exigido para promover um no-op.
-- [ ] NPV-005: o artefato é resolvido pela feature ativa
-      (`.specify/feature.json`), nunca por glob ambíguo.
-- [ ] NPV-006: fases produtoras continuam exigindo alteração.
-- [ ] NPV-007: `missing_artifact`, `unchanged_artifact` e `valid_noop`
-      são distinguidos.
-- [ ] NPV-008: `user_decision_required` pausa imediatamente sem
-      desperdiçar tentativas.
-- [ ] NPV-009: allowlists, proteção de paths e detecção de ferramenta
-      simulada continuam intactas.
-- [ ] NPV-010: uma tentativa bloqueada pelo contrato antigo pode ser
-      revalidada de forma recuperável.
-- [ ] NPV-011: política, versão do contrato, outcome e hashes são
-      registrados no estado.
-- [ ] NPV-012: workflows já concluídos continuam compatíveis (nenhuma
-      migração destrutiva de estado existente).
-- [ ] A suíte de testes atual (feature 1) continua passando integralmente.
-- [ ] O case `qwen-greeting-api` consegue sair do bloqueio de `clarify`
-      sem edição artificial no spec.
-- [ ] O relatório final diferencia `artifact_updated` de
-      `no_changes_required`.
+- [ ] Workstreams sem dependência de arquivo/contrato compartilhado entre si
+      são elegíveis para execução paralela via o mecanismo da Feature 1.
+- [ ] Workstreams que compartilham arquivo/contrato permanecem sequenciais
+      (nunca paralelizados às cegas).
+- [ ] Peer review e QA continuam bloqueantes antes da integração, mesmo
+      quando o pacote foi produzido em um worktree paralelo.
+- [ ] `.spec-master/workstreams.json` passa a registrar o resultado real de
+      execução (não apenas o plano), incluindo qual worktree rodou cada
+      pacote.
 
 #### Test scenarios
 
-Ver `docs/spec-master/../..` — na verdade ver
-`specs/002-guarded-noop-phase-validation/spec.md` §15 (cenários A-G) e
-§16 (testes obrigatórios: 6 casos em `test_phase_contracts.py`, 7 em
-`test_phase_runner.py`, 5 em `test_controller.py`, incluindo o cenário de
-regressão G baseado no case real `qwen-greeting-api`).
+- Dois pacotes de dev agents diferentes, sem overlap de arquivos → rodam em
+  paralelo.
+- Dois pacotes que tocam o mesmo arquivo/contrato → forçados a sequencial.
+
+#### Dependencies
+
+- parallel-worktree-execution
+
+### Feature 3 — speckit-tracker-orchestration
+
+#### Objective
+
+Detectar e orquestrar extensões/presets de tracker (Jira, Azure DevOps,
+Linear, GitHub Issues) já existentes no ecossistema GitHub Spec Kit, em vez
+de construir integrações próprias do zero.
+
+#### Expected behavior
+
+- `discovery scan` passa a detectar extensões de tracker instaladas no
+  projeto-alvo (presença de configuração/preset de Jira, Azure DevOps,
+  Linear ou GitHub Issues reconhecível no repositório).
+- Quando uma extensão de tracker é detectada, o Spec Master a invoca (via a
+  skill/comando que ela já expõe) em vez de reimplementar o fluxo de
+  sincronização.
+- Sem nenhuma extensão instalada, o comportamento atual (sem integração de
+  tracker) é preservado — nunca falha por ausência.
+- Reaproveita e estende a skill `speckit-taskstoissues` já presente no
+  projeto, quando aplicável.
+
+#### Acceptance criteria
+
+- [ ] Nova detecção determinística em `discovery.py` reconhece ao menos uma
+      extensão de tracker instalada, sem inventar presença.
+- [ ] A orquestração nunca duplica lógica de sincronização já fornecida
+      pela extensão — apenas invoca.
+- [ ] Links/ids de issues sincronizados aparecem na matriz de
+      rastreabilidade (`traceability`).
+- [ ] Ausência de qualquer extensão de tracker não bloqueia o workflow.
+
+#### Test scenarios
+
+- Projeto-alvo com extensão de tracker Jira instalada → detectada e
+  orquestrada.
+- Projeto-alvo sem nenhuma extensão → workflow segue normalmente, sem
+  integração de tracker.
+
+### Feature 4 — sast-quality-gate
+
+#### Objective
+
+Promover a checagem de segurança estática (SAST) a quality gate
+auto-detectado, no mesmo padrão de nunca hardcodar comando já usado para
+build/test/lint, em vez de depender apenas da proposta manual de pentest
+do Security Agent (Aegis Security) para apps críticos.
+
+#### Expected behavior
+
+- `gates detect` passa também a detectar scanners de segurança já
+  configurados no repositório-alvo (ex.: configuração de Semgrep, workflow
+  de CodeQL, outra ferramenta já presente).
+- Quando detectado, o scanner vira um gate como qualquer outro
+  (`{name, command, result, exit_code, blocking}`), sujeito ao mesmo
+  `policy preflight` antes de execução.
+- Quando nenhum scanner está configurado no projeto-alvo, nenhum gate de
+  segurança é inventado — o Security Agent continua podendo propor
+  ferramentas (como o Aegis Security) como recomendação, não como gate
+  obrigatório inexistente.
+
+#### Acceptance criteria
+
+- [ ] `gates detect` reconhece configuração de scanner de segurança já
+      presente no projeto-alvo, sem hardcodar nenhum comando específico.
+- [ ] O gate de segurança detectado segue o mesmo contrato dos demais gates
+      (`policy preflight`, bloqueante quando falha).
+- [ ] Ausência de scanner configurado não gera um gate falso nem bloqueia o
+      workflow.
+- [ ] Comportamento existente do Security Agent (proposta de pentest para
+      apps críticos) é preservado, não substituído.
+
+#### Test scenarios
+
+- Repositório com config de Semgrep presente → gate de segurança detectado
+  e executado.
+- Repositório sem nenhuma config de scanner → nenhum gate de segurança
+  aparece, sem erro.
+
+### Feature 5 — local-dashboard
+
+#### Objective
+
+Gerar um dashboard local, estático e sem dependências novas, a partir do
+estado real do workflow (`.spec-master/state.json`,
+`.spec-master/workstreams.json`, knowledge graph), fechando a primeira
+metade do item de roadmap "Dashboard/UI e MCP dedicado".
+
+#### Expected behavior
+
+- Um novo comando do core gera um arquivo HTML autocontido (sem servidor,
+  sem dependência externa) resumindo: features e seu status/fase atual,
+  workstreams e seus donos, métricas de entrega, e um resumo visual do
+  knowledge graph (reaproveitando `graph/maps.py::render_system_map`).
+- O dashboard é regenerado a cada execução relevante do workflow (mesmo
+  padrão de "nunca despejar output bruto", mas em formato navegável).
+
+#### Acceptance criteria
+
+- [ ] Novo comando determinístico gera um único arquivo HTML válido a
+      partir de `state.json` + `workstreams.json` + grafo, sem servidor e
+      sem nova dependência de terceiros.
+- [ ] O HTML reflete corretamente o status de cada feature/fase no momento
+      da geração (sem dados inventados).
+- [ ] Geração é idempotente: rodar de novo sem mudança de estado produz o
+      mesmo conteúdo (exceto timestamp).
+
+#### Test scenarios
+
+- Workflow com 2 features em fases diferentes → dashboard reflete
+  corretamente ambos os status.
+- Workflow recém-inicializado (sem features) → dashboard gera sem erro,
+  mostrando estado vazio.
+
+### Feature 6 — dedicated-mcp-server
+
+#### Objective
+
+Expor as capacidades de `spec-master/lib/cli.py` (state, traceability,
+graph query, quality gates) como tools de um servidor MCP dedicado,
+fechando a segunda metade do item de roadmap "Dashboard/UI e MCP dedicado".
+
+#### Expected behavior
+
+- Um servidor MCP, escrito com as mesmas restrições de dependência do core
+  (ou isolado como um componente opcional claramente documentado, caso o
+  protocolo MCP exija dependência externa), expõe leitura de estado,
+  rastreabilidade, consulta ao grafo e execução de quality gates como
+  tools MCP.
+- Qualquer host MCP (não apenas os 30+ adapters de CLI já suportados) pode
+  consultar o estado do Spec Master através dele.
+
+#### Acceptance criteria
+
+- [ ] O servidor MCP expõe, no mínimo, leitura de `state show`,
+      `traceability render` e `graph query`/`graph neighbors` como tools.
+- [ ] Nenhuma tool do servidor MCP escreve estado fora do que os comandos
+      equivalentes do CLI já permitem (mesmo contrato de permissões).
+- [ ] Documentação de instalação/uso do servidor MCP, consistente com os
+      demais adapters já documentados.
+
+#### Test scenarios
+
+- Um cliente MCP genérico consulta o estado de uma feature em andamento via
+  o servidor → recebe o mesmo dado que `state show` retornaria.
+
+### Feature 7 — context-delta-reporting
+
+#### Objective
+
+Expor um relatório de delta explícito (estilo ADDED/MODIFIED/REMOVED) para
+spec/plan/tasks a cada resume, complementando o `constitution diff` já
+existente (que hoje só cobre a constitution).
+
+#### Expected behavior
+
+- Ao retomar um workflow com fingerprint divergente, além de decidir quais
+  fases ficam stale, o Spec Master gera um resumo legível do que mudou nos
+  documentos normalizados e nos artefatos de spec/plan/tasks desde a última
+  execução.
+
+#### Acceptance criteria
+
+- [ ] Nova função determinística compara duas versões de spec/plan/tasks e
+      classifica mudanças como ADDED/MODIFIED/REMOVED por seção.
+- [ ] O relatório de delta é incluído no relatório final quando há resume
+      com fingerprint divergente.
+- [ ] Quando não há mudança (fingerprint idêntico), nenhum delta vazio é
+      exibido.
+
+#### Test scenarios
+
+- Resume com uma seção nova adicionada ao spec → aparece como ADDED.
+- Resume com uma seção removida → aparece como REMOVED.
+
+### Feature 8 — declarative-event-hooks
+
+#### Objective
+
+Formalizar hooks declarativos orientados a evento (ex.: "quality gate
+falhou → repair", "pacote mudou contrato público → revalidar
+constitution"), reaproveitando a lógica de escalonamento já existente nos
+playbooks de Team Mode.
+
+#### Expected behavior
+
+- Um conjunto de hooks nomeados, definidos deterministicamente, dispara
+  ações já suportadas pelo core (ex.: iniciar um novo ciclo de analyze,
+  marcar uma feature como stale) quando um evento correspondente ocorre
+  durante o workflow.
+
+#### Acceptance criteria
+
+- [ ] Ao menos os dois hooks citados no contexto (`gate-failed -> repair`,
+      `public-contract-changed -> revalidate-constitution`) existem como
+      hooks nomeados e testáveis isoladamente.
+- [ ] Hooks nunca executam uma ação fora do que o core já suporta via CLI
+      (sem lógica nova de negócio embutida apenas no hook).
+- [ ] Hooks disparados ficam registrados no relatório final (o que rodou,
+      por qual evento).
+
+#### Test scenarios
+
+- Gate bloqueante falha → hook de repair dispara automaticamente.
+- Pacote de dev agent altera um contrato público → hook revalida a
+  constitution.
+
+### Feature 9 — role-decision-memory
+
+#### Objective
+
+Registrar nós de decisão (quem decidiu o quê, por quê, quando) no knowledge
+graph durante escalonamentos do Team Mode, consultáveis via
+`knowledge for-role`.
+
+#### Expected behavior
+
+- Quando um escalonamento ocorre (dev agent → Architect → Tech Lead, por
+  exemplo), a decisão final é registrada como nó de decisão no grafo, com
+  proveniência e evidência apontando para o pacote/feature que a originou.
+
+#### Acceptance criteria
+
+- [ ] Novo tipo de nó de decisão é adicionado à ontologia existente
+      (`ontology.yaml`), sem quebrar validação atual.
+- [ ] Toda decisão de escalonamento resolvida pelo Tech Lead gera um nó de
+      decisão rastreável até o pacote/feature de origem.
+- [ ] `knowledge for-role`/consulta ao grafo permite recuperar decisões
+      passadas relevantes a um papel.
+
+#### Test scenarios
+
+- Escalonamento de inconsistência arquitetural resolvido pelo Tech Lead →
+  nó de decisão criado e consultável.
+
+### Feature 10 — optional-pr-open-step
+
+#### Objective
+
+Oferecer, ao final de uma feature em Git Flow, um passo opcional de
+abertura de PR — sempre mediante confirmação explícita do usuário, nunca
+automático — anexando a matriz de rastreabilidade e o relatório final como
+descrição.
+
+#### Expected behavior
+
+- Após uma feature atingir `validate: PASSED` em um workflow `git-flow`, o
+  Spec Master pergunta ao usuário (via `AskUserQuestion`) se deseja abrir um
+  PR para o branch da feature.
+- Se sim, o PR é aberto com a matriz de rastreabilidade e o relatório final
+  da feature como corpo da descrição.
+- Se não, ou em workflow `trunk`, nenhuma ação de PR é tomada.
+
+#### Acceptance criteria
+
+- [ ] Pergunta explícita ao usuário antes de qualquer criação de PR, sem
+      exceção.
+- [ ] PR aberto inclui a rastreabilidade e o relatório final da feature.
+- [ ] Em workflow `trunk`, o passo não se aplica (nenhuma pergunta sobre
+      PR).
+
+#### Test scenarios
+
+- Feature `validate: PASSED` em `git-flow`, usuário confirma → PR aberto
+  com descrição correta.
+- Usuário recusa → nenhum PR é criado, workflow segue normalmente.
 
 ## Cross-feature requirements
 
-- Feature 2 (`guarded-noop-phase-validation`) depende da Feature 1
-  (`guarded-mode-controller`): ela modifica `phase_contracts.py` e
-  `phase_runner.py` já criados pela Feature 1 e não pode regredir nenhum
-  dos testes/garantias já entregues por ela.
+- Toda nova decisão estrutural introduzida por essas features deve ser
+  implementada no core determinístico (`spec-master/lib/`), exposta via
+  `spec-master/lib/cli.py` como JSON em stdout, seguindo o padrão já
+  estabelecido pelos módulos existentes (`git_strategy.py`,
+  `quality_gates.py`, `graph/`).
+- Nenhuma feature reimplementa um comando `speckit.*` já existente.
 
 ## Quality requirements
 
-- Testes unitários não devem depender de Ollama, OpenCode ou rede (RNF).
-- Processos externos devem ser mockáveis (RNF).
-- Paths devem ser resolvidos e validados antes de qualquer operação (RNF).
-- Snapshots devem ignorar `.venv`, caches, dependências instaladas e logs do
-  próprio controlador (RNF).
-- A adição não deve alterar o comportamento de `--mode native` (RNF).
-- O controlador deve usar Python stdlib sempre que possível (RNF).
-- Toda validação de no-op deve ser determinística e testável sem LLM (RNF,
-  Feature 2).
-- O parser do resultado estruturado não deve executar conteúdo do
-  transcript; JSON inválido deve ser rejeitado com segurança; paths
-  informados pelo agente são não confiáveis (RNF, Feature 2).
-- A correção da Feature 2 não pode reduzir as proteções de fases
-  produtoras já entregues pela Feature 1 (RNF, Feature 2).
+- Cobertura de testes determinística (sem LLM) para toda lógica nova do
+  core, seguindo o padrão de `spec-master/tests/`.
+- Nenhum comando de build/test/lint/security é hardcoded — sempre
+  auto-detectado a partir do repositório-alvo.
 
 ## Non-goals
 
-- Escolher ou baixar modelos automaticamente.
-- Avaliar qualidade literária dos documentos por heurística subjetiva.
-- Substituir o GitHub Spec Kit.
-- Executar duas fases simultaneamente.
-- Corrigir automaticamente decisões de produto ambíguas.
-- Garantir que qualquer modelo local consiga completar o projeto.
-- Suportar, neste primeiro incremento, todos os agentes do registro do Spec
-  Kit em modo protegido (apenas OpenCode inicialmente; arquitetura não deve
-  impedir adaptadores futuros).
-- (Feature 2) Confiar irrestritamente na resposta textual do modelo;
-  aprovar automaticamente ambiguidades de produto; alterar comandos do
-  GitHub Spec Kit; remover allowlists ou snapshots; considerar timeout
-  como no-op válido; reavaliar semanticamente toda a especificação usando
-  outro LLM; mudar a política de tentativas global.
+- Adotar o modelo "spec-as-source" da Tessl (spec como fonte única, código
+  totalmente regenerável a partir dela) — contradiz o princípio
+  anti-alucinação central do Spec Master.
+- (Backlog Tier 3, não implementado neste workflow, apenas registrado para
+  roadmap futuro): sintaxe estruturada tipo EARS para critérios de aceite;
+  schema de export de métricas compatível com OpenTelemetry/JSON; "web
+  bundle" portátil para chat UIs sem CLI.
 
 ## Dependencies
 
-- GitHub Spec Kit já inicializado neste repositório (`.specify/`,
-  confirmado nesta execução via `specify init --here`).
-- OpenCode CLI disponível no ambiente para o adaptador inicial
-  (`spec-master/lib/opencode_runner.py`, já presente e não commitado, a ser
-  integrado ao novo contrato de fases per §19 da spec original).
-- `spec-master/lib/discovery.py` já estendido (não commitado) para localizar
-  comandos `speckit.*` em `.opencode/commands` além de `.claude/commands`.
-- Feature 2 depende inteiramente dos módulos entregues pela Feature 1
-  (`controller.py`, `execution_mode.py`, `phase_contracts.py`,
-  `phase_runner.py`, `opencode_runner.py`) e da suíte de testes existente
-  (95 testes) permanecer verde.
+- team-mode-parallel-workstreams depende de parallel-worktree-execution.
+- Demais features são independentes entre si.
 
 ## Open questions
 
-- A spec original não define o nome do arquivo de lock (`run.lock`)
-  explicitamente além de citá-lo em §12 — assumir
-  `.spec-master/run.lock`, alinhado ao padrão de state em
-  `.spec-master/state.json` (INFERRED).
-- A spec não define um valor padrão para o timeout de "lock abandonado" além
-  de reutilizar "o timeout configurado" (§12) — assumir
-  `phase_timeout_seconds` como esse valor até haver evidência em contrário
-  (INFERRED).
+- Nenhuma pendente no momento da geração deste documento — ambiguidades
+  específicas de cada feature serão levantadas na fase `clarify`
+  correspondente.
 
 ## Source traceability
 
 | Requirement | Source | Classification |
 |---|---|---|
-| Três modos `native`/`guarded`/`auto`, padrão `auto` | guarded-mode-spec.md §2 | EXPLICIT |
-| Fluxo do modo guarded (13 passos por fase) | guarded-mode-spec.md §5 | EXPLICIT |
-| Contrato por fase (artefatos/escritas permitidas) | guarded-mode-spec.md §6 | EXPLICIT |
-| Validações gerais e estruturais | guarded-mode-spec.md §7 | EXPLICIT |
-| Política de tentativas (defaults) | guarded-mode-spec.md §8 | EXPLICIT |
-| Política de migração automática (eventos críticos/recuperáveis) | guarded-mode-spec.md §9 | EXPLICIT |
-| Estrutura de `state.json.execution` | guarded-mode-spec.md §10 | EXPLICIT |
-| Isolamento OpenCode via agente `spec-phase` | guarded-mode-spec.md §11 | EXPLICIT |
-| Retomada e idempotência | guarded-mode-spec.md §12 | EXPLICIT |
-| Observabilidade e relatório | guarded-mode-spec.md §13 | EXPLICIT |
-| Requisitos funcionais GM-001..GM-012 | guarded-mode-spec.md §14 | EXPLICIT |
-| Requisitos não funcionais | guarded-mode-spec.md §15 | EXPLICIT |
-| Testes obrigatórios | guarded-mode-spec.md §16 | EXPLICIT |
-| Critérios de aceite | guarded-mode-spec.md §17 | EXPLICIT |
-| `opencode_runner.py` e discovery multi-integração já existem no repo | leitura do repositório (`git status`, `git diff`) | DISCOVERED_FROM_CODEBASE |
-| Nome/local do `run.lock` e do timeout de stale-lock | inferência a partir de §12 | INFERRED |
-| Bug real: `clarify` bloqueado com `missing_artifact` apesar de spec completo | specs/002-guarded-noop-phase-validation/spec.md §1 | EXPLICIT |
-| Classificação de fases: `produce-or-update`/`inspect-or-update`/`execute` | specs/002-guarded-noop-phase-validation/spec.md §4 | EXPLICIT |
-| Regras de no-op para `clarify` (11 condições) | specs/002-guarded-noop-phase-validation/spec.md §5 | EXPLICIT |
-| Resultado estruturado (`phase_result`) e extração do último bloco válido | specs/002-guarded-noop-phase-validation/spec.md §6 | EXPLICIT |
-| Resolução do artefato ativo via `.specify/feature.json` | specs/002-guarded-noop-phase-validation/spec.md §7 | EXPLICIT |
-| Regras de no-op para `analyze` | specs/002-guarded-noop-phase-validation/spec.md §8 | EXPLICIT |
-| Regras para fases produtoras (não regredir) | specs/002-guarded-noop-phase-validation/spec.md §9 | EXPLICIT |
-| Motivos de resultado padronizados | specs/002-guarded-noop-phase-validation/spec.md §10 | EXPLICIT |
-| Retomada após bloqueio incorreto (revalidação de contrato) | specs/002-guarded-noop-phase-validation/spec.md §11 | EXPLICIT |
-| Novos campos de estado por tentativa | specs/002-guarded-noop-phase-validation/spec.md §12 | EXPLICIT |
-| Requisitos funcionais NPV-001..NPV-012 | specs/002-guarded-noop-phase-validation/spec.md §13 | EXPLICIT |
-| Requisitos não funcionais | specs/002-guarded-noop-phase-validation/spec.md §14 | EXPLICIT |
-| Cenários de aceite A-G | specs/002-guarded-noop-phase-validation/spec.md §15 | EXPLICIT |
-| Testes obrigatórios | specs/002-guarded-noop-phase-validation/spec.md §16 | EXPLICIT |
-| Módulos afetados/novos já existem em `spec-master/lib/` (Feature 1) | leitura do repositório | DISCOVERED_FROM_CODEBASE |
+| parallel-worktree-execution | docs/market-benchmark-roadmap.md, Tier 1 item 1 | EXPLICIT |
+| team-mode-parallel-workstreams | docs/market-benchmark-roadmap.md, Tier 1 item 2 | EXPLICIT |
+| speckit-tracker-orchestration | docs/market-benchmark-roadmap.md, Tier 1 item 3 | EXPLICIT |
+| sast-quality-gate | docs/market-benchmark-roadmap.md, Tier 1 item 4 | EXPLICIT |
+| local-dashboard | docs/market-benchmark-roadmap.md, Tier 1 item 5 | EXPLICIT |
+| dedicated-mcp-server | docs/market-benchmark-roadmap.md, Tier 2 item 6 | EXPLICIT |
+| context-delta-reporting | docs/market-benchmark-roadmap.md, Tier 2 item 7 | EXPLICIT |
+| declarative-event-hooks | docs/market-benchmark-roadmap.md, Tier 2 item 8 | EXPLICIT |
+| role-decision-memory | docs/market-benchmark-roadmap.md, Tier 2 item 9 | EXPLICIT |
+| optional-pr-open-step | docs/market-benchmark-roadmap.md, Tier 2 item 10 | EXPLICIT |
+| Detalhes de implementação (nomes de função, formato exato de CLI) | Inferidos a partir de `spec-master/lib/` existente | INFERRED |

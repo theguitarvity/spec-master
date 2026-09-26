@@ -41,9 +41,11 @@ import metrics  # noqa: E402
 import quality_gates  # noqa: E402
 import state as state_mod  # noqa: E402
 import team_model  # noqa: E402
+import team_workstreams  # noqa: E402
 import tool_policy  # noqa: E402
 import traceability  # noqa: E402
 import runtime_contract  # noqa: E402
+import worktree  # noqa: E402
 
 
 def _print_json(payload) -> None:
@@ -53,6 +55,12 @@ def _print_json(payload) -> None:
 def _load_json_file(path: str):
     with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _save_json_file(path: str, payload) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False, sort_keys=False)
+        fh.write("\n")
 
 
 def cmd_state(args: argparse.Namespace) -> int:
@@ -148,6 +156,31 @@ def cmd_gates(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_worktree(args: argparse.Namespace) -> int:
+    if args.worktree_action == "waves":
+        features = _load_json_file(args.features)
+        _print_json(worktree.compute_waves(features))
+        return 0
+    if args.worktree_action == "plan":
+        handle = worktree.plan_worktree(
+            feature_id=args.feature_id,
+            project_root=args.project_root,
+            strategy=args.strategy,
+            wave_size=args.wave_size,
+            is_git_repo=not args.not_git_repo,
+        )
+        _print_json(handle)
+        return 0
+    if args.worktree_action == "conflicts":
+        _print_json(worktree.conflicts(args.path_a, args.path_b))
+        return 0
+    if args.worktree_action == "aggregate":
+        handles = _load_json_file(args.handles)
+        _print_json(worktree.aggregate(args.wave_index, handles))
+        return 0
+    raise SystemExit(f"unknown worktree action: {args.worktree_action}")
+
+
 def cmd_constitution(args: argparse.Namespace) -> int:
     if args.const_action == "diff":
         result = constitution_diff.diff_files(args.existing, args.proposed)
@@ -186,6 +219,32 @@ def cmd_team(args: argparse.Namespace) -> int:
         _print_json(team_model.build_workstreams(features))
         return 0
     raise SystemExit(f"unknown team action: {args.team_action}")
+
+
+def cmd_workstreams(args: argparse.Namespace) -> int:
+    if args.workstreams_action == "review":
+        doc = _load_json_file(args.file)
+        team_workstreams.record_review_verdict(
+            doc["packages"], args.package, reviewer_agent=args.reviewer,
+            status=args.status, reason=args.reason,
+        )
+        _save_json_file(args.file, doc)
+        _print_json(next(p for p in doc["packages"] if p["id"] == args.package))
+        return 0
+    if args.workstreams_action == "integrate":
+        doc = _load_json_file(args.file)
+        team_workstreams.record_integration_verdict(
+            doc["packages"], args.package, status=args.status, reason=args.reason,
+        )
+        _save_json_file(args.file, doc)
+        _print_json(next(p for p in doc["packages"] if p["id"] == args.package))
+        return 0
+    if args.workstreams_action == "aggregate":
+        handles = _load_json_file(args.handles)
+        doc = _load_json_file(args.packages)
+        _print_json(team_workstreams.aggregate_with_verdicts(args.wave_index, handles, doc["packages"]))
+        return 0
+    raise SystemExit(f"unknown workstreams action: {args.workstreams_action}")
 
 
 def cmd_metrics(args: argparse.Namespace) -> int:
@@ -447,6 +506,29 @@ def build_parser() -> argparse.ArgumentParser:
     gs_plan.add_argument("--git-extension-installed", action="store_true")
     gs_plan.add_argument("--spec-kit-present", action="store_true")
 
+    p_wt = sub.add_parser("worktree")
+    p_wt.set_defaults(func=cmd_worktree)
+    wt_sub = p_wt.add_subparsers(dest="worktree_action", required=True)
+
+    wt_waves = wt_sub.add_parser("waves")
+    wt_waves.add_argument("--features", required=True, help="JSON file: [{id, dependencies}]")
+
+    wt_plan = wt_sub.add_parser("plan")
+    wt_plan.add_argument("--feature-id", required=True)
+    wt_plan.add_argument("--project-root", required=True)
+    wt_plan.add_argument("--strategy", required=True, choices=["git-flow", "trunk"])
+    wt_plan.add_argument("--wave-size", type=int, default=2,
+                          help="feature count in this feature's wave (FR-004)")
+    wt_plan.add_argument("--not-git-repo", action="store_true", help="skip creation (FR-005)")
+
+    wt_conflicts = wt_sub.add_parser("conflicts")
+    wt_conflicts.add_argument("--path-a", required=True)
+    wt_conflicts.add_argument("--path-b", required=True)
+
+    wt_aggregate = wt_sub.add_parser("aggregate")
+    wt_aggregate.add_argument("--wave-index", type=int, required=True)
+    wt_aggregate.add_argument("--handles", required=True, help="JSON file: list of Worktree Handle")
+
     p_gates = sub.add_parser("gates")
     p_gates.set_defaults(func=cmd_gates)
     gates_sub = p_gates.add_subparsers(dest="gates_action", required=True)
@@ -476,8 +558,30 @@ def build_parser() -> argparse.ArgumentParser:
     team_sub.add_parser("roles")
     team_sub.add_parser("intake")
     team_sub.add_parser("adopt")
-    team_workstreams = team_sub.add_parser("workstreams")
-    team_workstreams.add_argument("--file", required=True, help="JSON file: feature objects with optional tasks")
+    team_workstreams_parser = team_sub.add_parser("workstreams")
+    team_workstreams_parser.add_argument("--file", required=True, help="JSON file: feature objects with optional tasks")
+
+    p_ws = sub.add_parser("workstreams")
+    p_ws.set_defaults(func=cmd_workstreams)
+    ws_sub = p_ws.add_subparsers(dest="workstreams_action", required=True)
+
+    ws_review = ws_sub.add_parser("review")
+    ws_review.add_argument("--file", required=True, help="workstreams.json (built by `team workstreams`)")
+    ws_review.add_argument("--package", required=True)
+    ws_review.add_argument("--reviewer", required=True, help="MUST match the package's own assigned reviewer_agent")
+    ws_review.add_argument("--status", required=True, choices=["APPROVED", "REJECTED"])
+    ws_review.add_argument("--reason", default=None, help="required when --status REJECTED")
+
+    ws_integrate = ws_sub.add_parser("integrate")
+    ws_integrate.add_argument("--file", required=True, help="workstreams.json (built by `team workstreams`)")
+    ws_integrate.add_argument("--package", required=True)
+    ws_integrate.add_argument("--status", required=True, choices=["APPROVED", "REJECTED"])
+    ws_integrate.add_argument("--reason", default=None, help="required when --status REJECTED")
+
+    ws_aggregate = ws_sub.add_parser("aggregate")
+    ws_aggregate.add_argument("--wave-index", type=int, required=True)
+    ws_aggregate.add_argument("--handles", required=True, help="JSON file: list of Worktree Handle")
+    ws_aggregate.add_argument("--packages", required=True, help="workstreams.json (built by `team workstreams`)")
 
     p_metrics = sub.add_parser("metrics")
     p_metrics.set_defaults(func=cmd_metrics)

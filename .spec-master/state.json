@@ -1,49 +1,169 @@
 {
   "version": 1,
-  "context": "docs/spec-master/guarded-mode-spec.md",
+  "context": "docs/market-benchmark-roadmap.md",
   "workflow": "trunk",
-  "status": "COMPLETED",
+  "status": "SPECIFYING",
   "constitution": {
-    "status": "VALIDATED",
-    "path": ".specify/memory/constitution.md"
+    "status": "APPLIED",
+    "additions": [
+      "VII. Reuse the Ecosystem Before Reimplementing It",
+      "VIII. Auto-Detected Quality Gates, Never Hardcoded",
+      "IX. Scoped, Documented Dependency Exceptions",
+      "X. Irreversible Publishing Actions Require Explicit Confirmation"
+    ]
   },
   "features": [
     {
-      "id": "guarded-mode-controller",
-      "name": "Guarded Mode Controller",
-      "description": "Add native/guarded/auto execution modes and a deterministic controller that isolates each Spec Kit phase in its own session, validates required artifacts before promoting state, and migrates auto -> guarded on unsafe behavior.",
+      "id": "context-delta-reporting",
+      "name": "Context delta reporting on resume",
+      "description": "Report an explicit ADDED/MODIFIED/REMOVED delta for spec/plan/tasks between executions on resume, analogous to the existing constitution diff, instead of only deciding staleness internally.",
       "source_requirements": [
-        "GM-001",
-        "GM-002",
-        "GM-003",
-        "GM-004",
-        "GM-005",
-        "GM-006",
-        "GM-007",
-        "GM-008",
-        "GM-009",
-        "GM-010",
-        "GM-011",
-        "GM-012"
+        "docs/market-benchmark-roadmap.md#tier-2-item-7"
       ],
       "acceptance_criteria": [
-        "--mode accepts native|guarded|auto; default is auto when omitted",
-        "guarded mode isolates every phase in its own session with no prior-phase history",
-        "no phase is promoted to PASSED without required-artifact validation (non-empty, no placeholders)",
-        "writes outside the phase allowlist are rejected",
-        "code created before the implement phase is detected and rejected",
-        "simulated tool calls printed as text are detected and rejected",
-        "timeout and max-attempts-per-phase are enforced; exhausted attempts -> BLOCKED",
-        "auto mode migrates irreversibly to guarded per the critical/recoverable event policy",
-        "resume is idempotent and never repeats a PASSED phase with a valid fingerprint",
-        "transcripts and failure causes are preserved for every attempt",
-        "OpenCode adapter works end to end without changing --mode native behavior",
-        "python3 -m unittest discover -s spec-master/tests -v passes, including new unit + fake-agent integration tests"
+        "On resume, a human-readable ADDED/MODIFIED/REMOVED delta is produced for spec/plan/tasks artifacts that changed since the last run",
+        "The delta reuses the existing fingerprint/staleness mechanism as its data source, not a parallel diffing mechanism",
+        "The report format mirrors the existing constitution diff output style for consistency"
       ],
       "dependencies": [],
       "branch": null,
+      "spec_directory": "specs/009-context-delta-reporting",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "declarative-event-hooks",
+      "name": "Declarative event-driven hooks",
+      "description": "Support declarative hooks for events such as a failed quality gate triggering repair, or a public-contract change triggering constitution revalidation, reusing the escalation logic already present in Team Mode playbooks.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-8"
+      ],
+      "acceptance_criteria": [
+        "Hooks are declared data (not new imperative code paths) and are evaluated deterministically against workflow events",
+        "The escalation logic already used by Team Mode playbooks is reused, not duplicated",
+        "A hook firing is recorded in a way traceable back to the event that triggered it"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/010-declarative-event-hooks",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "dedicated-mcp-server",
+      "name": "Dedicated MCP server",
+      "description": "Expose spec-master/lib/cli.py capabilities (state, traceability, graph query, quality gates) as MCP tools via a dedicated, isolated server component.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-6"
+      ],
+      "acceptance_criteria": [
+        "MCP tools map 1:1 to existing deterministic CLI capabilities, no new business logic duplicated in the server",
+        "Any dependency the MCP server needs beyond stdlib is isolated to this component only, per constitution Principle IX",
+        "The core (spec-master/lib/) remains fully functional and independently testable with the MCP server absent"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/008-dedicated-mcp-server",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "local-dashboard",
+      "name": "Local static dashboard",
+      "description": "Generate a lightweight, dependency-free, self-contained HTML dashboard from .spec-master/state.json, workstreams.json, and the knowledge graph (reusing graph/maps.py::render_system_map), with no server required.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-5"
+      ],
+      "acceptance_criteria": [
+        "A single self-contained HTML file is generated with no new runtime dependency",
+        "The dashboard reflects current state.json/workstreams.json/knowledge graph data at generation time",
+        "graph/maps.py::render_system_map is reused, not reimplemented"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/007-local-dashboard",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "optional-pr-open-step",
+      "name": "Optional PR-open step in Git Flow",
+      "description": "Offer an optional step to open a pull request at the end of a feature under Git Flow, always gated on explicit user confirmation, attaching the traceability matrix and final report as the PR description.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-10"
+      ],
+      "acceptance_criteria": [
+        "The PR-open step never runs automatically; it always requires an explicit confirmed answer from the user first, per constitution Principle X",
+        "When confirmed, the PR description includes the traceability matrix and final report content",
+        "Under trunk-based workflow (this repository's current strategy), the step is a documented no-op, not silently skipped without explanation"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/012-optional-pr-open-step",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "parallel-worktree-execution",
+      "name": "Parallel worktree execution",
+      "description": "Execute independent features in parallel using isolated git worktrees, aggregating and merging results.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-1"
+      ],
+      "acceptance_criteria": [
+        "Features with no dependency edge between them can execute in isolated git worktrees concurrently",
+        "Each worktree runs exactly one feature's full phase loop without touching another feature's files",
+        "Results (branch/diff/status) are aggregated back and merge conflicts are reported, never auto-resolved"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/003-parallel-worktree-execution",
       "status": "COMPLETED",
-      "spec_directory": "specs/001-guarded-mode-controller",
       "analyze_repair_cycles": 1,
       "phases": {
         "specify": "PASSED",
@@ -56,46 +176,105 @@
       }
     },
     {
-      "id": "guarded-noop-phase-validation",
-      "name": "Guarded No-op Phase Validation",
-      "description": "Fix the guarded controller so inspection phases (clarify, analyze) can pass without modifying a file when the pre-existing artifact already satisfies deterministic, phase-specific validations, without weakening any existing false-success protection.",
+      "id": "role-decision-memory",
+      "name": "Role-scoped decision memory in the knowledge graph",
+      "description": "Record decision nodes (who decided what, why, when) in the knowledge graph during Team Mode escalations, queryable via knowledge for-role.",
       "source_requirements": [
-        "NPV-001",
-        "NPV-002",
-        "NPV-003",
-        "NPV-004",
-        "NPV-005",
-        "NPV-006",
-        "NPV-007",
-        "NPV-008",
-        "NPV-009",
-        "NPV-010",
-        "NPV-011",
-        "NPV-012"
+        "docs/market-benchmark-roadmap.md#tier-2-item-9"
       ],
       "acceptance_criteria": [
-        "each phase is classified as produce-or-update, inspect-or-update, or execute",
-        "clarify can pass without changing spec.md when the active spec is complete and unambiguous",
-        "analyze can pass without changing files when there are no blocking findings",
-        "a structured phase_result block is required to promote any no-op",
-        "the active artifact is resolved via .specify/feature.json, never an ambiguous glob",
-        "producer phases still require a change on their first valid run",
-        "missing_artifact, unchanged_artifact, and valid_noop are distinguished",
-        "user_decision_required pauses the workflow immediately without consuming an attempt",
-        "allowlists, path protection, and simulated-tool-call detection remain intact",
-        "a previously-blocked attempt can be recoverably revalidated under a new contract version",
-        "policy, contract version, outcome, and artifact hashes are recorded in attempt state",
-        "already-completed workflows remain compatible (no destructive state migration)",
-        "the existing 95-test suite from feature 1 continues to pass",
-        "the qwen-greeting-api case can leave the clarify block without artificially editing the spec",
-        "the final report distinguishes artifact_updated from no_changes_required"
+        "A decision node is written to the knowledge graph at the moment a Team Mode escalation is resolved",
+        "Decision nodes are queryable via the existing knowledge for-role command",
+        "No new storage mechanism is introduced beyond the existing knowledge graph"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/011-role-decision-memory",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "sast-quality-gate",
+      "name": "Auto-detected SAST quality gate",
+      "description": "Detect already-configured SAST scanners (e.g. Semgrep config, CodeQL workflow) in the target repository and promote them to a blocking quality gate, following the same auto-detection pattern as build/test/lint gates in quality_gates.py.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-4"
+      ],
+      "acceptance_criteria": [
+        "A SAST scanner already configured in the target repo is detected without any hardcoded tool name/command",
+        "When detected, the gate is blocking, not merely a manual Security Agent suggestion",
+        "When no SAST scanner is configured, the gate is absent (not a failure) — consistent with existing gate-detection behavior"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/006-sast-quality-gate",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "speckit-tracker-orchestration",
+      "name": "Tracker orchestration via existing Spec Kit extensions",
+      "description": "Orchestrate existing Spec Kit tracker integrations (Jira, Azure DevOps, Linear, GitHub Issues) by reusing/extending the speckit-taskstoissues skill, instead of building new integrations from scratch.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-3"
+      ],
+      "acceptance_criteria": [
+        "No new bespoke tracker client is written where an existing Spec Kit extension/skill already covers that tracker",
+        "speckit-taskstoissues is reused or extended, not duplicated",
+        "Tracker selection is auto-detected from the target repository's own configuration, never hardcoded"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/005-speckit-tracker-orchestration",
+      "status": "PENDING",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      }
+    },
+    {
+      "id": "team-mode-parallel-workstreams",
+      "name": "Team Mode parallel workstreams execution",
+      "description": "Execute Team Mode workstreams from .spec-master/workstreams.json in parallel using the worktree mechanism from parallel-worktree-execution.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-2"
+      ],
+      "acceptance_criteria": [
+        "Each workstream in .spec-master/workstreams.json executes in its own worktree via the mechanism built for parallel-worktree-execution",
+        "Peer review and Tech Lead integration authority are respected before a workstream is merged",
+        "Workstream results are aggregated into the same reporting path as sequential Team Mode execution"
       ],
       "dependencies": [
-        "guarded-mode-controller"
+        "parallel-worktree-execution"
       ],
       "branch": null,
+      "spec_directory": "specs/004-team-mode-parallel-workstreams",
       "status": "COMPLETED",
-      "spec_directory": "specs/002-guarded-noop-phase-validation",
+      "analyze_repair_cycles": 1,
       "phases": {
         "specify": "PASSED",
         "clarify": "PASSED",
@@ -104,258 +283,215 @@
         "analyze": "PASSED",
         "implement": "PASSED",
         "validate": "PASSED"
-      },
-      "analyze_repair_cycles": 1
+      }
     }
   ],
   "quality_gates": [],
   "fingerprint": {
-    "guarded-mode-spec.md": "39334e7601310e3cf680992d2000479c291c72c0460e4577ec82b1a3a87159aa",
-    "spec.md": "001a9e66284e8fe3765142345ca4e61742bf682480fe80145d43a2600ff9c330",
-    "app-features.md": "b61f00e0b8b632b3dd0e48e6c7d2dcf73aa27a59f76aab91b069b987c682095d",
-    "project-goals.md": "40295ecd43d2195f838e91d598e2da24175043e1c309d6512daa119c6b0142a8",
-    "tech-stack.md": "f40064c1318bc7e8188152ce78dd3b257983ac5cf1e474f9d27583b8fc6ea2c5"
+    "app-features.md": "471946a71907c32de968141dc60aa3f023c900869bb788efc04b53138027e34b",
+    "project-goals.md": "9e1e94eb19572c55a23c4b7363bff2041caf196f7d5384ef550eb65517fea310",
+    "tech-stack.md": "077bd62909e16e73bfa78d6e215f0b1a0dafa57c5fc089763f6092bc74024f8a"
   },
   "traceability": [
     {
-      "requirement": "GM-001",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-001: Compute execution waves from features order output",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T010 (T005,T006)",
+      "test": "test_worktree.py::ComputeWavesTests",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-002",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-002: Create one isolated git worktree per feature in a multi-feature wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T011 (T007)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_plan_worktree_creates_handle_per_feature_in_multi_feature_wave",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-003",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-003: Each feature's phase loop only reads/writes inside its own worktree",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context (research.md #5)",
+      "task": "tasks.md#T011,T012 (T009)",
+      "test": "test_worktree.py::ResolveProjectRootTests",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-004",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-004: No worktree created for a single-feature wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T023 (T021)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_single_feature_wave_skips_worktree_creation",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-005",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-005: No worktrees created when is_git_repo is false; fallback to sequential",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T023 (T022)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_non_git_repo_falls_back_to_sequential",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-006",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-006: Aggregate each feature's final phase status and changed files after a wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T019 (T016)",
+      "test": "test_worktree.py::AggregateTests::test_aggregate_records_status_and_changed_files",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-007",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-007: Report file-level conflicts across worktrees in the same wave, never auto-resolve",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context (research.md #4)",
+      "task": "tasks.md#T018 (T014,T015)",
+      "test": "test_worktree.py::ConflictsTests",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-008",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-008: Never delete a worktree whose feature has not reached a terminal status",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T019 (T017)",
+      "test": "test_worktree.py::AggregateTests::test_aggregate_preserves_blocked_worktree_directory",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-009",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-009: Worktree orchestration logic lives in spec-master/lib/, exposed via cli.py",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#project-structure",
+      "task": "tasks.md#T001-T004,T013,T020",
+      "test": "n/a (structural placement, not behavior)",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-010",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-010: git worktree invocations go through a mockable boundary for tests",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#constitution-check (research.md #3)",
+      "task": "tasks.md#T003",
+      "test": "test_worktree.py (every test mocks worktree.run_git)",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-011",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-001: Group workstreams.json packages into waves via worktree.compute_waves",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T003",
+      "test": "test_team_workstreams.py::WaveGroupingReuseTests::test_worktree_compute_waves_accepts_package_shaped_input",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "GM-012",
-      "source": "docs/spec-master/guarded-mode-spec.md §14",
-      "feature": "guarded-mode-controller",
-      "spec": "specs/001-guarded-mode-controller/spec.md",
-      "plan": "specs/001-guarded-mode-controller/plan.md",
-      "task": "specs/001-guarded-mode-controller/tasks.md",
-      "test": "spec-master/tests/test_execution_mode.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-002: Create one isolated git worktree per package in a multi-package wave via worktree.plan_worktree",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T004 (no new code, research.md #2)",
+      "test": "test_worktree.py::PlanWorktreeTests (existing, unmodified)",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-001",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-003: Each package's work stays confined to its own worktree via worktree.resolve_project_root",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T004 (no new code, research.md #2)",
+      "test": "test_worktree.py::ResolveProjectRootTests (existing, unmodified)",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-002",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-004: A package MUST NOT be integration_ready without an APPROVED review verdict from its assigned reviewer_agent",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T011 (T005,T006,T007)",
+      "test": "test_team_workstreams.py::RecordReviewVerdictTests, IntegrationStateTests",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-003",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-005: A package MUST NOT be integration_ready without an additional APPROVED Tech Lead integration verdict",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T012 (T008)",
+      "test": "test_team_workstreams.py::RecordIntegrationVerdictTests, IntegrationStateTests",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-004",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-006: Verdicts MUST be recorded via an explicit structural CLI verb, never inferred or defaulted to approved",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T015",
+      "test": "test_team_workstreams.py::RecordReviewVerdictTests, RecordIntegrationVerdictTests + validation-report.md manual CLI walkthrough",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-005",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-007: Reuse worktree.conflicts unchanged to report overlapping file changes between package worktrees in the same wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "contracts/cli-workstreams.md#non-goals (no new task, research.md #2)",
+      "test": "test_worktree.py::ConflictsTests (existing, unmodified)",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-006",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-008: worktree.aggregate's result MUST be extended with each package's review/integration verdict state",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T014 (T010)",
+      "test": "test_team_workstreams.py::AggregateWithVerdictsTests",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-007",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-009: New Team-Mode-parallel logic MUST live in spec-master/lib/ and call worktree.py's existing functions rather than duplicating them",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#constitution-check",
+      "task": "tasks.md#T001,T011-T014",
+      "test": "test_team_workstreams.py::ReuseNotDuplicateTests::test_team_workstreams_defines_no_duplicate_wave_or_worktree_logic",
+      "status": "VALIDATED"
     },
     {
-      "requirement": "NPV-008",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
-    },
-    {
-      "requirement": "NPV-009",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
-    },
-    {
-      "requirement": "NPV-010",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
-    },
-    {
-      "requirement": "NPV-011",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
-    },
-    {
-      "requirement": "NPV-012",
-      "source": "specs/002-guarded-noop-phase-validation/spec.md §13",
-      "feature": "guarded-noop-phase-validation",
-      "spec": "specs/002-guarded-noop-phase-validation/spec.md",
-      "plan": "specs/002-guarded-noop-phase-validation/plan.md",
-      "task": "specs/002-guarded-noop-phase-validation/tasks.md",
-      "test": "test_phase_result.py, test_phase_contracts.py, test_phase_runner.py, test_controller.py",
-      "status": "IMPLEMENTED"
+      "requirement": "FR-010: A single-package wave or non-git repository MUST fall back to today's sequential behavior with no worktree created",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T004 (no new guard, research.md #2)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_single_feature_wave_skips_worktree_creation, test_non_git_repo_falls_back_to_sequential (existing, unmodified)",
+      "status": "VALIDATED"
     }
   ]
 }

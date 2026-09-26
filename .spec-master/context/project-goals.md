@@ -2,155 +2,115 @@
 
 ## Purpose
 
-Oferecer um controlador determinístico opcional para o Spec Master que
-mantenha modelos locais menores ou menos confiáveis restritos a uma fase
-por execução, porque hoje o fluxo agentic delega a condução semântica e
-operacional inteira ao modelo, e modelos menos robustos podem implementar
-cedo demais, ignorar comandos `speckit.*`, simular chamadas de ferramenta
-como texto, reentrar no skill, escrever em caminhos errados, declarar
-sucesso falso, perder a fase atual após compactação, ou travar sem
-progresso.
+Tornar o Spec Master (este repositório) mais completo e robusto frente ao
+estado atual do mercado de spec-driven development, fechando gaps que o
+próprio projeto já reconhece no seu roadmap (`README.md`) e nas suas
+"Limitations (this increment)" (`docs/spec-master/README.md`).
 
 ## Business / Product Context
 
-Ver `[[app-features]]`: repositório é o próprio motor Spec Master
-(`ai-sdd-master-skill`), que orquestra o GitHub Spec Kit para qualquer
-projeto-alvo. Esta feature estende o próprio motor, não um projeto
-consumidor dele.
+Spec Master é um orquestrador agentic, construído sobre o GitHub Spec Kit,
+com núcleo determinístico Python zero-dependência. Um benchmark competitivo
+contra GitHub Spec Kit, BMAD-METHOD, AWS Kiro, OpenSpec, Spec Kitty, Tessl e
+GSD identificou 10 melhorias priorizadas (ver
+`docs/market-benchmark-roadmap.md`), organizadas em Tier 1 (alta
+prioridade, alinhadas ao roadmap já declarado) e Tier 2 (prioridade média).
 
 ## Problem Statement
 
-Modelos robustos conseguem manter a fase atual, chamar ferramentas reais e
-atualizar o estado; modelos menores frequentemente não conseguem. Sem um
-controlador externo, não há garantia determinística de que uma fase só é
-promovida quando de fato produziu o artefato exigido, com o conteúdo
-mínimo esperado.
+O roadmap atual do Spec Master lista paralelização real, execução real dos
+workstreams do Team Mode, integrações de tracker e dashboard/MCP como
+trabalho futuro ainda não construído; o mercado já validou soluções para a
+maioria desses gaps (worktrees nativos, extensões de tracker do próprio
+Spec Kit, dashboards locais), tornando essas features implementáveis agora
+com baixo risco arquitetural.
 
 ## Desired Outcome
 
-Três modos de execução disponíveis (`native`, `guarded`, `auto`, com `auto`
-como padrão), em que `guarded` isola cada fase em sessão própria e só
-promove estado após validar artefatos, e `auto` decide automaticamente e de
-forma irreversível quando degradar de `native` para `guarded` dentro do
-mesmo workflow.
+As 10 features do Tier 1/Tier 2 implementadas, testadas
+deterministicamente (sem depender de LLM para a lógica estrutural), e
+integradas ao core existente sem reimplementar nenhum comando `speckit.*`.
 
 ## Target Scope
 
-Ver `## Escopo` — Incluído / Fora do escopo em
-`docs/spec-master/guarded-mode-spec.md` §3, reproduzido em
-`[[app-features]]`. Primeiro incremento suporta apenas a integração
-OpenCode; a arquitetura não deve impedir adaptadores futuros.
-
-Feature 2 (`guarded-noop-phase-validation`) restringe seu escopo à
-correção de um bug real do controlador entregue pela Feature 1: fases de
-inspeção (`clarify`, `analyze`) sendo incorretamente bloqueadas por
-exigirem alteração de arquivo mesmo quando o resultado válido é "nenhuma
-mudança necessária". Ver `## Escopo` em
-`specs/002-guarded-noop-phase-validation/spec.md` §3.
+Pacote `spec-master/` deste repositório (core Python, templates, knowledge
+base, protocolo). Fora de escopo: qualquer produto/projeto de terceiros.
 
 ## Delivery Approach
 
-Trunk-based: trabalho direto em `main`, feature isolada logicamente em
-`specs/<feature>/` (decisão do usuário nesta execução, sem branch
-dedicada). Implementação seguirá a estrutura sugerida em
-`docs/spec-master/guarded-mode-spec.md` §18
-(`controller.py`, `execution_mode.py`, `phase_contracts.py`,
-`phase_runner.py`, `opencode_runner.py` — este último já presente) e a
-migração faseada descrita em §19: preservar `native` como está, incorporar
-o runner OpenCode existente ao novo contrato de fases, adicionar `guarded`
-sem mudar o padrão inicialmente, validar com agentes falsos e com
-`qwen-todo-api`, só então trocar o padrão para `auto`, e por fim atualizar
-README/adapters/instalador global.
+Workflow `trunk`-based (conforme já usado neste repositório), uma feature
+por vez seguindo `specify -> clarify -> plan -> tasks -> analyze ->
+implement -> validate`, na ordem de dependência resolvida por `features
+order`. Item 1 do Tier 1 (`parallel-worktree-execution`) é pré-requisito
+direto do item 2 (`team-mode-parallel-workstreams`).
 
 ## What "Done" Means
 
-1. Os três modos estão disponíveis e `--mode auto` é aceito como padrão
-   quando `--mode` não é informado.
-2. O controlador protegido nunca promove uma fase para `PASSED` sem
-   validação real do artefato obrigatório.
-3. A retomada funciona de forma idempotente, sem repetir fases já `PASSED`
-   com fingerprint válido.
-4. Todos os testes determinísticos (`python3 -m unittest discover -s
-   spec-master/tests -v`) passam, incluindo os novos casos unitários e de
-   integração com agente falso.
-5. O case pequeno (`qwen-todo-api`) produz um relatório que distingue
-   corretamente o sucesso do workflow do desempenho do modelo avaliado.
-6. (Feature 2) Fases de inspeção (`clarify`, `analyze`) aceitam no-op
-   válido sob contrato determinístico, sem enfraquecer nenhuma proteção
-   de fases produtoras contra falso sucesso.
-7. (Feature 2) O case real `qwen-greeting-api` sai do bloqueio de
-   `clarify` sem edição artificial no spec.
+1. Cada feature aprovada tem spec, plano, tasks, análise sem findings
+   bloqueantes, implementação e validação `PASSED`.
+2. Toda nova lógica estrutural vive no core determinístico
+   (`spec-master/lib/`) e é testável sem LLM.
+3. Nenhuma capacidade já oferecida pelo GitHub Spec Kit (extensões de
+   tracker, comandos `speckit.*`) é reimplementada.
 
 ## Success Criteria
 
-Ver `docs/spec-master/guarded-mode-spec.md` §17 (Critérios de aceite,
-9 itens) — reproduzidos como acceptance criteria em `[[app-features]]`.
-Ver `specs/002-guarded-noop-phase-validation/spec.md` §18 (Critérios de
-aceite, 9 itens) para a Feature 2.
+- Testes determinísticos novos passam junto com a suíte existente
+  (`python3 -m unittest discover -s spec-master/tests`).
+- `graph validate` e os harness evals (`evals run`) passam ao final.
+- Rastreabilidade completa entre os itens do benchmark e a implementação
+  final.
 
 ## Constraints
 
-- Controlador deve usar Python stdlib sempre que possível.
-- Testes unitários não podem depender de Ollama, OpenCode ou rede.
-- Processos externos devem ser mockáveis.
-- A adição não pode alterar o comportamento de `--mode native`.
-- `.spec-master/state.json` só pode ser promovido pelo controlador.
-- O controlador nunca deve executar `git reset --hard` nem apagar trabalho
-  não atribuído à tentativa atual.
+- Núcleo determinístico permanece Python stdlib puro, sem novas
+  dependências externas obrigatórias (uma exceção documentada é aceitável
+  apenas se o protocolo MCP da Feature 6 exigir, e deve ficar isolada,
+  nunca no caminho crítico do core).
+- Nenhum comando de build/test/lint/security hardcoded.
+- Compatibilidade retroativa com o estado já `COMPLETED` das features
+  `guarded-mode-controller` e `guarded-noop-phase-validation` (código já
+  implementado por elas não deve ser quebrado).
 
 ## Governance
 
-- Este repositório já possui `.specify/memory/constitution.md` (template
-  padrão recém-copiado por `specify init --here`, ainda com placeholders).
-  A fase `constitution` deste workflow deve preenchê-la a partir dos
-  documentos normalizados e das convenções já existentes no repositório
-  (README, estrutura de `spec-master/lib`, testes stdlib-only).
+- Constitution existente em `.specify/memory/constitution.md` é a fonte de
+  princípios ratificados; qualquer `CONFLICT`/`REMOVAL_CANDIDATE` detectado
+  por `constitution diff` pausa o workflow para decisão do usuário.
 
 ## Risks
 
-- Divergência entre o exemplo de caminho do `PROTOCOL.md`
-  (`.claude/commands/speckit.<phase>.md`) e a instalação real do Spec Kit
-  neste repositório, que usa Skills em `.claude/skills/speckit-<phase>/`
-  (kebab-case, sem ponto) — ver nota em `discovery.md`. Mitigação: cada fase
-  deste workflow será executada invocando a Skill Claude Code
-  correspondente pelo nome real instalado.
-- A spec original é extensa (20 seções, 12 requisitos funcionais); o maior
-  risco de escopo é tentar implementar tudo em uma única passada de
-  `implement` sem tarefas suficientemente granulares — mitigado pela fase
-  `tasks` do próprio Spec Kit.
+- Escopo grande (10 features): risco de exceder o budget de uma única
+  sessão — mitigado executando na ordem de prioridade (Tier 1 primeiro) e
+  parando de forma transparente em `PARTIAL` se necessário, nunca
+  simulando conclusão.
+- `parallel-worktree-execution` introduz complexidade de merge — mitigado
+  por reportar conflitos em vez de resolvê-los automaticamente.
 
 ## Stakeholders
 
-- Usuário (mantenedor do Spec Master), único stakeholder identificado no
-  contexto fornecido.
+- Victor Silva (victor.silva@telefonica.com) — solicitante, mantenedor do
+  projeto.
 
 ## Non-goals
 
-Ver `[[app-features]]` — idêntico ao `## Fora do escopo` da spec original.
+- Modelo "spec-as-source" (Tessl) — ver `app-features.md`.
+- Itens de Tier 3 do benchmark (EARS, export OpenTelemetry, web bundle) —
+  registrados como backlog futuro, não implementados neste workflow.
 
 ## Stopping Conditions
 
 O workflow deve ser considerado concluído quando:
 
-- os três modos estiverem disponíveis e testáveis;
-- o controlador protegido impedir promoção falsa de fases (constitution
-  com placeholder, código antes de `implement`, ferramenta simulada como
-  texto, escrita fora da allowlist);
-- a retomada funcionar sem repetir fases válidas;
-- `python3 -m unittest discover -s spec-master/tests -v` passar
-  integralmente;
-- o case pequeno (`qwen-todo-api`) puder ser iniciado com um único comando
-  documentado e produzir um relatório que distinga `workflow SUCCESS` de
-  desempenho do modelo.
+- Todas as 10 features atingirem `validate: PASSED`, ou
+- O relatório final classificar como `PARTIAL`/`BLOCKED` com justificativa
+  clara por feature não concluída.
 
 ## Source Traceability
 
 | Goal / Constraint | Source | Classification |
 |---|---|---|
-| Contexto e motivação (§1) | guarded-mode-spec.md §1 | EXPLICIT |
-| Objetivo: três modos, padrão auto (§2) | guarded-mode-spec.md §2 | EXPLICIT |
-| Migração faseada de implementação (§19) | guarded-mode-spec.md §19 | EXPLICIT |
-| Definição de pronto (§20) | guarded-mode-spec.md §20 | EXPLICIT |
-| Requisitos não funcionais (§15) | guarded-mode-spec.md §15 | EXPLICIT |
-| Trunk-based, sem branch de feature | decisão do usuário nesta sessão (AskUserQuestion) | EXPLICIT |
-| Divergência de path das Skills instaladas | leitura do repositório (`.claude/skills/`) | DISCOVERED_FROM_CODEBASE |
+| 10 features priorizadas em Tier 1/Tier 2 | docs/market-benchmark-roadmap.md | EXPLICIT |
+| Backlog Tier 3 e exclusão do modelo Tessl | docs/market-benchmark-roadmap.md | EXPLICIT |
+| Núcleo determinístico zero-dependência | DISCOVERED_FROM_CODEBASE (spec-master/lib/, docs/spec-master/README.md) | DISCOVERED_FROM_CODEBASE |
+| Workflow trunk-based | DISCOVERED_FROM_CODEBASE (.spec-master/state.json anterior) | DISCOVERED_FROM_CODEBASE |
