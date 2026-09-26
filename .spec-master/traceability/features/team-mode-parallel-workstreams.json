@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "feature": "team-mode-parallel-workstreams",
+  "rows": [
+    {
+      "requirement": "FR-001: Group workstreams.json packages into waves via worktree.compute_waves",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T003",
+      "test": "test_team_workstreams.py::WaveGroupingReuseTests::test_worktree_compute_waves_accepts_package_shaped_input",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-002: Create one isolated git worktree per package in a multi-package wave via worktree.plan_worktree",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T004 (no new code, research.md #2)",
+      "test": "test_worktree.py::PlanWorktreeTests (existing, unmodified)",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-003: Each package's work stays confined to its own worktree via worktree.resolve_project_root",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T004 (no new code, research.md #2)",
+      "test": "test_worktree.py::ResolveProjectRootTests (existing, unmodified)",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-004: A package MUST NOT be integration_ready without an APPROVED review verdict from its assigned reviewer_agent",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T011 (T005,T006,T007)",
+      "test": "test_team_workstreams.py::RecordReviewVerdictTests, IntegrationStateTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-005: A package MUST NOT be integration_ready without an additional APPROVED Tech Lead integration verdict",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T012 (T008)",
+      "test": "test_team_workstreams.py::RecordIntegrationVerdictTests, IntegrationStateTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-006: Verdicts MUST be recorded via an explicit structural CLI verb, never inferred or defaulted to approved",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T015",
+      "test": "test_team_workstreams.py::RecordReviewVerdictTests, RecordIntegrationVerdictTests + validation-report.md manual CLI walkthrough",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-007: Reuse worktree.conflicts unchanged to report overlapping file changes between package worktrees in the same wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "contracts/cli-workstreams.md#non-goals (no new task, research.md #2)",
+      "test": "test_worktree.py::ConflictsTests (existing, unmodified)",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-008: worktree.aggregate's result MUST be extended with each package's review/integration verdict state",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T014 (T010)",
+      "test": "test_team_workstreams.py::AggregateWithVerdictsTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-009: New Team-Mode-parallel logic MUST live in spec-master/lib/ and call worktree.py's existing functions rather than duplicating them",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#constitution-check",
+      "task": "tasks.md#T001,T011-T014",
+      "test": "test_team_workstreams.py::ReuseNotDuplicateTests::test_team_workstreams_defines_no_duplicate_wave_or_worktree_logic",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-010: A single-package wave or non-git repository MUST fall back to today's sequential behavior with no worktree created",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
+      "feature": "team-mode-parallel-workstreams",
+      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T004 (no new guard, research.md #2)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_single_feature_wave_skips_worktree_creation, test_non_git_repo_falls_back_to_sequential (existing, unmodified)",
+      "status": "VALIDATED",
+      "issue": ""
+    }
+  ]
+}

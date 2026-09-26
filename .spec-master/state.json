@@ -2,7 +2,7 @@
   "version": 1,
   "context": "docs/market-benchmark-roadmap.md",
   "workflow": "trunk",
-  "status": "SPECIFYING",
+  "status": "PAUSED",
   "constitution": {
     "status": "APPLIED",
     "additions": [
@@ -28,7 +28,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/009-context-delta-reporting",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -38,6 +38,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -55,7 +60,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/010-declarative-event-hooks",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -65,6 +70,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -82,7 +92,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/008-dedicated-mcp-server",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -92,6 +102,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -109,7 +124,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/007-local-dashboard",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -119,6 +134,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -136,7 +156,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/012-optional-pr-open-step",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -146,6 +166,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -190,7 +215,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/011-role-decision-memory",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -200,6 +225,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -217,7 +247,7 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/006-sast-quality-gate",
-      "status": "PENDING",
+      "status": "COMPLETED",
       "analyze_repair_cycles": 0,
       "phases": {
         "specify": "PENDING",
@@ -227,6 +257,11 @@
         "analyze": "PENDING",
         "implement": "PENDING",
         "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
       }
     },
     {
@@ -244,16 +279,16 @@
       "dependencies": [],
       "branch": null,
       "spec_directory": "specs/005-speckit-tracker-orchestration",
-      "status": "PENDING",
-      "analyze_repair_cycles": 0,
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 1,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       }
     },
     {
@@ -292,206 +327,9 @@
     "project-goals.md": "9e1e94eb19572c55a23c4b7363bff2041caf196f7d5384ef550eb65517fea310",
     "tech-stack.md": "077bd62909e16e73bfa78d6e215f0b1a0dafa57c5fc089763f6092bc74024f8a"
   },
-  "traceability": [
-    {
-      "requirement": "FR-001: Compute execution waves from features order output",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T010 (T005,T006)",
-      "test": "test_worktree.py::ComputeWavesTests",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-002: Create one isolated git worktree per feature in a multi-feature wave",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T011 (T007)",
-      "test": "test_worktree.py::PlanWorktreeTests::test_plan_worktree_creates_handle_per_feature_in_multi_feature_wave",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-003: Each feature's phase loop only reads/writes inside its own worktree",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context (research.md #5)",
-      "task": "tasks.md#T011,T012 (T009)",
-      "test": "test_worktree.py::ResolveProjectRootTests",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-004: No worktree created for a single-feature wave",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T023 (T021)",
-      "test": "test_worktree.py::PlanWorktreeTests::test_single_feature_wave_skips_worktree_creation",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-005: No worktrees created when is_git_repo is false; fallback to sequential",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T023 (T022)",
-      "test": "test_worktree.py::PlanWorktreeTests::test_non_git_repo_falls_back_to_sequential",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-006: Aggregate each feature's final phase status and changed files after a wave",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T019 (T016)",
-      "test": "test_worktree.py::AggregateTests::test_aggregate_records_status_and_changed_files",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-007: Report file-level conflicts across worktrees in the same wave, never auto-resolve",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context (research.md #4)",
-      "task": "tasks.md#T018 (T014,T015)",
-      "test": "test_worktree.py::ConflictsTests",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-008: Never delete a worktree whose feature has not reached a terminal status",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T019 (T017)",
-      "test": "test_worktree.py::AggregateTests::test_aggregate_preserves_blocked_worktree_directory",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-009: Worktree orchestration logic lives in spec-master/lib/, exposed via cli.py",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#project-structure",
-      "task": "tasks.md#T001-T004,T013,T020",
-      "test": "n/a (structural placement, not behavior)",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-010: git worktree invocations go through a mockable boundary for tests",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
-      "feature": "parallel-worktree-execution",
-      "spec": "specs/003-parallel-worktree-execution/spec.md",
-      "plan": "plan.md#constitution-check (research.md #3)",
-      "task": "tasks.md#T003",
-      "test": "test_worktree.py (every test mocks worktree.run_git)",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-001: Group workstreams.json packages into waves via worktree.compute_waves",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T003",
-      "test": "test_team_workstreams.py::WaveGroupingReuseTests::test_worktree_compute_waves_accepts_package_shaped_input",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-002: Create one isolated git worktree per package in a multi-package wave via worktree.plan_worktree",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T004 (no new code, research.md #2)",
-      "test": "test_worktree.py::PlanWorktreeTests (existing, unmodified)",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-003: Each package's work stays confined to its own worktree via worktree.resolve_project_root",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T004 (no new code, research.md #2)",
-      "test": "test_worktree.py::ResolveProjectRootTests (existing, unmodified)",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-004: A package MUST NOT be integration_ready without an APPROVED review verdict from its assigned reviewer_agent",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T011 (T005,T006,T007)",
-      "test": "test_team_workstreams.py::RecordReviewVerdictTests, IntegrationStateTests",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-005: A package MUST NOT be integration_ready without an additional APPROVED Tech Lead integration verdict",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T012 (T008)",
-      "test": "test_team_workstreams.py::RecordIntegrationVerdictTests, IntegrationStateTests",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-006: Verdicts MUST be recorded via an explicit structural CLI verb, never inferred or defaulted to approved",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T015",
-      "test": "test_team_workstreams.py::RecordReviewVerdictTests, RecordIntegrationVerdictTests + validation-report.md manual CLI walkthrough",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-007: Reuse worktree.conflicts unchanged to report overlapping file changes between package worktrees in the same wave",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "contracts/cli-workstreams.md#non-goals (no new task, research.md #2)",
-      "test": "test_worktree.py::ConflictsTests (existing, unmodified)",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-008: worktree.aggregate's result MUST be extended with each package's review/integration verdict state",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T014 (T010)",
-      "test": "test_team_workstreams.py::AggregateWithVerdictsTests",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-009: New Team-Mode-parallel logic MUST live in spec-master/lib/ and call worktree.py's existing functions rather than duplicating them",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#constitution-check",
-      "task": "tasks.md#T001,T011-T014",
-      "test": "test_team_workstreams.py::ReuseNotDuplicateTests::test_team_workstreams_defines_no_duplicate_wave_or_worktree_logic",
-      "status": "VALIDATED"
-    },
-    {
-      "requirement": "FR-010: A single-package wave or non-git repository MUST fall back to today's sequential behavior with no worktree created",
-      "source": "docs/market-benchmark-roadmap.md#tier-1-item-2",
-      "feature": "team-mode-parallel-workstreams",
-      "spec": "specs/004-team-mode-parallel-workstreams/spec.md",
-      "plan": "plan.md#technical-context",
-      "task": "tasks.md#T004 (no new guard, research.md #2)",
-      "test": "test_worktree.py::PlanWorktreeTests::test_single_feature_wave_skips_worktree_creation, test_non_git_repo_falls_back_to_sequential (existing, unmodified)",
-      "status": "VALIDATED"
-    }
-  ]
+  "traceability": [],
+  "traceability_store": {
+    "version": 1,
+    "path": "traceability/features"
+  }
 }

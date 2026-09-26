@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "feature": "speckit-tracker-orchestration",
+  "rows": [
+    {
+      "requirement": "FR-001: discovery.scan() MUST detect installed tracker-orchestration skills only from SKILL.md manifests actually present on disk",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T007 (T003,T004,T005,T006)",
+      "test": "test_tracker_orchestration.py::DetectTrackerExtensionsTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-002: tracker_type classified from a skill's own declared description/name keywords only, never guessed; non-matches excluded entirely (no 'unknown' value)",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "research.md#2",
+      "task": "tasks.md#T007",
+      "test": "test_tracker_orchestration.py::DetectTrackerExtensionsTests::test_detect_tracker_extensions_skips_non_tracker_skill",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-003: tracker_extensions is a new additive field on discovery.scan(); no existing field's value or shape changes",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "plan.md#constitution-check",
+      "task": "tasks.md#T008",
+      "test": "test_discovery.py (existing, unmodified, still passing) + manual CLI walkthrough",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-004: orchestrate() produces one invocation instruction per detected extension, never performs a tracker network/API call itself",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "research.md#3",
+      "task": "tasks.md#T013 (T009,T010)",
+      "test": "test_tracker_orchestration.py::OrchestrateTests::test_orchestrate_returns_invocation_for_detected_extension, test_orchestrate_lists_all_when_multiple_detected",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-005: zero detected extensions MUST return orchestrated:false with a reason, never raise, never block the pipeline",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T013 (T018 verifies)",
+      "test": "test_tracker_orchestration.py::OrchestrateTests::test_orchestrate_returns_false_when_nothing_detected",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-006: speckit-taskstoissues MUST be detected as github_issues against this repo's own real state, with zero modification to SKILL.md itself",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "plan.md#summary",
+      "task": "tasks.md#T007",
+      "test": "manual CLI walkthrough: `tracker orchestrate --path .` against this repo + git diff --stat confirms .claude/skills/speckit-taskstoissues/SKILL.md untouched",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-007: traceability.py gains one new optional issue column, additive; a row without it renders exactly as before this feature",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "data-model.md#traceability-row-extended",
+      "task": "tasks.md#T014 (T011,T012)",
+      "test": "test_tracker_orchestration.py::TraceabilityIssueColumnTests + test_traceability.py (existing, unmodified, still passing)",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-008: all new detection/orchestration logic lives in spec-master/lib/ as pure testable Python exposed via cli.py, reusing discovery.py's manifest-scan pattern",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-3",
+      "feature": "speckit-tracker-orchestration",
+      "spec": "specs/005-speckit-tracker-orchestration/spec.md",
+      "plan": "plan.md#constitution-check",
+      "task": "tasks.md#T001,T007,T013,T015",
+      "test": "test_tracker_orchestration.py::OrchestrateTests::test_tracker_orchestration_module_has_no_network_imports",
+      "status": "VALIDATED",
+      "issue": ""
+    }
+  ]
+}

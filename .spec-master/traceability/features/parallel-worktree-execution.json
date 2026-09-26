@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "feature": "parallel-worktree-execution",
+  "rows": [
+    {
+      "requirement": "FR-001: Compute execution waves from features order output",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T010 (T005,T006)",
+      "test": "test_worktree.py::ComputeWavesTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-002: Create one isolated git worktree per feature in a multi-feature wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T011 (T007)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_plan_worktree_creates_handle_per_feature_in_multi_feature_wave",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-003: Each feature's phase loop only reads/writes inside its own worktree",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context (research.md #5)",
+      "task": "tasks.md#T011,T012 (T009)",
+      "test": "test_worktree.py::ResolveProjectRootTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-004: No worktree created for a single-feature wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T023 (T021)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_single_feature_wave_skips_worktree_creation",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-005: No worktrees created when is_git_repo is false; fallback to sequential",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T023 (T022)",
+      "test": "test_worktree.py::PlanWorktreeTests::test_non_git_repo_falls_back_to_sequential",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-006: Aggregate each feature's final phase status and changed files after a wave",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T019 (T016)",
+      "test": "test_worktree.py::AggregateTests::test_aggregate_records_status_and_changed_files",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-007: Report file-level conflicts across worktrees in the same wave, never auto-resolve",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context (research.md #4)",
+      "task": "tasks.md#T018 (T014,T015)",
+      "test": "test_worktree.py::ConflictsTests",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-008: Never delete a worktree whose feature has not reached a terminal status",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#technical-context",
+      "task": "tasks.md#T019 (T017)",
+      "test": "test_worktree.py::AggregateTests::test_aggregate_preserves_blocked_worktree_directory",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-009: Worktree orchestration logic lives in spec-master/lib/, exposed via cli.py",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#project-structure",
+      "task": "tasks.md#T001-T004,T013,T020",
+      "test": "n/a (structural placement, not behavior)",
+      "status": "VALIDATED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-010: git worktree invocations go through a mockable boundary for tests",
+      "source": "docs/market-benchmark-roadmap.md#tier-1-item-1",
+      "feature": "parallel-worktree-execution",
+      "spec": "specs/003-parallel-worktree-execution/spec.md",
+      "plan": "plan.md#constitution-check (research.md #3)",
+      "task": "tasks.md#T003",
+      "test": "test_worktree.py (every test mocks worktree.run_git)",
+      "status": "VALIDATED",
+      "issue": ""
+    }
+  ]
+}
