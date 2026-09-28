@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests and doctor (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      # Constitution Principles II and III: stdlib only, nothing to install.
+      - name: Unit tests
+        run: python3 -m unittest discover -s spec-master/tests
+
+      # Documented invocations vs the parser, LOC and latency budgets, records.
+      - name: Harness self-checks
+        run: python3 spec-master/lib/cli.py doctor run --path . --pretty
