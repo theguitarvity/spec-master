@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Spec Master</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#02030a"/><stop offset="0.7" stop-color="#051226"/><stop offset="1" stop-color="#0a2a44"/>
+    </linearGradient>
+    <linearGradient id="gridFade" gradientUnits="userSpaceOnUse" x1="0" y1="352" x2="0" y2="512">
+      <stop offset="0" stop-color="#19e6ff" stop-opacity="0"/><stop offset="0.35" stop-color="#19e6ff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#19e6ff" stop-opacity="0.65"/>
+    </linearGradient>
+    <linearGradient id="horizonFade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#19e6ff" stop-opacity="0"/><stop offset="0.5" stop-color="#7ff3ff"/>
+      <stop offset="1" stop-color="#19e6ff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="haze" cx="0.5" cy="1" r="0.8">
+      <stop offset="0" stop-color="#19e6ff" stop-opacity="0.24"/><stop offset="1" stop-color="#19e6ff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#ffffff" fill-opacity="0.035"/>
+    </pattern>
+    <filter id="glowWide" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="glow" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="panel"><path d="M 34 0 L 478 0 L 512 34 L 512 478 L 478 512 L 34 512 L 0 478 L 0 34 Z"/></clipPath>
+  </defs>
+  <g clip-path="url(#panel)">
+    <rect width="512" height="352" fill="url(#sky)"/>
+    <rect x="0" y="192" width="512" height="160" fill="url(#haze)"/>
+    <rect y="352" width="512" height="160" fill="#020510"/>
+    <path d="M 256.0 352 L -320.0 512 M 256.0 352 L -256.0 512 M 256.0 352 L -192.0 512 M 256.0 352 L -128.0 512 M 256.0 352 L -64.0 512 M 256.0 352 L 0.0 512 M 256.0 352 L 64.0 512 M 256.0 352 L 128.0 512 M 256.0 352 L 192.0 512 M 256.0 352 L 256.0 512 M 256.0 352 L 320.0 512 M 256.0 352 L 384.0 512 M 256.0 352 L 448.0 512 M 256.0 352 L 512.0 512 M 256.0 352 L 576.0 512 M 256.0 352 L 640.0 512 M 256.0 352 L 704.0 512 M 256.0 352 L 768.0 512 M 256.0 352 L 832.0 512 M 0 512.0 L 512 512.0 M 0 450.8 L 512 450.8 M 0 423.4 L 512 423.4 M 0 407.9 L 512 407.9 M 0 398.0 L 512 398.0 M 0 391.0 L 512 391.0 M 0 385.9 L 512 385.9 M 0 382.0 L 512 382.0 M 0 378.8 L 512 378.8 M 0 376.3 L 512 376.3 M 0 374.2 L 512 374.2" stroke="url(#gridFade)" stroke-width="1.5" fill="none"/>
+    <rect x="0" y="347" width="512" height="10" fill="url(#horizonFade)" filter="url(#glowWide)"/>
+    <rect x="0" y="351.2" width="512" height="1.6" fill="url(#horizonFade)"/>
+    <path d="M 128.0 512 L 177.0 450.8 L 404 450.8" stroke="#ff8a1f" stroke-width="12" fill="none" opacity="0.55" filter="url(#glowWide)"/>
+    <path d="M 128.0 512 L 177.0 450.8 L 404 450.8" stroke="#ff8a1f" stroke-width="5" fill="none"/>
+    <path d="M 128.0 512 L 177.0 450.8 L 404 450.8" stroke="#ffe2c2" stroke-width="1.5" fill="none"/>
+    <path d="M 404 442.8 L 432 447.8 L 432 453.8 L 404 458.8 Z" fill="#ff8a1f" filter="url(#glow)"/>
+    <path d="M 226.0 110.0 L 136.0 110.0 L 106.0 140.0 L 106.0 170.0 L 136.0 200.0 L 196.0 200.0 L 226.0 230.0 L 226.0 260.0 L 196.0 290.0 L 106.0 290.0 M 268.0 290.0 L 268.0 110.0 L 298.0 110.0 L 337.0 188.0 L 376.0 110.0 L 406.0 110.0 L 406.0 290.0" stroke="#19e6ff" stroke-width="22" fill="none" stroke-linecap="square" opacity="0.7" filter="url(#glowWide)"/>
+    <path d="M 226.0 110.0 L 136.0 110.0 L 106.0 140.0 L 106.0 170.0 L 136.0 200.0 L 196.0 200.0 L 226.0 230.0 L 226.0 260.0 L 196.0 290.0 L 106.0 290.0 M 268.0 290.0 L 268.0 110.0 L 298.0 110.0 L 337.0 188.0 L 376.0 110.0 L 406.0 110.0 L 406.0 290.0" stroke="#19e6ff" stroke-width="13" fill="none" stroke-linecap="square"/>
+    <path d="M 226.0 110.0 L 136.0 110.0 L 106.0 140.0 L 106.0 170.0 L 136.0 200.0 L 196.0 200.0 L 226.0 230.0 L 226.0 260.0 L 196.0 290.0 L 106.0 290.0 M 268.0 290.0 L 268.0 110.0 L 298.0 110.0 L 337.0 188.0 L 376.0 110.0 L 406.0 110.0 L 406.0 290.0" stroke="#eaffff" stroke-width="4" fill="none" stroke-linecap="square"/>
+    <rect width="512" height="512" fill="url(#scan)"/>
+  </g>
+  <path d="M 34 0 L 478 0 L 512 34 L 512 478 L 478 512 L 34 512 L 0 478 L 0 34 Z" stroke="#19e6ff" stroke-opacity="0.55" stroke-width="3" fill="none"/>
+  <path d="M 20 50 L 20 20 L 50 20 M 462 20 L 492 20 L 492 50 M 20 462 L 20 492 L 50 492 M 462 492 L 492 492 L 492 462" stroke="#7ff3ff" stroke-width="4" fill="none" stroke-linecap="square" filter="url(#glow)"/>
+</svg>
