@@ -1,8 +1,9 @@
 # Status da implementação
 
-O que da [proposta](proposal.md) está implementado neste branch, o que foi
+O que da [proposta](proposal.md) está implementado no `main`, o que foi
 medido e o que falta. O fluxo padrão do `/spec-master` continua o mesmo
-(Princípio VI). Tudo da onda 1 é opt-in.
+(Princípio VI). Tudo da onda 1 é opt-in. A emenda da constitution (2.0.0)
+foi aprovada e aplicada, e os hooks estão em auditoria neste repositório.
 
 ## Onda 0: medir e parar o desperdício
 
@@ -32,14 +33,14 @@ medido e o que falta. O fluxo padrão do `/spec-master` continua o mesmo
 |---|---|---|---|---|
 | stdout do CLI por feature (58 chamadas mandatadas) | 100.833 B | **14.138 B** (−86%) | ≤15 KB | mesmo `sim_feature.sh` da avaliação, com artefatos reais da feature para a evidência passar |
 | Escaladas espúrias S→M (003–005) | 3/3 | **0/3**; `optional-pr-open-step` sobe para M | 0/3 | replay do `risk classify` |
-| Invocações inválidas nos documentos lidos por agentes | 2 | **0** de 275 | 0 | `doctor` / `test_protocol_conformance` |
+| Invocações inválidas nos documentos lidos por agentes | 2 | **0** de 282 | 0 | `doctor` / `test_protocol_conformance` |
 | Skills de fase do Spec Kit detectadas | 0/10 | **10/10** | 10/10 | `discovery scan --path .` |
 | Updates perdidos (16 escritas concorrentes) | 6–50% | **0** | 0 | `test_state_integrity` (16 processos de CLI) |
 | Promoções aceitas sem artefato | aceitas | **recusadas** (`EvidenceMissing`) | 0 | `test_state_cli`, `test_evidence` |
 | `gates detect` no próprio repo / erros no `unittest` | `[]` / 21 | `python3 -m unittest discover -s spec-master/tests` / **0** | ≠ `[]` / 0 | CLI e suíte |
 | Rodadas com usage vindo do host | 0/9 | as 9 antigas são `manual-unverified`; o protocolo manda gravar as novas com `telemetry ingest` | 100% das novas | `metrics validate` |
 | `PROTOCOL.md` | 49,8 KB | 37,9 KB | — | `wc -c`; referência sob demanda em `spec-master/docs/` |
-| Testes | 631 com pytest; com `unittest`, 21 módulos com erro de import | **886** com `unittest`, todos passando | verde | `python3 -m unittest discover -s spec-master/tests` |
+| Testes | 631 com pytest; com `unittest`, 21 módulos com erro de import | **896** com `unittest`, todos passando, em Python 3.10 a 3.13 | verde | `python3 -m unittest discover -s spec-master/tests`, também no CI |
 
 ### Limites da telemetria (medidos, não resolvidos)
 
@@ -63,7 +64,7 @@ medido e o que falta. O fluxo padrão do `/spec-master` continua o mesmo
 
 | Entregável | Status | Onde |
 |---|---|---|
-| Kernel: `lanes`, `step`, cards, `policy`, `hookd`, `verify:post`, proveniência v1 | feito | `lib/kernel/` (998 LOC; orçamento 2.500) |
+| Kernel: `lanes`, `step`, cards, `policy`, `hookd`, `verify:post`, proveniência v1 | feito | `lib/kernel/` (1.212 LOC; orçamento 2.500) |
 | `step next\|begin\|end\|widen\|pause\|resume` | feito | `kernel/step.py` |
 | Cards (roteador ≤5 KB, core, patch, bugfix, escalada) | feito | `spec-master/cards/` (roteador 1,7 KB) |
 | Plugin do Claude Code (skill de lane, `hooks.json`) | feito, `claude plugin validate` passa | `spec-master/.claude-plugin/`, `.claude-plugin/marketplace.json` |
@@ -71,16 +72,17 @@ medido e o que falta. O fluxo padrão do `/spec-master` continua o mesmo
 | Hooks em audit por padrão, bloqueio por política | feito | `.spec-master/policy.json` `hooks_mode` |
 | Lane Patch de ponta a ponta, com bugfix | feito | `test_kernel_step` (git real, gate real, regressão no commit base) |
 | Evals adversariais de replay | feito | `test_kernel_hookd`: implementar antes do analyze, editar `state.json`, comando destrutivo, parar sem verificar, retomar após compactação |
-| `doctor` no CI | feito | `doctor run --path .` |
-| Proposta de emenda da constitution | feito, **não aplicada** | [`constitution-amendment.md`](constitution-amendment.md) |
+| `doctor` no CI | feito: `.github/workflows/ci.yml` roda a suíte e o `doctor` em Python 3.10 a 3.13 | `doctor run --path .` |
+| Emenda da constitution (Princípio VII e *Development Workflow*) | **aprovada e aplicada** em 2026-09-28 (versão 2.0.0) | [`constitution-amendment.md`](constitution-amendment.md) |
+| Auditoria dos hooks | **em andamento neste repositório desde 2026-09-28** (modo audit, hooks em `.claude/settings.json`) | `harness audit`, `kernel/audit.py`, `.spec-master/hooks/audit.jsonl` |
 
 ### Números da onda 1
 
 - Instruções para fazer um patch: entrypoint + `router.md` + `core.md` + card
   de implementação ≈ 7,3 KB, contra 55,1 KB do bootstrap do fluxo completo
   (meta ≤8 KB).
-- `hookd` no PreToolUse: 6 módulos, 666 LOC importadas, **~40 ms p50**
-  (máximo ~41–53 ms), medido pelo `doctor` com `-X importtime` (orçamento
+- `hookd` no PreToolUse: 6 módulos, 742 LOC importadas, **~38–40 ms p50**
+  (máximo ~39–53 ms), medido pelo `doctor` com `-X importtime` (orçamento
   1.500 LOC e 100 ms p50; a proposta pede p95 ≤50 ms).
 - Plugin: **~94 tokens** fixos por sessão; a skill de lane custa ~460 tokens
   quando é chamada.
@@ -109,23 +111,23 @@ medido e o que falta. O fluxo padrão do `/spec-master` continua o mesmo
    só sai com essa medição:
    `baseline plan --cases <arquivo> --max-budget-usd <teto>` mostra a matriz
    e o gasto no pior caso; `baseline run ... --yes` executa.
-2. **Decidir a emenda** da constitution
-   ([`constitution-amendment.md`](constitution-amendment.md)). Sem ela, Patch
-   e Standard continuam opt-in.
-3. **Período de audit dos hooks.** Duas semanas em `audit`, medindo falsos
-   bloqueios em `.spec-master/hooks/decisions.jsonl` (meta ≤2%), antes de
-   passar para `block`.
-4. **Pendências da onda 1**:
+2. **Fechar a auditoria dos hooks** (começou em 2026-09-28). No dia 14
+   (2026-10-12), `harness audit --path .` diz se os bloqueios ficaram em até
+   2% das decisões. Se ficaram, ou se a revisão da lista `flagged` mostrar
+   que os falsos bloqueios ficaram nesse limite,
+   `harness mode --project . --mode block` liga o bloqueio. Até lá, cada
+   sessão salva o próprio resumo (`--save`) antes do último commit.
+3. **Pendências da onda 1**:
    - fatiar o `PROTOCOL.md` do fluxo padrão num roteador ≤5 KB + cards (hoje
      só o fluxo por lane tem roteador; o padrão foi podado para 37,9 KB);
    - compartilhar a função de próximo passo com o `controller`;
    - `init.sh link --hooks` (hoje o caminho é `harness install-hooks` ou o
      plugin);
    - agents no plugin.
-5. **Ondas 2 a 4** (Standard, subagentes com `PhaseResult`, `claude plugin
+4. **Ondas 2 a 4** (Standard, subagentes com `PhaseResult`, `claude plugin
    eval` com braço sem plugin, compat do Spec Kit 1.x, paralelismo):
    não começaram. Cada uma depende do go/no-go da anterior.
-6. **Avisos atuais do `doctor`** (esperados):
-   - `step_path_budget`: 4.803 LOC contra a meta de 4.500 para a onda 3;
+5. **Avisos atuais do `doctor`** (esperados):
+   - `step_path_budget`: 4.830 LOC contra a meta de 4.500 para a onda 3;
    - `evidence`: 3 features do dogfood têm fases `PASSED` de antes da
      promoção por evidência, sem evidência verificada.

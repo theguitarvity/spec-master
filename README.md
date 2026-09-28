@@ -9,7 +9,7 @@ ciclo *Specification-Driven Development*: `constitution → specify → clarify
 não tem contexto, `/spec-master new` guia a descoberta da ideia por chat e
 gera o contexto inicial.
 
-`886 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
+`896 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
 
 </div>
 
@@ -145,7 +145,7 @@ Clone (ou já estando neste repo) — nada para instalar, é tudo Python 3
 stdlib:
 
 ```bash
-python3 -m unittest discover -s spec-master/tests   # 886 testes
+python3 -m unittest discover -s spec-master/tests   # 896 testes
 ```
 
 Os entrypoints locais mantidos na raiz deste repositório são só os que
@@ -287,7 +287,7 @@ tanto pelo agente quanto por você, para depurar ou inspecionar o estado:
 | `baseline plan\|run\|summarize` | baseline medido: fluxo do Spec Master × braço agentic direto (`run` exige `--yes`) |
 | `lane triage` · `step next\|begin\|end\|widen\|pause\|resume` | fluxo por lane (opt-in): triagem e mudança patch fechada só com evidência |
 | `state evidence` | mostra ou checa a evidência por trás das fases de uma feature |
-| `harness install-hooks\|mode` · `doctor run` | liga os hooks do host ao kernel · autoverificação para CI |
+| `harness install-hooks\|mode\|audit` · `doctor run` | liga os hooks do host ao kernel e mede a auditoria · autoverificação para CI |
 | `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature = max(escopo, sensibilidade via hooks, override); decide se clarify é pulável, profundidade do analyze, revisores e work packages por papel em L/XL; reclassifica antes do implement |
 | `metrics calibrate` | compara custo real × orçamento de cada tier, detecta drift e propõe (ou, com `--apply`, grava) novos limites em `.spec-master/risk/thresholds.json` |
 | `metrics validate\|export` | valida `rounds.json` contra `schemas/metrics-round.schema.json` e exporta como OTLP/JSON (`/v1/metrics`) ou JSONL; nunca envia nada sozinho |
@@ -526,7 +526,20 @@ O modo padrão é `audit`: decide e registra em
 `.spec-master/hooks/decisions.jsonl` sem interferir, para medir falsos
 positivos antes de ligar o bloqueio. `{"hooks_mode": "block"}` em
 `.spec-master/policy.json` passa a aplicar as decisões. Projetos sem
-`.spec-master/` nunca recebem escrita.
+`.spec-master/` nunca recebem escrita. O comando instalado termina em
+`|| true`: se o engine ou o `python3` sumirem, o hook não bloqueia nada.
+
+**Auditoria.** Entrar em modo audit grava `audit_started_at` na política.
+`harness audit --path .` mostra o que os hooks teriam feito: total de
+decisões, quantas bloqueariam (deny) e quantas só pediriam confirmação
+(ask, como `git push`), a lista para revisão (com credenciais mascaradas) e o
+dia do período de 14 dias. O log local some com o container numa sessão na
+nuvem, então `harness audit --path . --save` junta o resumo de cada sessão em
+`.spec-master/hooks/audit.jsonl`, que vai para o git; enquanto a auditoria
+dura, o hook de início de sessão lembra o agente de salvar esse resumo antes
+do último commit. O bloqueio é ligado (`harness mode --project . --mode
+block`) depois do período, se os falsos bloqueios ficarem em até 2% das
+decisões. Este repositório está em auditoria desde 2026-09-28.
 
 ```bash
 # por projeto: mescla as entradas em .claude/settings.json (idempotente)
@@ -658,9 +671,11 @@ python3 -m unittest discover -s spec-master/tests
 
 O core e a suíte são stdlib pura (Princípios II e III da constitution); o
 `PyYAML`, se instalado, é só um parser mais rápido para o front matter de
-grafo/knowledge.
+grafo/knowledge. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+roda a suíte e o `doctor run` em Python 3.10 a 3.13 a cada push no `main` e em
+cada pull request.
 
-886 testes, sem depender de nenhum LLM: transições de estado (incluindo o
+896 testes, sem depender de nenhum LLM: transições de estado (incluindo o
 teto de 3 ciclos de repair e a regra de que uma fase não começa antes da
 anterior ter `PASSED`), propagação de staleness por fingerprint, discovery
 de repositório (nunca inventa comando para uma stack sem manifest),

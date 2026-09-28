@@ -298,7 +298,17 @@ Rationale, measurements and later waves: `docs/harness-reformulation/`.
   `step end`; 2 re-entries, then PAUSED) and SessionStart (re-inject the
   current card). `hooks_mode` in `.spec-master/policy.json`: `audit`
   (default; log to `.spec-master/hooks/decisions.jsonl`, never interfere) or
-  `block`. Projects without `.spec-master/` are never written to.
+  `block`. Projects without `.spec-master/` are never written to, and every
+  installed command ends in `|| true`, so a missing engine never blocks.
+- **Audit.** Entering audit mode records `audit_started_at`.
+  `harness audit --path .` reports what the hooks would have done (denials
+  that would block, asks that would only prompt, the flagged list with
+  credentials masked, the day of the 14-day period); `--save` merges this
+  machine's per-session summaries into the committed
+  `.spec-master/hooks/audit.jsonl`, so short-lived cloud sessions add up.
+  While an audit runs, the SessionStart hook reminds the agent to save it
+  before the session's last commit. Switch to `block` after the period if
+  false blocks stay within 2% of all decisions.
 - **Install.** `harness install-hooks --project . [--mode audit|block]`
   merges the entries into `.claude/settings.json` (idempotent); or install
   the plugin (`claude plugin marketplace add theguitarvity/spec-master`,
@@ -407,7 +417,9 @@ python3 -m unittest discover -s spec-master/tests
 
 The core and the suite are stdlib-only (constitution Principles II and III);
 `PyYAML`, when installed, is only an optional faster parser for the
-graph/knowledge front matter.
+graph/knowledge front matter. CI (`.github/workflows/ci.yml`) runs the suite
+and `doctor run` on Python 3.10 to 3.13 for every push to `main` and every
+pull request.
 
 The tests cover state transitions (including the 3-cycle repair cap and the
 rule that a phase can't start before its predecessor `PASSED`), fingerprint
