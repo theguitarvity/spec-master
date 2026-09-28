@@ -70,13 +70,21 @@ def _run_quality_gates(project: Path) -> list[dict]:
             # orchestrator confirms the CI check before declaring SUCCESS.
             results.append({**gate, "result": "DEFERRED_TO_CI", "exit_code": None})
             continue
+        # A declared gate may set a repository-relative `cwd` (quality_gates
+        # rejects one that leaves the project) and a `timeout_seconds`.
+        cwd = project / gate["cwd"] if gate.get("cwd") else project
         try:
             completed = subprocess.run(
-                gate["command"], shell=True, cwd=project, text=True,
+                gate["command"], shell=True, cwd=cwd, text=True,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+                timeout=gate.get("timeout_seconds"),
             )
             result = "PASSED" if completed.returncode == 0 else "FAILED"
             exit_code = completed.returncode
+        except subprocess.TimeoutExpired:
+            result = "FAILED"
+            exit_code = None
+            gate = {**gate, "timed_out": True, "error": f"timed out after {gate['timeout_seconds']}s"}
         except OSError as exc:
             result = "FAILED"
             exit_code = None
