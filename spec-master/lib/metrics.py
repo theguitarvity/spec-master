@@ -1,4 +1,19 @@
-"""Delivery metrics helpers for Spec Master rounds."""
+"""Delivery metrics helpers for Spec Master rounds.
+
+Provenance (metrics schema v2): a row may carry `source`, saying where its
+numbers came from:
+
+- `host-transcript` / `host-headless`: measured by the host (Claude Code
+  session transcript, or the `claude -p --output-format json` result), built
+  by `telemetry.to_round()`;
+- `manual`: typed in by a person or an agent, with non-zero tokens;
+- `manual-unverified`: typed in with no token usage at all, i.e. nothing was
+  measured. `record_round(source="manual")` downgrades to this automatically.
+
+Rows without `source` are v1 rows: `metrics_export.validate_rounds` warns
+about them, and `calibration` ignores the zero-token ones as unverified once
+the input carries provenance (see `calibration.calibrate(require_measured=)`).
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -6,6 +21,13 @@ from datetime import datetime, timezone
 # Ceremony tiers (mirrors risk_profile / hooks.TIER_ORDER; kept local so this
 # module stays dependency-free).
 TIERS = ("XS", "S", "M", "L", "XL")
+
+# Provenance of a round (schema v2 `source`). Order matches the schema enum.
+SOURCES = ("host-transcript", "host-headless", "manual", "manual-unverified")
+HOST_SOURCES = ("host-transcript", "host-headless")
+UNVERIFIED_SOURCE = "manual-unverified"
+# How a `cost_usd` value was obtained (schema v2 `cost_basis`).
+COST_BASES = ("measured", "estimated")
 
 
 def _parse_iso(value: str) -> datetime:
@@ -29,12 +51,24 @@ def record_round(
     notes: str | None = None,
     feature_id: str | None = None,
     tier: str | None = None,
+    source: str | None = None,
 ) -> dict:
     """Create a deterministic metrics row for one delivery round.
 
     `feature_id` / `tier` are optional attribution for per-tier calibration
     (`calibration.py`); the keys are only written when given, so rows without
-    them are unchanged."""
+    them are unchanged.
+
+    `source` is the optional provenance (one of `SOURCES`). Like the other
+    optional fields, the key is written ONLY when `source` is passed, so a
+    call without it returns exactly the v1 row (existing callers and tests
+    that compare whole rows are unaffected). Two rules keep rows honest:
+
+    - `source="manual"` with input + output tokens == 0 is stored as
+      `manual-unverified`: nothing was measured, so the row says so;
+    - a host source (`host-transcript` / `host-headless`) with 0 tokens is
+      rejected (ValueError): `metrics_export.validate_rounds` would flag
+      such a row as an ERROR, so it is never produced here."""
     if tier:
         tier = str(tier).strip().upper()
         if tier not in TIERS:
@@ -48,6 +82,16 @@ def record_round(
     end = _parse_iso(ended_at)
     duration_seconds = max(0.0, (end - start).total_seconds())
     total_tokens = input_tokens + output_tokens
+
+    if source is not None:
+        source = str(source).strip()
+        if source not in SOURCES:
+            raise ValueError(f"unknown source: {source!r} (known: {', '.join(SOURCES)})")
+        if source in HOST_SOURCES and total_tokens == 0:
+            raise ValueError(f"source {source!r} requires measured tokens; got input + output == 0 "
+                             f"(use source='manual' to record an unmeasured round as {UNVERIFIED_SOURCE!r})")
+        if source == "manual" and total_tokens == 0:
+            source = UNVERIFIED_SOURCE
     duration_minutes = duration_seconds / 60 if duration_seconds else 0.0
 
     payload = {
@@ -75,6 +119,8 @@ def record_round(
         payload["feature_id"] = feature_id
     if tier:
         payload["tier"] = tier
+    if source is not None:
+        payload["source"] = source
     return payload
 
 

@@ -102,5 +102,34 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(json.loads(summary_output)["rounds"], 1)
 
 
+class RecordRoundSourceTests(unittest.TestCase):
+    ARGS = dict(round_id="r1", phase="plan", started_at="2026-08-31T10:00:00Z", ended_at="2026-08-31T10:10:00Z")
+
+    def test_without_source_the_row_is_the_v1_row(self):
+        row = metrics.record_round(**self.ARGS, input_tokens=5)
+        self.assertNotIn("source", row)
+        self.assertEqual(list(row)[-1], "features_per_hour")
+
+    def test_manual_with_tokens_stays_manual(self):
+        row = metrics.record_round(**self.ARGS, input_tokens=5, source="manual", tier="s")
+        self.assertEqual(row["source"], "manual")
+        self.assertEqual(list(row)[-2:], ["tier", "source"])
+
+    def test_manual_without_tokens_is_stored_as_unverified(self):
+        self.assertEqual(metrics.record_round(**self.ARGS, source="manual")["source"], "manual-unverified")
+        self.assertEqual(metrics.record_round(**self.ARGS, source=" manual-unverified ")["source"],
+                         "manual-unverified")
+
+    def test_host_sources_require_measured_tokens(self):
+        for source in metrics.HOST_SOURCES:
+            with self.assertRaises(ValueError):
+                metrics.record_round(**self.ARGS, source=source)
+            self.assertEqual(metrics.record_round(**self.ARGS, output_tokens=1, source=source)["source"], source)
+
+    def test_unknown_source_is_rejected(self):
+        with self.assertRaises(ValueError):
+            metrics.record_round(**self.ARGS, input_tokens=1, source="vibes")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,7 +16,23 @@ Two pieces, pure stdlib (no jsonschema / opentelemetry dependency, no network):
      JSON mapping used by OTLP/HTTP `application/json`: lowerCamelCase field
      names, enums as integers, 64-bit integers as decimal strings), ready
      for any OpenTelemetry Collector `otlphttp` receiver (`POST /v1/metrics`).
+     The v2 numeric fields (cache tokens, turns, cost, human wait) become
+     extra metrics only for the rows that carry them (`OTLP_OPTIONAL_METRICS`);
+     a v1 payload exports exactly the v1 metric set.
    - JSONL -> one row per line, for log pipelines / `jq`.
+
+Metrics schema v2 (1.1.0) is additive: every v1 row is still valid.
+`validate_rounds()` adds provenance and chronology checks on top of the schema:
+
+- no `source` -> warning "unverified: no source"; `manual-unverified` ->
+  warning (never an error);
+- `source` host-transcript/host-headless with `total_tokens == 0` -> error
+  (the host always measures something; 0 means the window was wrong);
+- `started_at` earlier than the previous row's `started_at` (file order)
+  -> warning, or error for host rows; rows are appended when a round ends,
+  so host rows must be monotonic (revisit for parallel lanes, where rounds
+  can legitimately end out of start order);
+- `ended_at` after `now` -> warning, or error for host rows.
 
 Validator notes (the honest subset):
 - `type`: "integer" follows JSON Schema — any number with a zero fractional
@@ -38,7 +54,9 @@ import re
 import tempfile
 from pathlib import Path
 
-SCHEMA_VERSION = "1.0.0"
+import metrics
+
+SCHEMA_VERSION = "1.1.0"
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "metrics-round.schema.json"
 ROUNDS_RELPATH = os.path.join(".spec-master", "metrics", "rounds.json")
 
@@ -74,14 +92,37 @@ OTLP_METRICS = (
      "Features completed during the round."),
 )
 
+# Schema v2 numeric fields, same tuple shape. Each is exported only for the
+# rows that carry it, and omitted entirely when no row does. Kind "sum_double"
+# is a monotonic DELTA Sum with `asDouble` values (cost is fractional).
+OTLP_OPTIONAL_METRICS = (
+    ("spec_master.tokens.cache_read", "cache_read_input_tokens", "sum", "{token}",
+     "Input tokens read from the prompt cache during the round (not part of spec_master.tokens.input)."),
+    ("spec_master.tokens.cache_creation", "cache_creation_input_tokens", "sum", "{token}",
+     "Input tokens written to the prompt cache during the round (not part of spec_master.tokens.input)."),
+    ("spec_master.turns", "turns", "sum", "{turn}",
+     "Model API responses during the round."),
+    ("spec_master.cost", "cost_usd", "sum_double", "USD",
+     "Cost of the round in US dollars; see the spec_master.cost_basis attribute."),
+    ("spec_master.human_wait", "human_wait_seconds", "gauge", "s",
+     "Seconds spent waiting for a genuine human prompt during the round."),
+)
+
 # Row field -> data point attribute key; optional fields are emitted only
-# when present. `notes` is free text and deliberately never exported.
+# when present. `notes` is free text and deliberately never exported;
+# `session_id` is not an attribute either (unbounded cardinality).
 OTLP_ATTRIBUTES = (
     ("round_id", "spec_master.round_id"),
     ("phase", "spec_master.phase"),
     ("feature_id", "spec_master.feature_id"),
     ("tier", "spec_master.tier"),
+    ("source", "spec_master.source"),
+    ("lane", "spec_master.lane"),
 )
+# Attributes added only to specific metrics (metric name -> row fields).
+OTLP_METRIC_ATTRIBUTES = {
+    "spec_master.cost": (("cost_basis", "spec_master.cost_basis"),),
+}
 
 _TIMESTAMP_RE = re.compile(
     r"^(?P<base>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
@@ -319,17 +360,57 @@ def _consistency_warnings(index: int, row: dict) -> list[dict]:
             warnings.append({"index": index, "path": "/ended_at", "message": "ended_at is before started_at"})
     except (KeyError, ValueError):
         pass  # already reported as a schema error
+    if ("cost_usd" in row) != ("cost_basis" in row):
+        missing = "cost_basis" if "cost_usd" in row else "cost_usd"
+        warnings.append({"index": index, "path": f"/{missing}",
+                         "message": "cost_usd and cost_basis must be recorded together"})
     return warnings
 
 
-def validate_rounds(rounds, schema: dict | None = None) -> dict:
+def _timestamp_or_none(value) -> dt.datetime | None:
+    try:
+        return parse_timestamp(value)
+    except ValueError:
+        return None
+
+
+def _coerce_now(now) -> dt.datetime:
+    if now is None:
+        return dt.datetime.now(dt.timezone.utc)
+    if isinstance(now, dt.datetime):
+        return now if now.tzinfo is not None else now.replace(tzinfo=dt.timezone.utc)
+    return parse_timestamp(now)
+
+
+def _provenance_findings(index: int, row: dict) -> tuple[list[dict], list[dict]]:
+    """(errors, warnings) about where the row's numbers came from."""
+    if "source" not in row:
+        return [], [{"index": index, "path": "/source", "message": "unverified: no source"}]
+    source = row["source"]
+    if source == metrics.UNVERIFIED_SOURCE:
+        return [], [{"index": index, "path": "/source",
+                     "message": f"unverified: source is {metrics.UNVERIFIED_SOURCE} (no measured usage)"}]
+    total = row.get("total_tokens")
+    if source in metrics.HOST_SOURCES and _type_ok(total, "integer") and total == 0:
+        return [{"index": index, "path": "/total_tokens",
+                 "message": f"host-sourced round ({source}) has total_tokens == 0: usage was not measured"}], []
+    return [], []
+
+
+def validate_rounds(rounds, schema: dict | None = None, *, now=None) -> dict:
     """Validate a rounds.json payload row by row.
 
     Returns {"valid", "errors": [{"index", "path", "message"}], "warnings": [...]}.
     `index` is the row's position (None when `rounds` itself is not an
     array); `path` is a JSON Pointer relative to that row ("" = the row).
-    Warnings (duplicate round_id, total/ended_at consistency) never make a
-    payload invalid.
+    Warnings (duplicate round_id, total/ended_at consistency, rows without a
+    verified source, chronology of non-host rows) never make a payload
+    invalid. Errors are schema violations plus the host-row rules: a
+    host-transcript/host-headless row with total_tokens == 0, starting before
+    the previous row, or ending after `now`.
+
+    `now` bounds `ended_at`: an aware datetime, a naive one (read as UTC), or
+    an ISO 8601 string. Default: the current UTC time.
     """
     schema = schema if schema is not None else load_schema()
     if not isinstance(rounds, list):
@@ -337,14 +418,34 @@ def validate_rounds(rounds, schema: dict | None = None) -> dict:
                 "errors": [{"index": None, "path": "",
                             "message": f"rounds must be a JSON array, got {_json_type(rounds)}"}],
                 "warnings": []}
+    now_dt = _coerce_now(now)
     errors: list[dict] = []
     warnings: list[dict] = []
     seen: dict[str, int] = {}
+    previous_start: tuple[int, dt.datetime] | None = None
     for index, row in enumerate(rounds):
         for err in validate(row, schema):
             errors.append({"index": index, **err})
         if isinstance(row, dict):
             warnings.extend(_consistency_warnings(index, row))
+            prov_errors, prov_warnings = _provenance_findings(index, row)
+            errors.extend(prov_errors)
+            warnings.extend(prov_warnings)
+            host = row.get("source") in metrics.HOST_SOURCES
+            start = _timestamp_or_none(row.get("started_at"))
+            if start is not None:
+                if previous_start is not None and start < previous_start[1]:
+                    finding = {"index": index, "path": "/started_at",
+                               "message": (f"{'host-sourced round: ' if host else ''}started_at is earlier than "
+                                           f"the previous round's started_at (index {previous_start[0]})")}
+                    (errors if host else warnings).append(finding)
+                previous_start = (index, start)
+            end = _timestamp_or_none(row.get("ended_at"))
+            if end is not None and end > now_dt:
+                finding = {"index": index, "path": "/ended_at",
+                           "message": (f"{'host-sourced round: ' if host else ''}ended_at is in the future "
+                                       f"(after {now_dt.isoformat()})")}
+                (errors if host else warnings).append(finding)
             rid = row.get("round_id")
             if isinstance(rid, str):
                 if rid in seen:
@@ -361,18 +462,22 @@ def _attr(key: str, value: str) -> dict:
     return {"key": key, "value": {"stringValue": str(value)}}
 
 
-def _data_point(row: dict, field: str, kind: str) -> dict:
+def _data_point(row: dict, field: str, kind: str, extra_attributes: tuple = ()) -> dict:
     point = {
-        "attributes": [_attr(key, row[name]) for name, key in OTLP_ATTRIBUTES
+        "attributes": [_attr(key, row[name]) for name, key in OTLP_ATTRIBUTES + tuple(extra_attributes)
                        if row.get(name) not in (None, "")],
         "startTimeUnixNano": str(timestamp_unix_nano(row["started_at"])),
         "timeUnixNano": str(timestamp_unix_nano(row["ended_at"])),
     }
-    if kind == "gauge":
+    if kind in ("gauge", "sum_double"):
         point["asDouble"] = float(row[field])
     else:
         point["asInt"] = str(int(row[field]))
     return point
+
+
+def _has_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def to_otlp(rounds: list[dict], service_name: str = "spec-master",
@@ -385,6 +490,8 @@ def to_otlp(rounds: list[dict], service_name: str = "spec-master",
     64-bit fields are decimal strings and the temporality enum is its integer
     value, as the OTLP JSON encoding requires. Rows are ordered by
     (start, end, round_id) so the output is independent of input order.
+    `OTLP_OPTIONAL_METRICS` follow the base metrics, each with points only for
+    the rows that carry the field (cost is a DELTA Sum of `asDouble`).
     Rows are assumed valid (run `validate_rounds` first).
     """
     ordered = sorted(
@@ -392,26 +499,30 @@ def to_otlp(rounds: list[dict], service_name: str = "spec-master",
         key=lambda r: (timestamp_unix_nano(r["started_at"]), timestamp_unix_nano(r["ended_at"]),
                        str(r.get("round_id", ""))),
     )
-    metrics = []
-    if ordered:
-        for name, field, kind, unit, description in OTLP_METRICS:
-            points = [_data_point(row, field, kind) for row in ordered]
-            metric = {"name": name, "description": description, "unit": unit}
-            if kind == "gauge":
-                metric["gauge"] = {"dataPoints": points}
-            else:
-                metric["sum"] = {
-                    "dataPoints": points,
-                    "aggregationTemporality": AGGREGATION_TEMPORALITY_DELTA,
-                    "isMonotonic": True,
-                }
-            metrics.append(metric)
+    exported = []
+    optional_names = {spec[0] for spec in OTLP_OPTIONAL_METRICS}
+    for name, field, kind, unit, description in OTLP_METRICS + OTLP_OPTIONAL_METRICS:
+        rows = ordered if name not in optional_names else [r for r in ordered if _has_number(r.get(field))]
+        if not rows:
+            continue
+        extra = OTLP_METRIC_ATTRIBUTES.get(name, ())
+        points = [_data_point(row, field, kind, extra) for row in rows]
+        metric = {"name": name, "description": description, "unit": unit}
+        if kind == "gauge":
+            metric["gauge"] = {"dataPoints": points}
+        else:
+            metric["sum"] = {
+                "dataPoints": points,
+                "aggregationTemporality": AGGREGATION_TEMPORALITY_DELTA,
+                "isMonotonic": True,
+            }
+        exported.append(metric)
     return {
         "resourceMetrics": [{
             "resource": {"attributes": [_attr("service.name", service_name)]},
             "scopeMetrics": [{
                 "scope": {"name": OTLP_SCOPE_NAME, "version": scope_version},
-                "metrics": metrics,
+                "metrics": exported,
             }],
         }],
     }

@@ -1,6 +1,7 @@
 import _pathfix  # noqa: F401
 
 import copy
+import datetime as dt
 import json
 import os
 import shutil
@@ -53,7 +54,10 @@ class ValidateRoundsTests(unittest.TestCase):
                  work_packages_completed=0, features_completed=0),
         ]
         report = metrics_export.validate_rounds(rounds)
-        self.assertEqual(report, {"valid": True, "errors": [], "warnings": []})
+        # v2: rows without `source` stay valid but are flagged as unverified.
+        self.assertEqual((report["valid"], report["errors"]), (True, []))
+        self.assertEqual(report["warnings"], [{"index": i, "path": "/source", "message": "unverified: no source"}
+                                              for i in range(3)])
 
     def test_repo_rounds_file_validates_when_present(self):
         path = metrics_export.default_rounds_path(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -109,8 +113,9 @@ class ValidateRoundsTests(unittest.TestCase):
         self.assertIn("date-time", errors["/ended_at"])
 
     def test_unknown_key_rejected(self):
-        errors = self._errors(dict(_row(), cost_usd=1.2))
-        self.assertIn("/cost_usd", errors)
+        # `cost_usd` became a v2 field; any key outside the schema is still rejected.
+        errors = self._errors(dict(_row(), cost_eur=1.2))
+        self.assertIn("/cost_eur", errors)
 
     def test_non_array_and_non_object_rows(self):
         report = metrics_export.validate_rounds({"round_id": "x"})
@@ -127,6 +132,143 @@ class ValidateRoundsTests(unittest.TestCase):
         self.assertIn((0, "/total_tokens"), messages)
         self.assertIn((1, "/round_id"), messages)
         self.assertIn((2, "/ended_at"), messages)
+
+
+NOW = "2026-09-28T00:00:00Z"
+
+
+def _v2(round_id="h1", started="2026-09-26T10:00:00Z", ended="2026-09-26T10:30:00Z", source="host-transcript",
+        **extra):
+    row = _row(round_id, started, ended, source=source)
+    row.update({"cache_read_input_tokens": 5000, "cache_creation_input_tokens": 300, "turns": 12,
+                "human_wait_seconds": 42.5, "lane": "standard", "session_id": "sess-1"})
+    row.update(extra)
+    return row
+
+
+class SchemaV2Tests(unittest.TestCase):
+    V2_FIELDS = ("source", "cache_read_input_tokens", "cache_creation_input_tokens", "turns", "cost_usd",
+                 "cost_basis", "human_wait_seconds", "lane", "session_id")
+
+    def test_version_and_optional_fields(self):
+        schema = metrics_export.load_schema()
+        self.assertEqual(metrics_export.SCHEMA_VERSION, "1.1.0")
+        self.assertTrue(schema["$id"].endswith(":" + metrics_export.SCHEMA_VERSION))
+        self.assertIs(schema["additionalProperties"], False)
+        for key in self.V2_FIELDS:
+            self.assertIn(key, schema["properties"])
+            self.assertNotIn(key, schema["required"])
+        self.assertEqual(tuple(schema["properties"]["source"]["enum"]), metrics.SOURCES)
+        self.assertEqual(tuple(schema["properties"]["cost_basis"]["enum"]), metrics.COST_BASES)
+
+    def test_full_v2_row_validates_cleanly(self):
+        row = _v2(cost_usd=0.42, cost_basis="measured", feature_id="f", tier="S")
+        self.assertEqual(set(row) - set(metrics_export.load_schema()["properties"]), set())
+        self.assertEqual(metrics_export.validate_rounds([row], now=NOW), {"valid": True, "errors": [], "warnings": []})
+
+    def test_v2_field_constraints(self):
+        bad = dict(_v2(cost_usd=-0.1, cost_basis="free", human_wait_seconds=-1, turns=1.5, lane="",
+                       session_id=7, cache_read_input_tokens=-3), source="guess")  # record_round refuses "guess"
+        errors = {e["path"] for e in metrics_export.validate_rounds([bad], now=NOW)["errors"]}
+        self.assertEqual(errors, {"/source", "/cost_usd", "/cost_basis", "/human_wait_seconds", "/turns", "/lane",
+                                  "/session_id", "/cache_read_input_tokens"})
+
+
+class ProvenanceAndChronologyTests(unittest.TestCase):
+    def _report(self, rows, now=NOW):
+        return metrics_export.validate_rounds(rows, now=now)
+
+    def test_host_row_without_tokens_is_an_error(self):
+        row = dict(_v2(), input_tokens=0, output_tokens=0, total_tokens=0)
+        report = self._report([row])
+        self.assertFalse(report["valid"])
+        self.assertEqual([(e["index"], e["path"]) for e in report["errors"]], [(0, "/total_tokens")])
+        self.assertIn("host-sourced", report["errors"][0]["message"])
+
+    def test_unverified_rows_only_warn(self):
+        unverified = _row("m1", source="manual", input_tokens=0, output_tokens=0)
+        self.assertEqual(unverified["source"], "manual-unverified")
+        report = self._report([unverified, _row("m2", "2026-09-26T11:00:00Z", "2026-09-26T11:10:00Z")])
+        self.assertEqual((report["valid"], report["errors"]), (True, []))
+        self.assertEqual([(w["index"], w["path"]) for w in report["warnings"]], [(0, "/source"), (1, "/source")])
+        self.assertTrue(report["warnings"][0]["message"].startswith("unverified:"))
+        self.assertEqual(report["warnings"][1]["message"], "unverified: no source")
+        manual = _row("m3", source="manual")
+        self.assertEqual(self._report([manual])["warnings"], [])
+
+    def test_started_before_previous_row_warns_or_errors(self):
+        late, early = ("2026-09-26T10:00:00Z", "2026-09-26T10:30:00Z"), ("2026-09-26T09:00:00Z", "2026-09-26T09:30:00Z")
+        manual = self._report([_row("a", *late, source="manual"), _row("b", *early, source="manual")])
+        self.assertTrue(manual["valid"])
+        self.assertEqual([(w["index"], w["path"]) for w in manual["warnings"]], [(1, "/started_at")])
+        self.assertIn("index 0", manual["warnings"][0]["message"])
+        host = self._report([_v2("a", *late), _v2("b", *early)])
+        self.assertFalse(host["valid"])
+        self.assertEqual([(e["index"], e["path"]) for e in host["errors"]], [(1, "/started_at")])
+        # the previous row is the nearest one with a readable started_at
+        skipped = self._report([_row("a", *late, source="manual"), dict(_row("x", source="manual"), started_at="?"),
+                                _row("c", "2026-09-26T09:45:00Z", "2026-09-26T09:50:00Z", source="manual")])
+        self.assertIn((2, "/started_at"), [(w["index"], w["path"]) for w in skipped["warnings"]])
+
+    def test_ended_in_the_future(self):
+        span = ("2026-09-27T23:00:00Z", "2026-09-28T01:00:00Z")
+        manual = self._report([_row("m", *span, source="manual")])
+        self.assertTrue(manual["valid"])
+        self.assertEqual([w["path"] for w in manual["warnings"]], ["/ended_at"])
+        self.assertIn("future", manual["warnings"][0]["message"])
+        host = self._report([_v2("h", *span)])
+        self.assertEqual([e["path"] for e in host["errors"]], ["/ended_at"])
+        aware = dt.datetime(2026, 9, 28, 2, tzinfo=dt.timezone.utc)
+        self.assertTrue(self._report([_v2("h", *span)], now=aware)["valid"])
+        self.assertTrue(self._report([_v2("h", *span)], now=dt.datetime(2026, 9, 28, 2))["valid"])  # naive = UTC
+
+    def test_default_now_is_the_current_time(self):
+        report = metrics_export.validate_rounds([_row("m", "2999-01-01T00:00:00Z", "2999-01-01T01:00:00Z",
+                                                      source="manual")])
+        self.assertIn("/ended_at", [w["path"] for w in report["warnings"]])
+
+    def test_cost_needs_its_basis(self):
+        report = self._report([_v2(cost_usd=1.0)])
+        self.assertTrue(report["valid"])
+        self.assertEqual([w["path"] for w in report["warnings"]], ["/cost_basis"])
+
+    def test_export_refuses_host_rows_with_errors(self):
+        with self.assertRaises(metrics_export.InvalidRoundsError):
+            metrics_export.export([dict(_v2(), input_tokens=0, output_tokens=0, total_tokens=0)])
+
+
+class OtlpV2Tests(unittest.TestCase):
+    def test_optional_metrics_only_for_rows_that_carry_them(self):
+        rounds = [_v2("h1", cost_usd=0.5, cost_basis="measured"),
+                  _row("m1", "2026-09-26T11:00:00Z", "2026-09-26T11:10:00Z", source="manual")]
+        payload = metrics_export.to_otlp(rounds)
+        by_name = {m["name"]: m for m in payload["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]}
+        every_metric = metrics_export.OTLP_METRICS + metrics_export.OTLP_OPTIONAL_METRICS
+        self.assertEqual(list(by_name), [m[0] for m in every_metric])
+        self.assertEqual(len(by_name["spec_master.tokens.input"]["sum"]["dataPoints"]), 2)
+        cache = by_name["spec_master.tokens.cache_read"]["sum"]["dataPoints"]
+        self.assertEqual([p["asInt"] for p in cache], ["5000"])
+        self.assertEqual(by_name["spec_master.turns"]["sum"]["dataPoints"][0]["asInt"], "12")
+        cost = by_name["spec_master.cost"]
+        self.assertEqual((cost["unit"], cost["sum"]["aggregationTemporality"], cost["sum"]["isMonotonic"]),
+                         ("USD", 1, True))
+        point = cost["sum"]["dataPoints"][0]
+        self.assertEqual(point["asDouble"], 0.5)
+        attrs = {a["key"]: a["value"]["stringValue"] for a in point["attributes"]}
+        self.assertEqual((attrs["spec_master.cost_basis"], attrs["spec_master.source"], attrs["spec_master.lane"]),
+                         ("measured", "host-transcript", "standard"))
+        self.assertNotIn("spec_master.session_id", attrs)
+        wait = by_name["spec_master.human_wait"]
+        self.assertEqual((wait["unit"], wait["gauge"]["dataPoints"][0]["asDouble"]), ("s", 42.5))
+        manual_input = by_name["spec_master.tokens.input"]["sum"]["dataPoints"][1]
+        manual_attrs = {a["key"]: a["value"]["stringValue"] for a in manual_input["attributes"]}
+        self.assertEqual(manual_attrs["spec_master.source"], "manual")
+        self.assertNotIn("spec_master.cost_basis", manual_attrs)
+
+    def test_rows_without_v2_numbers_add_no_metrics(self):
+        payload = metrics_export.to_otlp([_row(source="manual")])
+        names = [m["name"] for m in payload["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]]
+        self.assertEqual(names, [m[0] for m in metrics_export.OTLP_METRICS])
 
 
 class TimestampTests(unittest.TestCase):
