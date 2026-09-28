@@ -222,7 +222,7 @@ Kubernetes-Helm), and escalation triggers — e.g. a dev agent that spots an
 architecture inconsistency escalates to the Architect Agent, who scopes it
 to the Tech Lead, who creates an owned remediation package, which the Scrum
 Master folds into the visible plan and metrics. The Knowledge Router
-(`knowledge for-role` / `for-context`) ranks a role's own playbook first
+(`knowledge for-role` / `route`) ranks a role's own playbook first
 before any other concept module — see PROTOCOL.md §Step 6.
 
 For a project that already has `.spec-master/state.json`, Team Mode adoption

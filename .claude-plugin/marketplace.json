@@ -1,0 +1,14 @@
+{
+  "name": "spec-master",
+  "description": "The Spec Master harness plugin for spec-driven development.",
+  "owner": {
+    "name": "Spec Master maintainers"
+  },
+  "plugins": [
+    {
+      "name": "spec-master",
+      "source": "./spec-master",
+      "description": "Lane triage, evidence-gated steps and host-enforced hooks for spec-driven development."
+    }
+  ]
+}

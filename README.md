@@ -387,7 +387,7 @@ de pacotes hexagonal, WireMock/Cypress, IaC/CI-CD por tecnologia), o que
 evitar, e para quem escalar cada tipo de decisão (ex.: Backend Dev detecta
 inconsistência arquitetural → Architect Agent → Tech Lead cria o pacote de
 remediação → Scrum Master registra métricas e replaneja). O Knowledge Router
-(`knowledge for-role` / `knowledge for-context`) prioriza o playbook do papel
+(`knowledge for-role` / `knowledge route`) prioriza o playbook do papel
 antes de qualquer outro módulo de conhecimento — ver §6 do `PROTOCOL.md`.
 GoF design patterns (quando usar cada um, por sintoma no código) ficam em
 `knowledge/design/gof-patterns.md`.

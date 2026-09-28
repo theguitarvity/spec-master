@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import shlex
 
+from kernel import policy as kernel_policy
+
 DEFAULT_ALLOWED_EXECUTABLES = {
     "python", "python3", "pytest", "uv", "uvx",
     "npm", "pnpm", "yarn", "node",
@@ -30,6 +32,15 @@ def classify_command(command: str,
     stripped = command.strip()
     if not stripped:
         return {"allowed": False, "risk": "blocked", "reason": "empty command"}
+
+    # The argv-level policy the hooks enforce also covers every segment of a
+    # compound command (`a && b`, pipes, redirections), force pushes by any
+    # spelling, `git clean -f*` and publishing commands.
+    verdict = kernel_policy.decide_command(stripped)
+    if verdict["decision"] == kernel_policy.DENY:
+        return {"allowed": False, "risk": "blocked", "reason": verdict["reason"]}
+    if verdict["decision"] == kernel_policy.ASK:
+        return {"allowed": False, "risk": "requires_approval", "reason": verdict["reason"]}
 
     lowered = " ".join(stripped.lower().split())
     for sequence in BLOCKED_SEQUENCES:

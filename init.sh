@@ -40,6 +40,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# Spec Kit release used when bootstrapping a project through uvx: always a
+# tag, never the moving default branch (supported range: >=0.16.4,<1.1).
+SPEC_KIT_REF="${SPEC_KIT_REF:-v0.16.4}"
 ENGINE_SRC="$SCRIPT_DIR/spec-master"
 ENGINE_DST="$HOME/.spec-master-engine"
 MARKER_FILE="$ENGINE_DST/.managed-by-spec-master-init"
@@ -469,7 +472,7 @@ check_spec_kit() {
     warn "o CLI 'specify' não foi encontrado no PATH."
     if command -v uvx >/dev/null 2>&1; then
       log "você pode rodar sem instalar nada:"
-      log "  cd \"$project_dir\" && uvx --from git+https://github.com/github/spec-kit.git specify init --here"
+      log "  cd \"$project_dir\" && uvx --from git+https://github.com/github/spec-kit.git@${SPEC_KIT_REF} specify init --here"
     else
       log "instale o Spec Kit primeiro: https://github.com/github/spec-kit"
     fi

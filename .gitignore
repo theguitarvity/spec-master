@@ -39,3 +39,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Spec Master runtime locks (state.json.lock, run.lock) are per-process state.
+.spec-master/**/*.lock
+.spec-master/hooks/decisions.jsonl

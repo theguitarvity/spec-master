@@ -25,7 +25,8 @@ Mapping to the core:
   every adapter) and repeats only what's Copilot-specific — how the
   context-file argument is resolved from the invocation, and that ordinary
   chat turn-taking replaces `AskUserQuestion` for every gate (still batching
-  every `clarify` question into one message, per §21 of the original spec).
+  every `clarify` question into one message, per the batching rule of
+  `PROTOCOL.md` §4).
 - All structural decisions go through the same
   `python3 spec-master/lib/cli.py ...` calls as every other adapter — the
   core is plain Python 3 stdlib with no Claude-specific dependency, so it

@@ -187,10 +187,13 @@ class ToolListTest(_ServerCase):
 
     def test_read_only_annotations_are_conservative(self):
         for name in ("state_show", "graph_stats", "graph_neighbors", "hooks_list", "team_decisions",
-                     "gates_detect", "git_strategy_plan"):
+                     "gates_detect", "git_strategy_plan", "telemetry_locate", "baseline_plan", "lane_triage",
+                     "step_next"):
             self.assertTrue(self.tools[name]["annotations"]["readOnlyHint"], name)
         for name in ("state_init", "state_transition", "traceability_render", "hooks_init", "hooks_emit",
-                     "worktree_plan", "graph_health", "graph_snapshot", "delta_report", "team_resolve"):
+                     "worktree_plan", "graph_health", "graph_snapshot", "delta_report", "team_resolve",
+                     "metrics_record_round", "telemetry_ingest", "baseline_run", "step_begin", "step_end",
+                     "harness_install_hooks", "harness_mode"):
             self.assertFalse(self.tools[name]["annotations"]["readOnlyHint"], name)
 
 

@@ -8,6 +8,12 @@
 > ...` because the agent's shell working directory is the repository root,
 > not this directory.
 
+> **Lane flow (opt-in).** `/spec-master --lane [<lane>] <request>` does not use
+> this file: it follows `cards/router.md`, where a deterministic triage decides
+> — before any artifact exists — whether a change is a *patch* (implemented in
+> the session, closed by `step end` on evidence) or needs the full cycle
+> described here. This file remains the default flow.
+
 `/spec-master <context-file>` replaces the manual sequence
 `/speckit.constitution → /speckit.specify → /speckit.clarify → /speckit.plan
 → /speckit.tasks → /speckit.analyze → /speckit.implement` with a single
@@ -22,7 +28,7 @@ generates the prompts each `speckit.*` phase needs, decides when to advance,
 repair, ask the user, or stop, and keeps traceability from context to
 implementation. If the Spec Kit is not installed in the target repository,
 **offer to initialize it** (Step 2 below) rather than failing immediately;
-only report `FAILED — Spec Kit unavailable` (§29 of CLAUDE.md) if the user
+only report `FAILED — Spec Kit unavailable` (final statuses in Step 8) if the user
 declines or no `specify`/`uvx` is reachable — never simulate Spec Kit's
 output as a substitute.
 
@@ -35,28 +41,9 @@ direction, and peer review by another dev agent before tech-lead integration.
 
 ## Global installation
 
-This engine doesn't have to live inside a single project. `init.sh` (next to
-this file, at the repo root of the *ai-sdd-master-skill* source) mirrors this
-whole `spec-master/` package to `~/.spec-master-engine` and registers a
-**global** entrypoint for the documented adapters, each in that agent's own
-documented personal/user-level skill directory:
-
-- Claude Code: `~/.claude/commands/spec-master.md`,
-  `~/.claude/skills/spec-master/SKILL.md`.
-- GitHub Copilot CLI: `~/.copilot/skills/spec-master/SKILL.md` and
-  `~/.copilot/agents/spec-master.agent.md`.
-- OpenAI Codex CLI: `~/.codex/skills/spec-master/SKILL.md`.
-- Shared fallback both Copilot CLI and Codex CLI also scan:
-  `~/.agents/skills/spec-master/SKILL.md`.
-
-So `/spec-master <context-file>` (or `$spec-master`, or `@spec-master`,
-depending on the agent) works in every project on the machine, for every
-adapter, without vendoring a copy. `init.sh link <project>` additionally
-generates a small per-project pointer (`.github/skills/spec-master/SKILL.md`,
-`.agents/skills/spec-master/SKILL.md`) for teammates who haven't run
-`init.sh` themselves, or repos that want the pointer committed. Either way,
-there is exactly one copy of `lib/`, `templates/`, and this protocol on a
-given machine; every adapter, in every project, reads from it.
+`init.sh` installs this engine once per machine (`~/.spec-master-engine`) and
+registers the global entrypoints; `init.sh link <project>` adds per-project
+pointers. Details: `docs/protocol-reference.md#global-installation`.
 
 ## 0. Division of responsibility: core vs. agent
 
@@ -71,7 +58,7 @@ given machine; every adapter, in every project, reads from it.
   export, web bundles, context budget accounting, command policy preflight,
   graph snapshots/drift checks, runtime capability contracts, and
   deterministic harness evals. The agent calls it via `Bash` (or the MCP
-  server, §5) for every structural decision — never re-derive these by hand.
+  server, see §5) for every structural decision — never re-derive these by hand.
 - **Agent (you, running this skill)**: reading and semantically understanding
   the user's context file and the repository, writing the normalized context
   documents, generating each `speckit.*` prompt from the templates in
@@ -81,7 +68,7 @@ given machine; every adapter, in every project, reads from it.
   exact path convention) with that prompt as input, resolving ambiguity, and
   writing the final report.
 
-## 1. Anti-hallucination rule (CLAUDE.md §5)
+## 1. Anti-hallucination rule
 
 The file passed to `/spec-master` is the source of truth. Never invent
 requirements, features, acceptance criteria, integrations, components,
@@ -129,19 +116,21 @@ usual clarification gates later.
 1. Resolve the context-file argument. If missing or the file doesn't exist,
    and it was not a guided-intake invocation from Step -1, stop and tell the
    user (this is not a state to persist).
-2. `python3 spec-master/lib/cli.py state show --path .spec-master/state.json` (if it
-   fails because the file doesn't exist, this is a fresh run — go to Step 1).
+2. `python3 spec-master/lib/cli.py state show --summary --path
+   .spec-master/state.json` (if it fails because the file doesn't exist, this
+   is a fresh run — go to Step 1). The summary is enough to resume; load the
+   full record (`state show`) only for a feature you are about to work on.
 3. If state exists: recompute the fingerprint of the context file + any
    `.spec-master/context/*.md` already generated
    (`fingerprint compute --files ...`) and compare against
    `state["fingerprint"]` (`fingerprint compare --previous ... --current ...`).
-   - Identical → resume automatically (§31 safe default), continue from the
+   - Identical → resume automatically (safe default), continue from the
      first phase that isn't `PASSED`/`COMPLETED`. Say so in one line.
    - Different → `AskUserQuestion`: **Resume existing workflow** vs
      **Restart workflow**. Only the phases marked stale by `fingerprint
      compare` need to be redone if the user resumes; never blindly redo
      everything, and never treat `implement` as auto-invalidated — assess
-     impact instead (§33).
+     impact instead (§3).
 4. Whenever state exists (resume either way), show the user what changed in
    the feature artifacts since the last run:
    `delta report --path . --format markdown --output
@@ -161,7 +150,7 @@ Team Mode artifacts and future gates, but it does not restart the workflow,
 rewrite the constitution, or invalidate completed phases unless the normal
 fingerprint/staleness logic proves a concrete artifact changed.
 
-### Step 1 — Discovery (read-only, CLAUDE.md §6)
+### Step 1 — Discovery (read-only)
 
 `python3 spec-master/lib/cli.py discovery scan --path .` and read the manifests it found
 directly if you need more than command detection (README.md, CLAUDE.md,
@@ -172,24 +161,25 @@ Spec Kit / constitution / specs, branching model hints).
 
 ### Step 2 — Spec Kit availability + Git strategy (mandatory once, batched)
 
-Two independent decisions are gated here. Per §21's "never ask one at a
-time" rule, ask both **in a single `AskUserQuestion` call** (it supports
-multiple questions per call) whenever both are pending — never two separate
-prompts back to back.
+Two independent decisions are gated here. Per the batching rule (§4), ask
+both **in a single `AskUserQuestion` call** (it supports multiple questions
+per call) whenever both are pending — never two separate prompts back to
+back.
 
 1. **Spec Kit not initialized** (`discovery.spec_kit_present == false`, i.e.
    no `.specify/` in this repo): this blocks every downstream phase, so
    resolve it before anything else. If a `specify` CLI is reachable
    (`which specify`, or `uvx` as a fallback via
-   `uvx --from git+https://github.com/github/spec-kit.git specify ...`),
-   ask whether to run `specify init --here` now. If declined, or if no
+   `uvx --from git+https://github.com/github/spec-kit.git@v0.16.4 specify ...`
+   — always a tagged release, never the moving default branch; the supported
+   range is `>=0.16.4,<1.1`), ask whether to run `specify init --here` now. If declined, or if no
    `specify`/`uvx` is reachable at all, this is a `FAILED — Spec Kit
-   unavailable` condition (§29) — say so plainly and stop; don't keep
+   unavailable` condition (Step 8) — say so plainly and stop; don't keep
    generating normalized docs against a repo that can't execute any
    `speckit.*` phase.
    - This same check ships as a **non-interactive installer path** too:
      `init.sh` (at the engine's repo root) runs it as a shell prompt when
-     bootstrapping a new project — see "Global installation" below. Either
+     bootstrapping a new project — see "Global installation" above. Either
      path is fine; the agent-driven one here is what runs when the user
      invokes `/spec-master` directly without having run `init.sh` first.
 2. **Git strategy** (`state["workflow"]` unset): ask exactly once per
@@ -218,7 +208,7 @@ is executed (`git-strategy plan`), never whether the Spec Kit phases run.
   automation; keep working on the current branch and separate features
   logically via `specs/<feature>/`.
 
-### Step 3 — Normalized context layer (CLAUDE.md §10-14)
+### Step 3 — Normalized context layer
 
 Generate/update, from `templates/{app-features,project-goals,tech-stack}.md`,
 under `.spec-master/context/`:
@@ -234,7 +224,7 @@ Source Traceability table of each document. Avoid duplicating large blocks
 across the three files; cross-reference instead. Recompute and store the
 fingerprint of these three files in `state["fingerprint"]` once written.
 
-### Step 4 — Constitution (CLAUDE.md §15-16, §39)
+### Step 4 — Constitution
 
 Build the `/speckit.constitution` prompt from
 `templates/prompts/constitution.md`, sourced from the three normalized docs +
@@ -247,13 +237,13 @@ Build the `/speckit.constitution` prompt from
 2. Apply `ADDITION`/`MODIFICATION` automatically.
 3. On any `CONFLICT` or `REMOVAL_CANDIDATE`: **stop**, report it, and ask the
    user before touching a ratified principle — this is a destructive,
-   potentially blocking decision (§9 permission rules apply: changing
-   governance is not something to auto-approve).
+   potentially blocking decision (changing governance is never
+   auto-approved).
 
 Never state "constitution approved" — use `GENERATED`/`VALIDATED` internally;
-"approved" requires the user's explicit word (§39).
+"approved" requires the user's explicit word.
 
-### Step 5 — Feature discovery & ordering (CLAUDE.md §17-18)
+### Step 5 — Feature discovery & ordering
 
 Parse `app-features.md` into `FeatureExecution` objects:
 
@@ -269,110 +259,56 @@ status: PENDING
 spec_directory: specs/<NNN-feature-id>
 ```
 
-`state upsert-feature --feature-json '{...}'` for each. Then
-`features order --file <features.json>` for the execution sequence (§18). A
-cycle is a hard stop — report it, don't guess an order.
+`state upsert-feature --feature-json '{...}'` for each. Upsert records
+metadata only: it refuses to change `phases`, `evidence`, `risk` or to mark a
+feature `COMPLETED` while a phase is open — phases move only through `state
+transition` (Step 6). History that never ran through Spec Master can be
+imported with `--import-unverified --reason "..."`, which marks every promoted
+phase as unverified evidence. Then `features order --file <features.json>`
+for the execution sequence. A cycle is a hard stop — report it, don't guess
+an order.
 
-### Step 6 — Per-feature workflow (CLAUDE.md §19-27)
+`spec_directory` is the directory Spec Kit will create for the feature. Pass
+its number and short name to the specify script (`--number NNN --short-name
+<slug>`) so both agree; if Spec Kit still creates a different directory,
+record the real one with `state upsert-feature` before promoting `specify`.
 
-Before entering per-feature execution, initialize Team Mode when the user
-asked for it explicitly, when guided intake created the context, or when an
-existing project adopted Team Mode:
+### Step 6 — Per-feature workflow
 
-1. `python3 spec-master/lib/cli.py team roles` to load the canonical delivery
-   roles. The Spec Master remains the orchestrator; the Tech Lead Agent owns
-   technical decomposition, internal code conflicts, and integration
-   approval.
-2. Before instantiating any role for a package, review, or gate decision,
-   load its binding playbook — never improvise a role's practices from
-   general knowledge: `python3 spec-master/lib/cli.py knowledge get --id
-   playbook.<role-id>` (resolve team_model.py ids like `po`, `infra`,
-   `ui-ux-brand` to their knowledge-base ids `product-owner`,
-   `infrastructure`, `ux` first — `knowledge for-role` does this
-   resolution automatically). Pull additional budgeted context for the
-   specific task with `knowledge for-context --role <role-id> --keywords
-   "<feature/task keywords>" --tech-stacks "<detected stack>"`. Playbooks
-   define each role's concrete must-do/must-avoid practices, testing
-   conventions, stack/tooling defaults, and escalation triggers — see
-   `spec-master/knowledge/playbooks/*.md` (or `playbook.spec-master` for
-   the orchestrator's own escalation-routing rules).
-3. During/after `tasks`, call `python3 spec-master/lib/cli.py team
-   workstreams --file <features-with-tasks.json>` and write the result to
-   `.spec-master/workstreams.json`.
-4. The workstream plan may expose safe parallel work, but each package must
-   still respect feature dependencies, Spec Kit phase gates, and analyze
-   repair rules.
-5. Dev agents implement only assigned packages, per their playbook:
-   - Backend Dev Agent: APIs, persistence, business rules, backend tests,
-     integrations (`playbook.backend-dev`).
-   - Frontend Dev Agent: screens, components, forms, UI state,
-     accessibility, responsive behavior, UI tests (`playbook.frontend-dev`).
-   - Fullstack Dev Agent: thin vertical slices and front/back integration
-     (`playbook.fullstack-dev`).
-   When a dev agent finds an architecture inconsistency or a candidate
-   design-pattern decision that crosses its package (see
-   `design.gof-patterns`), it does not resolve this unilaterally — it
-   escalates to the Architect Agent per its playbook's Escalation
-   Triggers, which routes to the Tech Lead to create a scoped, owned
-   remediation package (see `playbook.architect`, `playbook.tech-lead`).
-   The Scrum Master Agent folds that new package into the visible plan and
-   metrics (`playbook.scrum-master`).
-6. Every implementation package requires peer review by a different dev
-   agent (`reviewer_agent`) before QA validation. The reviewer cannot be the
-   package owner, and checks conformance against the owner's playbook, not
-   just correctness.
-7. QA validates behavior against acceptance criteria using its own test
-   pyramid rules (`playbook.qa`: unit owned by the dev agent, backend
-   integration tests stub external systems with WireMock, frontend
-   component/E2E tests use Cypress). The Tech Lead resolves code conflicts,
-   shared-file ownership, contract ordering, and final integration
-   readiness. Spec Master records the result and controls workflow status.
-8. When discovery or the feature set implies more than one independently
-   deployable service, the Architect Agent proposes containerization and
-   Kubernetes/Helm; the DevOps and Infrastructure Agents own the concrete
-   CI/CD pipeline (any of GitHub Actions, Jenkins, Azure DevOps, Spinnaker,
-   Nexus — pick from evidence, not default) and Terraform provisioning
-   (`playbook.devops`, `playbook.infrastructure`). Do not propose this
-   tooling for a single deployable service.
+**Team Mode** applies only when the user asked for it, when guided intake
+created the context, or when the project adopted it (`team adopt`). In that
+case, read `docs/team-mode.md` once before the first feature and follow it —
+roles, playbooks, workstreams, peer review and escalation routing live there,
+not here.
 
-At the end of every meaningful round (guided intake batch, phase execution,
-workstream package, peer review, QA validation, or quality gate run), record
-delivery metrics with `python3 spec-master/lib/cli.py metrics record-round`.
-Use observed timestamps and platform-provided token counts when available.
-If exact token usage is unavailable, record `0` and note that the adapter did
-not expose token accounting; never invent token counts. Append each row to
-`.spec-master/metrics/rounds.json`. Before the final report, call
-`python3 spec-master/lib/cli.py metrics summarize --file
-.spec-master/metrics/rounds.json` and include total tokens, tokens/minute,
-packages/hour, features/hour, and per-round speed in
-`.spec-master/reports/final-report.md`.
+At the end of every meaningful round (a phase, a workstream package, a
+review, a gate run), record it from the host's own accounting — never from
+memory:
 
-Every row in `rounds.json` must match `spec-master/schemas/metrics-round.schema.json`
-(JSON Schema 2020-12: one row at the root, the array at `#/$defs/rounds`; the
-optional keys are `notes`, `feature_id` and `tier`, and any other key is rejected).
-Before the final report, run `python3 spec-master/lib/cli.py metrics validate
---path .`. It exits 1 and lists `{index, path, message}` for each error. Fix the
-rows it names; do not delete them to make the check pass. Its warnings, such as
-`total_tokens != input + output`, a reversed interval or a duplicate `round_id`,
-do not block anything, but mention them in the report.
+- **Claude Code**: `python3 spec-master/lib/cli.py telemetry ingest --path .
+  --latest --since <round start> --round-id <id> --phase <phase> --feature-id
+  <id> [--tier <tier>] --append` reads only `usage` and timestamps (never
+  message content) from the session transcript and appends a
+  `source: host-transcript` row to `.spec-master/metrics/rounds.json`.
+- **Headless runs** (`claude -p --output-format json`): `telemetry ingest
+  --headless-json <result file> ...` records the measured cost
+  (`source: host-headless`).
+- **A host with no accounting**: `metrics record-round ... --source manual
+  --append` with the observed timestamps. Token fields stay 0 and the row is
+  stored as `manual-unverified`; cost reports and calibration ignore it.
 
-When the user wants the metrics in an observability stack, run
-`python3 spec-master/lib/cli.py metrics export --path . --format otlp --output
-.spec-master/metrics/rounds.otlp.json`. This produces an OTLP/JSON
-`ExportMetricsServiceRequest` that can be POSTed to a collector's
-`/v1/metrics` endpoint:
+Never invent token counts or timestamps, and never edit `rounds.json` by
+hand. Before the final report, run `metrics validate --path .` (it exits 1 on
+errors such as a host-sourced row with zero tokens or an impossible
+timestamp; fix the rows it names instead of deleting them) and `metrics
+summarize --file .spec-master/metrics/rounds.json`, and include total tokens,
+tokens/minute, packages/hour and features/hour in
+`.spec-master/reports/final-report.md`, saying which rows are unverified.
+Every row must match `spec-master/schemas/metrics-round.schema.json`.
 
-- `spec_master.round.duration` is a Gauge in `s`.
-- `spec_master.tokens.input`, `spec_master.tokens.output`,
-  `spec_master.work_packages.completed` and `spec_master.features.completed`
-  are monotonic DELTA Sums with one data point per round.
-- Each data point carries the attributes `spec_master.round_id` and
-  `spec_master.phase`, plus `spec_master.feature_id` and `spec_master.tier`
-  when the row has them.
-
-Use `--format jsonl` for log pipelines. The export validates the rows first and
-writes nothing if they are invalid. Spec Master never sends the file anywhere
-itself: shipping it to a collector is a separate action the user must confirm.
+Exporting the rounds to an observability stack (`metrics export`) is a
+separate action the user confirms — see
+`docs/protocol-reference.md#metrics-export-otlp`.
 
 For each feature id in the resolved order, drive:
 
@@ -382,27 +318,44 @@ specify -> clarify -> plan -> tasks -> analyze(+repair, max 3) -> implement -> v
 
 using `state transition --feature <id> --phase <phase> --status <status>`
 before/after each step (the core rejects starting phase N before phase N-1
-`PASSED` — trust that guard, don't bypass it). Prompts come from
+`PASSED` — trust that guard, don't bypass it). `--status PASSED` also needs
+evidence (constitution Principle IV): the phase's artifact in the feature's
+`spec_directory`, non-empty and without template placeholders; for
+`implement`, every task in `tasks.md` checked; for `validate`, at least one
+traceability row for the feature. The core checks it and refuses the
+promotion otherwise — fix the artifact, don't work around the check. `state
+evidence --feature <id> --phase <phase>` runs the same check without changing
+anything. Promoting `validate` marks the feature `COMPLETED`. The command
+answers with a short ack (`--full` prints the whole record). Prompts come from
 `templates/prompts/<phase>.md`, filled with the normalized docs, constitution,
 discovered conventions, and this feature's `source_requirements`/
 `acceptance_criteria`/`dependencies` — never copy another project's prompt
-verbatim (§41). Execute the actual Spec Kit phase by following the installed
-`speckit.<phase>` command/skill for the platform you're running on (see your
-`adapters/*.md` for the exact path — e.g. `.claude/commands/speckit.<phase>.md`
-for Claude, `.github/skills/speckit-<phase>/SKILL.md` for Copilot,
-`.agents/skills/speckit-<phase>/SKILL.md` for Codex) with the generated
+verbatim. Execute the actual Spec Kit phase by following the installed
+command or skill for the platform you're running on — `discovery scan`
+reports it per phase under `speckit_phase_entrypoints` (e.g.
+`.claude/skills/speckit-<phase>/SKILL.md`, invoked as `/speckit-<phase>`, for
+Claude Code with a current Spec Kit; `.claude/commands/speckit.<phase>.md`
+for older installs; `.github/skills/speckit-<phase>/SKILL.md` for Copilot;
+`.agents/skills/speckit-<phase>/SKILL.md` for Codex) — with the generated
 prompt as its effective input; if that command/skill doesn't exist, this is
-a `FAILED` condition (§29).
+a `FAILED` condition (Step 8). Where an installed skill asks the user
+something, the batching rule (§4) takes precedence over the skill's own
+turn-taking, as detailed per phase below.
 
 - **risk tier**: classify each feature at intake (before `clarify`) and again
   before `implement`, and apply the resulting ceremony profile. See
   "Risk-adaptive ceremony" below.
 - **clarify**: batch every `USER_DECISION_REQUIRED` question into one message
-  (§21); never ask one at a time; resume automatically after the answer.
-  Skip it only when the feature's profile says `clarify: skippable`, and
-  record the skip with `--status SKIPPED`.
-- **analyze**: never skip it, never go straight from `tasks` to `implement`
-  (§24). On findings, don't implement — repair the responsible artifact
+  (§4); never ask one at a time; resume automatically after the answer. The
+  installed clarify skill asks its (up to 5) questions one by one — collect
+  them and ask them all in a single `AskUserQuestion` call instead, then
+  encode every answer into the spec as the skill describes. Skip clarify only
+  when the feature's profile says `clarify: skippable`, and record the skip
+  with `--status SKIPPED`.
+- **analyze**: never skip it, never go straight from `tasks` to `implement`.
+  The installed analyze skill ends by offering remediation to the user; don't
+  ask — the repair loop here is automatic. On findings, don't implement —
+  repair the responsible artifact
   (spec/plan/tasks) and re-run analyze. Track cycles with
   `state analyze-cycle --feature <id> --action increment|check`; at 3
   exhausted cycles, transition the feature to `BLOCKED` and escalate to the
@@ -410,9 +363,15 @@ a `FAILED` condition (§29).
   artifact. MEDIUM findings may proceed only if they don't touch behavior,
   security, integrity, acceptance criteria, or normative architecture —
   record that decision.
-- **implement**: execute only analyzed/approved tasks. On `SPEC_DRIFT`, stop
-  the affected task, reassess, update plan/spec only when justified, redo
-  tasks + analyze, then resume — never improvise around a mismatch.
+- **implement**: execute only analyzed/approved tasks, checking each one off
+  in `tasks.md` as it is done (the `implement` evidence requires it). If the
+  implement skill stops on unchecked checklist items, report the checklist
+  table and continue without asking when the unchecked items are
+  reviewer-owned quality notes; ask (in the phase's single question batch)
+  only when an unchecked item is a requirement of this feature. On
+  `SPEC_DRIFT`, stop the affected task, reassess, update plan/spec only when
+  justified, redo tasks + analyze, then resume — never improvise around a
+  mismatch.
 - **traceability**: as requirements get covered by spec/plan/tasks/tests, call
   `traceability add --row-json '{"requirement": "...", "source": "...",
   "feature": "...", "spec": "...", "plan": "...", "task": "...", "test":
@@ -429,18 +388,13 @@ Ceremony scales with risk. Every feature gets a tier. The tier picks a ceremony 
 
 ##### Tier = max(scope, sensitivity floors, override)
 
-- **Scope** is measured against `.spec-master/risk/thresholds.json`. If that file is absent, the built-in defaults apply. The signals are:
-  - acceptance criteria
-  - words in the description
-  - tasks
-  - files touched
-  - architectural layers
-- A feature's scope tier is the first tier whose limits hold every signal. The output's `scope.binding` shows which signals pushed it higher.
-  - **At intake** these are estimates from the spec text plus any `--paths` hints.
-  - **At `pre_implement`** the tasks come from `<spec_directory>/tasks.md`: the task count, plus the files and layers cited in the tasks.
-- **Sensitivity** comes from the hook events `feature.intake` and `feature.pre_implement`. The default `sensitivity-*` hooks use `raise_tier` with these floors:
+- **Scope** is measured against `.spec-master/risk/thresholds.json`. If that file is absent, the built-in defaults apply. A feature's scope tier is the first tier whose limits hold every signal; `scope.binding` shows which signals pushed it higher.
+  - **At intake** the signals are estimates: acceptance criteria, words in the description, files and architectural layers from the spec text plus any `--paths` hints.
+  - **At `pre_implement`** the signals are the files and layers cited in `<spec_directory>/tasks.md`. The task count is reported but does not set the tier (the Spec Kit template splits a small module into 20+ tasks). Files count production code only: tests and docs are part of the work, not of its risk, and a bare file name in the task prose counts only when it exists at the project root.
+- **Sensitivity** comes from the hook events `feature.intake` and `feature.pre_implement`, matched against the feature's own text (name, description, acceptance criteria) and the concrete paths — never against the generated task prose, whose Spec Kit vocabulary (`data-model`, `contracts/`) would raise every feature. The default `sensitivity-*` hooks use `raise_tier` with these floors:
   - auth, payment, secrets: floor **L**
   - schema, public_contract, external_provider: floor **M**
+  - irreversible (push, pull/merge request, package publish, deploy to a shared environment): floor **M** — and the action itself still needs the user's explicit confirmation (Principle X)
   - Project hooks in `.spec-master/hooks.json` can disable a default hook or add new floors.
 - An **override** can only raise the tier. See the override rules below.
 
@@ -487,52 +441,18 @@ For L/XL features, `risk work-packages --feature ID --tier L` returns role packa
 
 ##### Calibration (`metrics calibrate`)
 
-Attribute every round so calibration can use it:
-
-`python3 spec-master/lib/cli.py metrics record-round ... --feature-id ID --tier <feature.risk.tier>`
-
-Rows without these two flags are counted in `ignored_rounds` and are not used.
-
-`python3 spec-master/lib/cli.py metrics calibrate --path . [--rounds FILE] [--window 3] [--state PATH] [--apply]`
-
-- For each completed feature, calibration compares the actual cost with its tier's budget. The cost basis is tokens, falling back to duration ≥ 60 s, then round count. Each feature is then marked:
-  - `under`: it cost more than its tier's budget
-  - `over`: it cost less than 75% of the budget of the tier below
-  - `ok`
-  - `pending`: not yet completed
-- A feature whose tier came from sensitivity or an override is never counted as `over`.
-- **Drift** means the last `--window` features of a tier went the same way. It is reported as, for example, "XS está custando como S há 3 features seguidas".
-  - Drift `under` tightens that tier's thresholds (×0.8).
-  - Drift `over` loosens the tier below (×1.25), so cheap features move down.
-  - The monotonic order of tiers is always preserved.
-- Without `--apply`, calibration only reports. `proposed_thresholds` shows the result.
-- With `--apply`:
-  - It writes `.spec-master/risk/thresholds.json` and appends to `.spec-master/risk/calibration-log.jsonl`.
-  - Evidence that was already used (`consumed_until`) never fires the same drift again.
-  - Run it only with the user's agreement, at a retrospective or a milestone.
+Calibration adjusts the tier thresholds from measured rounds. Rows recorded
+without host telemetry (`source` missing or `manual-unverified`) never feed
+it, and `--apply` runs only with the user's agreement, at a retrospective or
+a milestone. Details: `docs/protocol-reference.md#calibration`.
 
 #### Optional EARS acceptance criteria
 
-Acceptance criteria *may* use EARS-like syntax (EN or PT). Supported patterns:
-ubiquitous (`The <system> shall <response>` / `O <sistema> deve <resposta>`),
-event (`When`/`Quando`), state (`While`/`Enquanto`), unwanted
-(`If … then`/`Se … então`), optional (`Where`/`Onde`), and complex
-(several preconditions). The modal is `shall` (EN) or `deve`/`deverá` (PT).
-`must`/`should`/`will` are only flagged with a `weak_modal` hint.
-
-- `ears check --path . [--feature <id>]` checks the criteria stored in
-  `state.json`. `ears check --text "<criterion>" [--text …]` checks draft text
-  before `state upsert-feature`.
-- The check is **advisory by default**: it always exits 0 and reports
-  `coverage`, per-criterion `pattern`/`clauses`, and `hints`, such as
-  `no_modal`, `weak_modal`, `missing_system`, `missing_comma`, `missing_then`,
-  `vague_term` and `multiple_shall`. Use the hints to tighten wording during
-  `/speckit.clarify`. Never rewrite criteria silently. Propose the rewrite and
-  keep the user's meaning.
-- `--strict` is opt-in. Use it only when the constitution or the user requires
-  EARS. With `--strict`, any non-EARS criterion makes `valid: false` and the
-  command exits 1. Treat that as a clarify issue, not a blocker for other
-  features.
+`ears check --path . [--feature <id>]` (or `ears check --text "<criterion>"`
+for drafts) lints acceptance criteria against EARS patterns (EN/PT). It is
+advisory unless the constitution or the user requires EARS (`--strict`).
+Never rewrite a criterion silently — propose the rewrite and keep the user's
+meaning. Patterns and hints: `docs/protocol-reference.md#ears`.
 
 #### Event hooks (declarative automation)
 
@@ -561,32 +481,7 @@ it.
   reported by `hooks validate` but never breaks `state transition` or the
   controller.
 
-#### Escalations and decision memory
-
-When a role hits one of its playbook's escalation triggers, don't route it by
-hand: `team escalate --path . --kind <kind> --raised-by <role> [--feature
-<id>] [--summary "..."]` returns the playbook route (`chain`, `decided_by`,
-`package_owner`, `adr_candidate`); `team routes` lists every kind. Once the
-deciding role has decided, record it:
-
-```
-team resolve --path . --kind <kind> --raised-by <role> --decision "<what was decided>"
-  [--decided-by <role>] [--rationale "..."] [--feature <id>] [--title "..."]
-  [--alternative "<rejected option>" ...] [--adr-trigger <trigger> ...]
-```
-
-This writes a `Decision` node to the knowledge graph (`DECIDED_BY` the
-deciding agent, `INFLUENCES` the feature node when it exists) — re-recording
-the same decision is idempotent. ADR triggers (`new_external_provider`,
-`new_core_data_model`, `security_privacy_change`, `boundary_change`,
-`infra_change`, `rejected_alternatives`; `systemic_violation` escalations add
-one automatically) also write an ADR file into the repository's existing ADR
-directory (`docs/adr`, `docs/decisions`, …), or `.spec-master/adr/` when the
-repository has none. Before a role acts, load its past decisions together
-with its playbook: `knowledge for-role --role <role> --path .` (adds a
-`decisions` list), or `team decisions --path . --role <role> | --feature <id>`.
-
-### Step 7 — Quality gates (CLAUDE.md §28)
+### Step 7 — Quality gates
 
 `gates detect --path .` — never hardcode a command family. Before running any
 returned shell command, call `policy preflight "<command>"`; execute only
@@ -610,28 +505,26 @@ the same evidence under `sast_scanners`.
 
 For prompts that include generated context, preflight the assembled context
 with `budget file --files <comma-separated-files> --token-budget <budget>`.
-If relevant context is omitted, list the omitted IDs/files in the phase notes
-instead of silently exceeding budget.
+It returns only ids and estimated tokens (`selected_ids`, `omitted_ids`) —
+read the selected files yourself, once. If relevant context is omitted, list
+the omitted IDs/files in the phase notes instead of silently exceeding
+budget.
 
-### Step 8 — Report & traceability (CLAUDE.md §35-36)
+### Step 8 — Report & traceability
 
 `traceability render --path .spec-master/state.json --output
 .spec-master/reports/traceability.md` (add `--feature <id>` for a single
 feature's matrix). The report is always a render of the per-feature store —
 never the source of truth, never edited by hand. Fill
 `templates/final-report.md` → `.spec-master/reports/final-report.md`.
-Before printing the final status, run:
-
-1. `graph enrich-discovery --path .`
-2. `graph validate --path .`
-3. `graph snapshot --path . --name final`
-4. `graph health --path .`
-5. `evals run`
-6. `runtime contract --runtime-type hybrid`
-
-Print the report to the user only when graph validation and deterministic
-harness evals pass, or clearly classify the result as `PARTIAL`/`BLOCKED`.
-Determine final status per §29:
+Before printing the final status, check the evidence behind every
+feature's promotions with `state evidence --feature <id>`: `verified` phases
+passed the core's check, `unverified` ones were imported with a reason, and
+`missing` ones were promoted before evidence existed. Report the last two
+per feature — they are not proof that the phase happened. The harness's own
+self-checks (graph validation, harness evals, runtime contract) belong to the
+project's CI (`doctor`), not to every workflow run. Determine the final
+status:
 
 - `SUCCESS`: constitution valid AND all selected features implemented AND all
   acceptance criteria mapped in traceability AND analyze has no blocking
@@ -650,27 +543,10 @@ Determine final status per §29:
 
 #### Local dashboard
 
-`.spec-master/reports/dashboard.html` is a static, self-contained page: inline CSS only, no CDN, fonts or network requests. It follows light or dark mode from the OS and works on narrow screens. It is a **render**, never a source of truth. Open it with `file://` in any browser.
-
-```bash
-python3 spec-master/lib/cli.py dashboard render --path . [--output PATH] [--refresh N]
-# -> {"output": "<abs path>", "features": 10, "completeness": 30.0, "active": false}
-python3 spec-master/lib/cli.py dashboard model --path .    # the read-only JSON model the page is built from
-```
-
-- **When it updates.** The default `dashboard-refresh` hook re-renders the page on `phase.started`, `phase.transition` and `workflow.status`. Hook failures are swallowed and never block a transition. Run `dashboard render` to refresh it on demand.
-- **Read-only.** Rendering never writes `state.json` or any other source. The only thing it creates is the output file and its parent directory. The write is atomic: a temp file in the same directory, then `os.replace`. The knowledge graph is read only if `.spec-master/knowledge/graph` already exists.
-- **Graceful degradation.** Each source is optional: state, `workstreams.json`, `metrics/rounds.json`, `hooks/firings.jsonl`, traceability rows, decision memory and the graph.
-  - A missing source shows an empty section.
-  - A corrupt source is listed under "Some sources could not be read".
-  - A missing `state.json` renders a "Not initialized" page instead of failing.
-- **Completeness.** A phase counts as done when it is `PASSED` or `SKIPPED`. Per-feature % is done/phases. Global % is weighted by phase count across all features.
-- **Refresh rule.** The page is static, so its run state is decided when it is rendered:
-  - `running`: `.spec-master/run.lock` is fresh (not older than `execution.phase_timeout_seconds`, default 600s), or some feature phase is `RUNNING`. The page gets a spinner and `<meta http-equiv="refresh" content="N">`. N comes from `--refresh` and defaults to 5.
-  - `settling`: not running, but `state.json` or the firings log changed in the last 120s, and the workflow is not terminal (`COMPLETED/BLOCKED/FAILED/PAUSED`) or the last logged lifecycle event is `phase.started`. There is no meta refresh. A tiny inline script reloads every N seconds until 120s after generation. This bridges the gap between phases, where the controller has already released the lock.
-  - `idle`: everything else. No refresh and no script.
-  - `--refresh 0` disables both the meta refresh and the settling script.
-  - This rule is a heuristic over files on disk. A crashed agent that leaves a phase `RUNNING` keeps the page in `running` until the state is corrected.
+`dashboard render --path .` writes `.spec-master/reports/dashboard.html`, a
+static render of the state (never a source of truth); the default
+`dashboard-refresh` hook keeps it current. Details:
+`docs/protocol-reference.md#local-dashboard`.
 
 #### Optional PR step (Git Flow only — never automatic)
 
@@ -705,7 +581,7 @@ directives with `requires: ["user_confirmed"]`. One confirmation covers one
 PR. Don't reuse it for other features. `pr plan` exits 0 for
 `noop`/`blocked`/`confirm_required`, so always branch on `action`.
 
-## 3. Idempotency & staleness (CLAUDE.md §32-33)
+## 3. Idempotency & staleness
 
 Before any mutating action, prefer the idempotent check: Spec Kit already
 installed → don't reinstall; git extension already present → don't add
@@ -716,7 +592,7 @@ don't reimplement. When a normalized doc changes, use
 `fingerprint compare` to see exactly which phases go stale and re-run only
 those — never assume `implement` is invalid without assessing impact first.
 
-## 4. Progress messaging (CLAUDE.md §37)
+## 4. Progress messaging and questions
 
 Emit short status lines as you move through phases
 (`[Spec Master] 3 features identified.`,
@@ -724,7 +600,20 @@ Emit short status lines as you move through phases
 Spec Kit output. Present decisions, blockers, results, and phase changes —
 nothing else.
 
-## 5. Portability (CLAUDE.md §2, §40)
+**Batching rule.** Ask the user only at a phase boundary, with every pending
+question in a single batch (`AskUserQuestion` takes several questions per
+call) — never one question per turn, and never in the middle of a phase
+unless the phase cannot continue at all. A wait longer than a few minutes
+also expires the prompt cache, so every extra stop costs a full context
+rewrite. When a question has a safe default and the answer changes neither
+scope, security, data nor a public contract, take the default instead of
+asking and record it in the phase notes as `SAFE_DEFAULT: <decision>`. The
+gates that always need the user's word stay unchanged: Spec Kit
+initialization and Git strategy (Step 2), constitutional conflicts (Step 4),
+unresolved `USER_DECISION_REQUIRED` items, and anything irreversible
+(Principle X).
+
+## 5. Portability
 
 Nothing in this file or in `lib/` references a specific project, stack, org,
 or prior feature name. Every adapter must:
@@ -735,103 +624,15 @@ or prior feature name. Every adapter must:
 4. Use its own platform's way of asking the user (`AskUserQuestion` here;
    see `adapters/copilot.md` and `adapters/codex.md` for their equivalents).
 
-Four adapters are hand-written today, each a thin pointer file living in its
-own platform's directory, all reading this same file and calling the same
-`spec-master/lib/cli.py`:
+Hand-written adapters exist for Claude Code, GitHub Copilot, OpenAI Codex and
+Qwen-compatible shells; every other Spec Kit agent gets a generated
+entrypoint (`init.sh link`). None of them contains protocol content of its
+own. List and layout: `docs/protocol-reference.md#adapters`.
 
-- `.claude/commands/spec-master.md` + `.claude/skills/spec-master/SKILL.md`
-  (Claude Code, `/spec-master`, `$ARGUMENTS`) — see `adapters/claude-code.md`.
-- `.github/skills/spec-master/SKILL.md` (GitHub Copilot, `/spec-master`,
-  matching Spec Kit's own `speckit-<command>/SKILL.md` layout for Copilot) —
-  see `adapters/copilot.md`.
-- `.agents/skills/spec-master/SKILL.md` (OpenAI Codex CLI, `$spec-master`,
-  matching Spec Kit's own `$speckit-<phase>` skills-mode layout for Codex) —
-  see `adapters/codex.md`.
-- Qwen-based environments, via `adapters/qwen.md`, for shells or agents that
-  expose the same file-system + command-execution primitives.
+### MCP server and web bundle
 
-Every other agent [GitHub Spec Kit](https://github.com/github/spec-kit)
-supports (30+ — Gemini CLI, Cursor, IBM Bob, Trae, Kilo Code, Goose, Cline,
-Devin, Factory Droid, Grok Build, RovoDev, ZCode, Zed, Kiro CLI, Tabnine,
-Forge, Kimi Code, and more) gets a *generated* entrypoint instead, rendered
-by `spec-master/lib/adapters_gen.py` from a table transcribed from Spec
-Kit's own integration registry — same four points above (argument
-resolution, this protocol, the deterministic core, turn-taking in place of
-`AskUserQuestion`), same stopping conditions, just written into each target
-project's agent-specific install directory and file format when `init.sh
-link <project>` or `adapters_gen.py generate` runs. The source repo keeps the
-generator table, not every generated directory at its root. See
-`adapters/generic.md` for the full rationale and the regeneration command.
-
-None of these platform directories contain any Python, templates, or
-protocol content of their own — everything structural or semantic-but-shared
-lives only in `spec-master/`.
-
-### MCP server (dedicated, stdio)
-
-Agents that speak MCP can call the deterministic core as tools instead of
-shelling out: `spec-master/mcp/spec_master_mcp.py` is a stdlib-only stdio MCP
-server that exposes **every** `cli.py` command. The tool list is introspected
-from `cli.build_parser()` at startup — `<group> <action>` becomes the tool
-`<group>_<action>` (dashes as underscores: `state_show`, `git_strategy_plan`,
-`traceability_render`, `graph_neighbors`, `hooks_emit`, `team_decisions`, ...),
-so a new CLI group is available over MCP with no server change. Arguments are
-the argparse `dest` names (`{"feature": "001-auth", "phase": "plan", "status":
-"PASSED"}` for `state_transition`).
-
-Each call runs `python3 spec-master/lib/cli.py ...` in a subprocess (argv
-list, no shell) with `cwd` fixed to the project root, so the MCP path and the
-shell path share the same code, JSON output and exit codes: `structuredContent`
-carries the CLI's JSON object, `isError: true` mirrors a non-zero exit (e.g.
-`{"error": "state file not found: ..."}`). Tools annotated
-`readOnlyHint: true` never write (`*_show`, `*_list`, `*_validate`,
-`graph_stats`, `graph_neighbors`, `gates_detect`, ...); every other tool may
-update `.spec-master/` exactly like its CLI command — the protocol rules above
-(when to transition, when to record traceability) apply unchanged.
-
-Register it per project in `.mcp.json` (Claude Code starts stdio servers in
-the project root):
-
-```json
-{"mcpServers": {"spec-master": {"type": "stdio", "command": "python3",
-  "args": ["spec-master/mcp/spec_master_mcp.py"]}}}
-```
-
-With the global engine, use `~/.spec-master-engine/mcp/spec_master_mcp.py`
-and pass `--project <repo>` (or `SPEC_MASTER_PROJECT`) if the client does not
-start servers in the repository root. `SPEC_MASTER_MCP_TIMEOUT` (default 120 s)
-bounds each call; `--list-tools` prints the tool catalog for debugging. See
-`mcp/README.md`.
-
-### Web bundle (chat UIs without tools)
-
-`python3 spec-master/lib/cli.py bundle build --path . --feature <id>
-[--phase <phase>] [--budget 12000] [--output FILE | --stdout] [--no-timestamp]`
-writes one Markdown file to `.spec-master/bundles/<feature>-<phase>.md`. You
-can paste that file into a chat assistant that has no file-system or shell
-access. When `--phase` is omitted, the phase is the feature's first one that is
-not `PASSED` or `SKIPPED`. `--phase constitution` works without `--feature`.
-
-The bundle contains, in order:
-
-1. Usage steps for the user and hard rules for the assistant:
-   - it has no tool access;
-   - it must return every deliverable in full, preceded by `File: <path>`;
-   - it must never invent sources, and must ask for anything left out.
-2. The phase prompt, rendered from `templates/prompts/<phase>.md`:
-   - placeholders are filled from `state.json` and the project files;
-   - anything that cannot be filled stays visible as `{{name}}` and is listed
-     under "Unresolved placeholders".
-3. The feature record.
-4. The prior artifacts, constitution and normalized context for that phase, in
-   priority order, trimmed as whole files by `context_budget.budget_items()`.
-5. A **Not included** list of every file dropped for the budget or not found.
-
-The deliverable paths come from `phase_contracts.PHASE_ARTIFACTS`. The
-`validate` phase has no template, so it gets a built-in prompt that marks
-every quality gate `NOT RUN`.
-
-The bundle is a convenience for people outside an agent runtime. It does not
-replace the guarded flow. Once the user has saved the returned files, record
-the outcome with the normal CLI (`state transition`, `traceability add`, and so
-on). A bundle is never evidence that a phase passed.
+Agents that speak MCP can call the core through
+`spec-master/mcp/spec_master_mcp.py` (every CLI command as a tool, same JSON
+and exit codes); chat UIs without tools can use `bundle build`. Neither
+changes the rules above. Details: `docs/protocol-reference.md#mcp-server` and
+`docs/protocol-reference.md#web-bundle`.

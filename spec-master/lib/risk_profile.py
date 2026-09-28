@@ -202,7 +202,7 @@ def extract_paths(text: str, spec_directory: str | None = None) -> list[str]:
         if not is_file_path(token) and not token.endswith("/"):
             continue  # "and/or", "load/mutate/save", "US1/US2" are prose, not paths
         segments = token.strip("/").split("/")
-        if segments[0] == "specs" or (spec_prefix and token.startswith(spec_prefix)):
+        if segments[0] in ("specs", ".spec-master") or (spec_prefix and token.startswith(spec_prefix)):
             continue
         if segments[-1] in _SPECKIT_ARTIFACTS and len(segments) == 1:
             continue
@@ -274,8 +274,39 @@ def _layer_summary(paths: list[str], fallback_text: str | None) -> tuple[list[st
     return layers, counted
 
 
+def countable_files(paths: list[str], root: str, hinted: list[str] = ()) -> list[str]:
+    """Files that measure the size of the change.
+
+    Tests and docs are part of the work but not of its risk (the same rule
+    `layers` already applies). A bare file name mentioned in generated prose
+    (`state.json`, `SKILL.md`, `test_x.py`) is a reference, not a file the
+    change touches, unless it exists at the project root or was given as an
+    explicit path hint.
+    """
+    counted = []
+    for path in paths:
+        if not is_file_path(path) or path_layer(path) in UNCOUNTED_LAYERS:
+            continue
+        if "/" not in path.strip("/") and path not in hinted and not os.path.isfile(os.path.join(root, path)):
+            continue
+        counted.append(path)
+    return counted
+
+
+# Signals that decide the pre_implement scope tier. The Spec Kit task count is
+# still reported, but it is not a size signal: its template splits a
+# 100-line module into 20+ tasks, which lifted every small feature to M.
+PRE_IMPLEMENT_SCOPE_SIGNALS = ("files", "layers")
+
+
 def gather_evidence(root: str, feature: dict, stage: str, paths: list[str] | None = None) -> dict:
-    """Signals + the hook payload for one stage. Read-only."""
+    """Signals + the hook payload for one stage. Read-only.
+
+    Sensitivity looks at the feature's own text (the user's intent) and at the
+    concrete paths; the prose of a generated tasks.md is never matched as
+    text, because Spec Kit's vocabulary (`data-model`, `contracts/`) would
+    otherwise raise every feature (schema/public_contract) at pre_implement.
+    """
     if stage not in STAGES:
         raise ValueError(f"unknown stage `{stage}` (known: {', '.join(STAGES)})")
     root = os.path.abspath(root)
@@ -299,7 +330,7 @@ def gather_evidence(root: str, feature: dict, stage: str, paths: list[str] | Non
             text = base_text + "\n" + task_text
     extracted = extract_paths(base_text + "\n" + task_text, spec_dir)
     all_paths = list(dict.fromkeys(hint_paths + extracted))
-    files = [p for p in all_paths if is_file_path(p)]
+    files = countable_files(all_paths, root, hint_paths)
     use_text_layers = source == "estimate" or not all_paths
     layers, counted = _layer_summary(all_paths, base_text if use_text_layers else None)
     if source == "tasks.md":
@@ -312,7 +343,7 @@ def gather_evidence(root: str, feature: dict, stage: str, paths: list[str] | Non
             "files": len(files),
             "layers": len(counted),
         }
-    payload = {"feature": feature.get("id"), "text": text, "paths": all_paths}
+    payload = {"feature": feature.get("id"), "text": base_text, "paths": all_paths}
     return {"signals": signals, "source": source, "paths": all_paths, "layers": layers,
             "warnings": warnings, "payload": payload}
 
@@ -533,7 +564,10 @@ def classify(root: str, state: dict, feature_id: str, stage: str = "intake", *, 
     hooks_list = hooks.load_hooks(root) if hooks_list is None else hooks_list
 
     evidence = gather_evidence(root, feature, stage, paths)
-    scope, binding = scope_tier(evidence["signals"], thresholds)
+    tier_signals = evidence["signals"]
+    if evidence["source"] == "tasks.md":
+        tier_signals = {k: v for k, v in tier_signals.items() if k in PRE_IMPLEMENT_SCOPE_SIGNALS}
+    scope, binding = scope_tier(tier_signals, thresholds)
     event_type = STAGE_EVENTS[stage]
     sensitivity = _sensitivity(hooks_list, event_type, evidence["payload"])
     categories = sorted({s["category"] for s in sensitivity})

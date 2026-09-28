@@ -187,17 +187,17 @@ def classify_events(phase: str, findings: dict) -> list[str]:
     return events
 
 
-def _artifact_wrong_location(project: Path, phase: str, changed: list[str]) -> list[str]:
+def _artifact_wrong_location(project: Path, phase: str, changed: list[str],
+                             feature_dir: str | None = None) -> list[str]:
     """A required artifact's basename appears at an unexpected path."""
-    if not phase_contracts.validate_artifacts(project, phase):
+    if not phase_contracts.validate_artifacts(project, phase, feature_dir):
         return []  # required artifacts are all present at their canonical location
-    expected_basenames = {
-        Path(pattern).name for pattern in phase_contracts.PHASE_ARTIFACTS[phase]
-    }
+    patterns = phase_contracts.phase_artifacts(phase, feature_dir)
+    expected_basenames = {Path(pattern).name for pattern in patterns}
     misplaced = [
         path for path in changed
         if Path(path).name in expected_basenames
-        and not any(fnmatch.fnmatch(path, pattern) for pattern in phase_contracts.PHASE_ARTIFACTS[phase])
+        and not any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
     ]
     return sorted(misplaced)
 
@@ -215,7 +215,8 @@ def _reason_for_hard_fail(findings: dict, blocking_gate_failed: bool) -> str:
 
 
 def _evaluate_inspect_noop(project: Path, phase: str, structured_result: dict | None,
-                            outcome: str | None) -> tuple[str, str, str | None, list[str]]:
+                            outcome: str | None,
+                            feature_dir: str | None = None) -> tuple[str, str, str | None, list[str]]:
     """`inspect-or-update` no-op decision (clarify/analyze) — specs/002-
     guarded-noop-phase-validation/spec.md §5, §8. Relies only on the
     active-feature-scoped predicate, never the generic glob-based
@@ -231,9 +232,9 @@ def _evaluate_inspect_noop(project: Path, phase: str, structured_result: dict | 
     predicate = phase_contracts.clarify_result_ok if phase == "clarify" else phase_contracts.analyze_result_ok
     names = ("spec.md",) if phase == "clarify" else ("spec.md", "plan.md", "tasks.md")
     try:
-        ok = predicate(project, structured_result)
-        feature_dir = phase_contracts.resolve_active_feature_dir(project)
-        active_artifacts = [str((feature_dir / name).relative_to(project)) for name in names]
+        ok = predicate(project, structured_result, feature_dir)
+        resolved_dir = phase_contracts.feature_dir_path(project, feature_dir)
+        active_artifacts = [str((resolved_dir / name).relative_to(project)) for name in names]
     except phase_contracts.ActiveFeatureUnresolved:
         return "FAILED", "active_feature_unresolved", outcome, []
 
@@ -262,7 +263,8 @@ def _evaluate_producer_retry(findings: dict, history: list) -> tuple[str, str, s
     return "FAILED", "unchanged_artifact", None
 
 
-def revalidate_from_transcript(project, phase: str, transcript_text: str, history: list) -> dict | None:
+def revalidate_from_transcript(project, phase: str, transcript_text: str, history: list,
+                               feature_dir: str | None = None) -> dict | None:
     """Re-evaluate a previously-blocked attempt under the *current* contract
     without spawning a new subprocess (controller.py's contract-revalidation,
     specs/002-guarded-noop-phase-validation/spec.md §11, research.md item 6).
@@ -282,7 +284,9 @@ def revalidate_from_transcript(project, phase: str, transcript_text: str, histor
     if policy == "inspect-or-update":
         structured_result = phase_result.parse_last_phase_result(transcript_text)
         outcome = structured_result.get("phase_result") if structured_result else None
-        status, _reason, outcome, active_artifacts = _evaluate_inspect_noop(project, phase, structured_result, outcome)
+        status, _reason, outcome, active_artifacts = _evaluate_inspect_noop(
+            project, phase, structured_result, outcome, feature_dir
+        )
         if status != "PASSED":
             return None
         return {
@@ -294,8 +298,8 @@ def revalidate_from_transcript(project, phase: str, transcript_text: str, histor
 
     if policy == "produce-or-update":
         findings = {
-            "missing_artifacts": phase_contracts.validate_artifacts(project, phase),
-            "placeholder_artifacts": phase_contracts.placeholder_artifacts(project, phase),
+            "missing_artifacts": phase_contracts.validate_artifacts(project, phase, feature_dir),
+            "placeholder_artifacts": phase_contracts.placeholder_artifacts(project, phase, feature_dir),
         }
         status, _reason, outcome = _evaluate_producer_retry(findings, list(history))
         if status != "PASSED":
@@ -306,7 +310,8 @@ def revalidate_from_transcript(project, phase: str, transcript_text: str, histor
 
 
 def run_phase(project, phase: str, integration: str, model: str, prompt_text: str,
-              timeout_seconds: int, agent: str = "spec-phase", history: list = ()) -> dict:
+              timeout_seconds: int, agent: str = "spec-phase", history: list = (),
+              feature_dir: str | None = None) -> dict:
     if integration not in INTEGRATIONS:
         raise UnsupportedIntegrationError(
             f"integration {integration!r} is not supported in guarded mode yet "
@@ -330,14 +335,14 @@ def run_phase(project, phase: str, integration: str, model: str, prompt_text: st
         "changed_paths": changed,
         "symlink_escapes": [p for p in changed if _symlink_escapes_project(project, p)],
         "fake_tool_markers": phase_contracts.validate_transcript(invocation["stdout"]),
-        "missing_artifacts": phase_contracts.validate_artifacts(project, phase),
-        "placeholder_artifacts": phase_contracts.placeholder_artifacts(project, phase),
-        "forbidden_writes": phase_contracts.forbidden_writes(changed, phase),
-        "artifact_wrong_location": _artifact_wrong_location(project, phase, changed),
+        "missing_artifacts": phase_contracts.validate_artifacts(project, phase, feature_dir),
+        "placeholder_artifacts": phase_contracts.placeholder_artifacts(project, phase, feature_dir),
+        "forbidden_writes": phase_contracts.forbidden_writes(changed, phase, feature_dir),
+        "artifact_wrong_location": _artifact_wrong_location(project, phase, changed, feature_dir),
     }
     required_changed = any(
         any(fnmatch.fnmatch(path, pattern) for path in changed)
-        for pattern in phase_contracts.PHASE_ARTIFACTS[phase]
+        for pattern in phase_contracts.phase_artifacts(phase, feature_dir)
     )
     blocking_gate_failed = bool(quality_gate_results) and any(
         g["blocking"] and g["result"] == "FAILED" for g in quality_gate_results
@@ -374,7 +379,7 @@ def run_phase(project, phase: str, integration: str, model: str, prompt_text: st
             outcome = outcome or "artifact_updated"
     elif policy == "inspect-or-update":
         status, reason, outcome, active_artifacts = _evaluate_inspect_noop(
-            project, phase, structured_result, outcome
+            project, phase, structured_result, outcome, feature_dir
         )
     elif policy == "produce-or-update":
         status, reason, noop_outcome = _evaluate_producer_retry(findings, list(history))

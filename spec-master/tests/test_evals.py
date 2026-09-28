@@ -1,10 +1,16 @@
-import _pathfix
+import unittest
 
+import _pathfix  # noqa: F401
 import evals
 
 
-def test_harness_evals_pass():
-    result = evals.run()
-    assert result["success"] is True
-    assert result["failed"] == 0
-    assert result["passed"] == result["total"]
+class HarnessEvalsTests(unittest.TestCase):
+    def test_harness_evals_pass(self):
+        result = evals.run()
+        self.assertIs(result["success"], True)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["passed"], result["total"])
+
+
+if __name__ == "__main__":
+    unittest.main()

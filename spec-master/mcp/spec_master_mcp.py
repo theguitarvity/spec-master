@@ -69,10 +69,11 @@ READ_ONLY_ACTIONS = frozenset({
 # Verified pure tools whose action name is too generic for the allowlist
 # (e.g. `worktree plan` creates a git worktree, `git-strategy plan` does not).
 READ_ONLY_TOOLS = frozenset({
-    "git_strategy_plan", "metrics_record_round", "team_workstreams",
+    "git_strategy_plan", "team_workstreams",
     "worktree_aggregate", "workstreams_aggregate", "tracker_orchestrate",
     "evals_run", "budget_file", "dashboard_model",
     "risk_profiles", "risk_work_packages",
+    "telemetry_locate", "baseline_plan", "lane_triage", "step_next",
 })
 
 _MISSING = object()

@@ -1,0 +1,11 @@
+{
+  "name": "spec-master",
+  "version": "0.2.0",
+  "description": "Spec Master harness for Claude Code: lane triage before any artifact, evidence-gated steps, and hooks that enforce the workflow's rules (write policy, destructive-command policy, verification before done). Spec Kit stays available as the full cycle for critical changes.",
+  "author": {
+    "name": "Spec Master maintainers"
+  },
+  "homepage": "https://github.com/theguitarvity/spec-master",
+  "repository": "https://github.com/theguitarvity/spec-master",
+  "keywords": ["spec-driven-development", "harness", "spec-kit", "hooks"]
+}

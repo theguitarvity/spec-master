@@ -8,13 +8,15 @@ stays in the calling agent's prompt.
 
     python3 cli.py <command> <subcommand> [options]
 
-All output is JSON on stdout unless the subcommand renders Markdown
-(`traceability render`), in which case Markdown is printed directly.
+All output is compact JSON on stdout (`--pretty`, or SPEC_MASTER_PRETTY=1,
+indents it) unless the subcommand renders Markdown (`traceability render`),
+in which case Markdown is printed directly.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -39,6 +41,7 @@ import decision_memory  # noqa: E402
 import discovery  # noqa: E402
 import ears  # noqa: E402
 import evals  # noqa: E402
+import evidence  # noqa: E402
 import feature_model  # noqa: E402
 import fingerprint  # noqa: E402
 import git_strategy  # noqa: E402
@@ -51,6 +54,7 @@ import risk_profile  # noqa: E402
 import state as state_mod  # noqa: E402
 import team_model  # noqa: E402
 import team_workstreams  # noqa: E402
+import telemetry  # noqa: E402
 import tool_policy  # noqa: E402
 import traceability  # noqa: E402
 import tracker_orchestration  # noqa: E402
@@ -59,8 +63,29 @@ import runtime_contract  # noqa: E402
 import worktree  # noqa: E402
 
 
+# Output is compact JSON by default: every byte printed here lands in the
+# calling agent's context. `--pretty` (anywhere on the command line) or
+# SPEC_MASTER_PRETTY=1 restores the indented format for humans.
+PRETTY = False
+
+
 def _print_json(payload) -> None:
-    print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False))
+    if PRETTY:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False))
+    else:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=False, separators=(",", ":")))
+
+
+class EvidenceMissing(state_mod.InvalidTransitionError):
+    """A phase promotion without the evidence Principle IV requires."""
+
+    def __init__(self, result: dict):
+        failed = [c["detail"] for c in result["checks"] if not c["ok"]]
+        super().__init__(
+            f"cannot promote '{result['phase']}' of '{result['feature']}' to PASSED without evidence: "
+            + "; ".join(failed)
+        )
+        self.payload = {"evidence": result}
 
 
 def _load_json_file(path: str):
@@ -74,12 +99,24 @@ def _save_json_file(path: str, payload) -> None:
         fh.write("\n")
 
 
+def _transition_ack(feature: dict, args: argparse.Namespace, previous: str, evidence_entry: dict | None,
+                    feature_status_changed: bool) -> dict:
+    ack = {"feature": args.feature, "phase": args.phase, "status": args.status, "previous": previous}
+    if evidence_entry is not None:
+        ack["evidence"] = {"verified": evidence_entry["verified"],
+                           "artifacts": len(evidence_entry.get("artifacts") or [])}
+    if feature_status_changed:
+        ack["feature_status"] = feature.get("status")
+    return ack
+
+
 def cmd_state(args: argparse.Namespace) -> int:
     if args.state_action == "init":
-        s = state_mod.init(args.path, context=args.context, workflow=args.workflow)
-        # New states keep traceability per feature from the start (nothing to migrate yet).
-        traceability.migrate_from_state(s, args.path)
-        state_mod.save(args.path, s)
+        with state_mod.locked(args.path):
+            s = state_mod.init(args.path, context=args.context, workflow=args.workflow)
+            # New states keep traceability per feature from the start (nothing to migrate yet).
+            traceability.migrate_from_state(s, args.path)
+            state_mod.save(args.path, s)
         _print_json(s)
         return 0
     if args.state_action == "show":
@@ -87,40 +124,75 @@ def cmd_state(args: argparse.Namespace) -> int:
         _print_json(state_mod.summarize(s) if args.summary else s)
         return 0
     if args.state_action == "set-workflow":
-        s = state_mod.load(args.path)
-        state_mod.set_workflow(s, args.workflow)
-        state_mod.save(args.path, s)
+        with state_mod.transaction(args.path) as s:
+            state_mod.set_workflow(s, args.workflow)
         _print_json(s)
         return 0
     if args.state_action == "set-status":
-        s = state_mod.load(args.path)
-        state_mod.transition_workflow_status(s, args.status)
-        state_mod.save(args.path, s)
+        with state_mod.transaction(args.path) as s:
+            state_mod.transition_workflow_status(s, args.status)
         _print_json(s)
         return 0
     if args.state_action == "upsert-feature":
-        s = state_mod.load(args.path)
         feature = _load_json_file(args.feature_file) if args.feature_file else json.loads(args.feature_json)
-        f = state_mod.upsert_feature(s, feature)
-        state_mod.save(args.path, s)
-        _print_json(f)
+        if args.import_unverified and not (args.reason or "").strip():
+            raise state_mod.StateError("--import-unverified requires --reason")
+        with state_mod.transaction(args.path) as s:
+            f, info = state_mod.upsert_feature_metadata(s, feature, allow_unverified=args.import_unverified)
+            for phase in info["imported_phases"]:
+                evidence.record_unverified(f, phase, args.reason)
+        payload = dict(f)
+        if args.import_unverified:
+            payload["imported_unverified"] = info
+        _print_json(payload)
         return 0
     if args.state_action == "transition":
-        s = state_mod.load(args.path)
-        previous = state_mod.find_feature(s, args.feature)["phases"].get(args.phase, "PENDING")
-        f = state_mod.transition_phase(s, args.feature, args.phase, args.status)
-        state_mod.save(args.path, s)
+        if args.import_unverified and not (args.reason or "").strip():
+            raise state_mod.StateError("--import-unverified requires --reason")
+        root = hooks.project_root_for_state(args.path)
+        with state_mod.transaction(args.path) as s:
+            feature = state_mod.find_feature(s, args.feature)
+            previous = feature["phases"].get(args.phase, "PENDING")
+            state_status = feature.get("status")
+            f = state_mod.transition_phase(s, args.feature, args.phase, args.status)
+            evidence_entry = None
+            if args.status == "PASSED":
+                if args.import_unverified:
+                    evidence_entry = evidence.record_unverified(f, args.phase, args.reason)
+                else:
+                    rows = (traceability.load_rows(s, args.path, feature=args.feature)
+                            if args.phase == "validate" else None)
+                    result = evidence.check(root, f, args.phase, traceability_rows=rows)
+                    if not result["ok"]:
+                        raise EvidenceMissing(result)
+                    evidence_entry = evidence.record(f, result)
+                if args.phase == state_mod.FEATURE_PHASES[-1]:
+                    f["status"] = "COMPLETED"
         fired = None if args.no_hooks else hooks.safe_emit(
-            hooks.project_root_for_state(args.path), "phase.transition",
+            root, "phase.transition",
             {"feature": args.feature, "phase": args.phase, "status": args.status, "previous": previous},
         )
-        _print_json({**f, "hook_directives": fired["directives"]} if fired and fired["directives"] else f)
+        payload = dict(f) if args.full else _transition_ack(
+            f, args, previous, evidence_entry, f.get("status") != state_status)
+        if fired and fired["directives"]:
+            payload["hook_directives"] = fired["directives"]
+        _print_json(payload)
         return 0
     if args.state_action == "analyze-cycle":
-        s = state_mod.load(args.path)
-        result = state_mod.analyze_cycle(s, args.feature, args.action)
-        state_mod.save(args.path, s)
+        with state_mod.transaction(args.path) as s:
+            result = state_mod.analyze_cycle(s, args.feature, args.action)
         _print_json(result)
+        return 0
+    if args.state_action == "evidence":
+        s = state_mod.load(args.path)
+        root = hooks.project_root_for_state(args.path)
+        feature = state_mod.find_feature(s, args.feature)
+        if args.phase:
+            rows = traceability.load_rows(s, args.path, feature=args.feature) if args.phase == "validate" else None
+            _print_json(evidence.check(root, feature, args.phase, traceability_rows=rows))
+        else:
+            _print_json({"feature": args.feature, "phases": evidence.summary(feature),
+                         "evidence": feature.get("evidence") or {}})
         return 0
     raise SystemExit(f"unknown state action: {args.state_action}")
 
@@ -210,11 +282,9 @@ def cmd_constitution(args: argparse.Namespace) -> int:
 
 def cmd_traceability(args: argparse.Namespace) -> int:
     if args.trace_action == "add":
-        s = state_mod.load(args.path)
         row = _load_json_file(args.row_file) if args.row_file else json.loads(args.row_json)
-        written = traceability.record(s, args.path, row)
-        if not traceability.uses_store(s):
-            state_mod.save(args.path, s)
+        with state_mod.transaction(args.path) as s:
+            written = traceability.record(s, args.path, row)
         _print_json(written)
         return 0
     if args.trace_action == "render":
@@ -230,9 +300,8 @@ def cmd_traceability(args: argparse.Namespace) -> int:
             print(markdown)
         return 0
     if args.trace_action == "migrate":
-        s = state_mod.load(args.path)
-        summary = traceability.migrate_from_state(s, args.path)
-        state_mod.save(args.path, s)
+        with state_mod.transaction(args.path) as s:
+            summary = traceability.migrate_from_state(s, args.path)
         _print_json(summary)
         return 0
     raise SystemExit(f"unknown traceability action: {args.trace_action}")
@@ -311,17 +380,17 @@ def cmd_risk(args: argparse.Namespace) -> int:
         paths = [p.strip() for p in (args.paths or "").split(",") if p.strip()] or None
         result = risk_profile.classify(args.path, s, args.feature, args.stage, paths=paths)
         if args.save:
-            result["saved_risk"] = risk_profile.save_classification(s, args.feature, result)
-            state_mod.save(state_path, s)
+            with state_mod.transaction(state_path) as locked_state:
+                result["saved_risk"] = risk_profile.save_classification(locked_state, args.feature, result)
+            s = locked_state
             emitted = risk_profile.emit_event(args.path, s, args.feature, args.stage, paths=paths)
             result["hook_directives"] = (emitted or {}).get("directives", [])
         _print_json(result)
         return 0
     if args.risk_action == "override":
         state_path = _risk_state_path(args)
-        s = state_mod.load(state_path)
-        result = risk_profile.override(args.path, s, args.feature, args.tier, args.reason, by=args.by)
-        state_mod.save(state_path, s)
+        with state_mod.transaction(state_path) as s:
+            result = risk_profile.override(args.path, s, args.feature, args.tier, args.reason, by=args.by)
         _print_json(result)
         return 0
     if args.risk_action == "profiles":
@@ -452,23 +521,48 @@ def cmd_workstreams(args: argparse.Namespace) -> int:
     raise SystemExit(f"unknown workstreams action: {args.workstreams_action}")
 
 
+def _append_round(rounds_path: str, row: dict) -> dict:
+    """Append one row to rounds.json: validated first, then written
+    atomically under the file's lock (rounds.json is core-owned)."""
+    report = metrics_export.validate_rounds([row])
+    if not report["valid"]:
+        raise ValueError("refusing to append an invalid round: "
+                         + "; ".join(f"{e['path'] or '/'}: {e['message']}" for e in report["errors"]))
+    with state_mod.locked(rounds_path):
+        rounds = []
+        if os.path.exists(rounds_path):
+            rounds = _load_json_file(rounds_path)
+            if not isinstance(rounds, list):
+                raise ValueError(f"{rounds_path} is not a JSON array; fix it before appending")
+        rounds.append(row)
+        state_mod.save(rounds_path, rounds)
+    return {"appended": row["round_id"], "rounds_file": rounds_path, "rounds": len(rounds)}
+
+
+def _emit_round(args: argparse.Namespace, row: dict) -> None:
+    if args.append:
+        _print_json({**_append_round(args.rounds or metrics_export.default_rounds_path(args.path), row), "row": row})
+    else:
+        _print_json(row)
+
+
 def cmd_metrics(args: argparse.Namespace) -> int:
     if args.metrics_action == "record-round":
-        _print_json(
-            metrics.record_round(
-                round_id=args.round_id,
-                phase=args.phase,
-                started_at=args.started_at,
-                ended_at=args.ended_at,
-                input_tokens=args.input_tokens,
-                output_tokens=args.output_tokens,
-                work_packages_completed=args.work_packages_completed,
-                features_completed=args.features_completed,
-                notes=args.notes,
-                feature_id=args.feature_id,
-                tier=args.tier,
-            )
+        row = metrics.record_round(
+            round_id=args.round_id,
+            phase=args.phase,
+            started_at=args.started_at,
+            ended_at=args.ended_at,
+            input_tokens=args.input_tokens,
+            output_tokens=args.output_tokens,
+            work_packages_completed=args.work_packages_completed,
+            features_completed=args.features_completed,
+            notes=args.notes,
+            feature_id=args.feature_id,
+            tier=args.tier,
+            source=args.source,
         )
+        _emit_round(args, row)
         return 0
     if args.metrics_action == "summarize":
         rounds = _load_json_file(args.file)
@@ -503,6 +597,7 @@ def cmd_metrics(args: argparse.Namespace) -> int:
             window=args.window,
             risk=calibration.risk_from_state(s),
             since=calibration.consumed_until(args.path),
+            require_measured=True if args.require_measured else None,
         )
         result["rounds_file"] = rounds_path
         if args.apply:
@@ -510,6 +605,63 @@ def cmd_metrics(args: argparse.Namespace) -> int:
         _print_json(result)
         return 0
     raise SystemExit(f"unknown metrics action: {args.metrics_action}")
+
+
+def cmd_telemetry(args: argparse.Namespace) -> int:
+    if args.telemetry_action == "locate":
+        found = telemetry.locate_transcripts(args.path, include_subagents=args.include_subagents)
+        _print_json({"project": os.path.abspath(args.path), "transcripts": found})
+        return 0
+    if args.telemetry_action == "ingest":
+        if args.headless_json:
+            usage = telemetry.read_headless_result(args.headless_json)
+        else:
+            files = list(args.transcript or [])
+            if args.latest:
+                found = telemetry.locate_transcripts(args.path)
+                if not found:
+                    _print_json({"error": "no Claude Code transcript found for this project",
+                                 "project": os.path.abspath(args.path)})
+                    return 1
+                files = [found[0]]
+            if not args.main_only:  # a session's usage includes its subagents
+                files = [path for session in files for path in telemetry.session_transcripts(session)]
+            usage = telemetry.read_transcript_usage(files, since=args.since, until=args.until)
+        row = telemetry.to_round(
+            usage, round_id=args.round_id, phase=args.phase, source=usage["source"],
+            feature_id=args.feature_id, tier=args.tier, lane=args.lane, notes=args.notes,
+            started_at=args.started_at, ended_at=args.ended_at,
+            work_packages_completed=args.work_packages_completed, features_completed=args.features_completed,
+        )
+        _emit_round(args, row)
+        return 0
+    raise SystemExit(f"unknown telemetry action: {args.telemetry_action}")
+
+
+def cmd_baseline(args: argparse.Namespace) -> int:
+    import baseline
+    cases = baseline.load_cases(args.cases) if args.baseline_action in ("plan", "run") else None
+    if args.baseline_action == "plan":
+        _print_json(baseline.plan(cases, _csv(args.arms), args.runs, args.max_budget_usd,
+                                  model=args.model, claude=args.claude))
+        return 0
+    if args.baseline_action == "run":
+        try:
+            result = baseline.run(cases, arms=_csv(args.arms), runs=args.runs, max_budget_usd=args.max_budget_usd,
+                                  out_dir=args.out, confirm=args.yes, model=args.model, claude=args.claude,
+                                  timeout=args.timeout)
+        except baseline.ConfirmationRequired as exc:
+            _print_json({"error": "a baseline run spends real money: show the plan to the user and re-run with "
+                                  "--yes only after their explicit agreement",
+                         "total_runs": exc.plan["total_runs"],
+                         "worst_case_budget_usd": exc.plan["worst_case_budget_usd"]})
+            return 2
+        _print_json({key: result[key] for key in ("out_dir", "total_runs", "worst_case_budget_usd", "summary")})
+        return 0
+    if args.baseline_action == "summarize":
+        _print_json(baseline.summarize(baseline.load_results(args.out)))
+        return 0
+    raise SystemExit(f"unknown baseline action: {args.baseline_action}")
 
 
 def cmd_bundle(args: argparse.Namespace) -> int:
@@ -631,9 +783,17 @@ def cmd_budget(args: argparse.Namespace) -> int:
     if args.budget_action == "file":
         items = []
         for path in args.files.split(","):
-            p = Path(path)
-            items.append({"id": str(p), "content": p.read_text(encoding="utf-8") if p.exists() else ""})
-        _print_json(context_budget.budget_items(items, token_budget=args.token_budget))
+            p = Path(path.strip())
+            items.append({"id": str(p), "content": p.read_text(encoding="utf-8") if p.exists() else "",
+                          "exists": p.exists()})
+        result = context_budget.budget_items(items, token_budget=args.token_budget)
+        # The caller reads the selected files itself; echoing them here put
+        # every file in the context twice (omitted ones included).
+        for key in ("selected", "omitted"):
+            for entry in result[key]:
+                if not (args.with_content and key == "selected"):
+                    entry.pop("content", None)
+        _print_json(result)
         return 0
     raise SystemExit(f"unknown budget action: {args.budget_action}")
 
@@ -712,6 +872,76 @@ def cmd_knowledge(args: argparse.Namespace) -> int:
     raise SystemExit(f"unknown knowledge action: {args.knowledge_action}")
 
 
+def _csv(value: str | None) -> list[str]:
+    return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def cmd_lane(args: argparse.Namespace) -> int:
+    from kernel import lanes
+    if args.lane_action == "triage":
+        _print_json(lanes.triage(args.path, intent=args.intent, paths=_csv(args.paths),
+                                 confirmed=args.confirm or (), denied=args.deny or (),
+                                 unresolved=args.unresolved, requested=args.lane))
+        return 0
+    raise SystemExit(f"unknown lane action: {args.lane_action}")
+
+
+def cmd_step(args: argparse.Namespace) -> int:
+    from kernel import changes, step
+    try:
+        if args.step_action == "next":
+            result = step.next_step(args.path)
+        elif args.step_action == "begin":
+            result = step.begin(args.path, intent=args.intent, paths=_csv(args.paths), lane=args.lane,
+                                kind=args.kind, confirmed=args.confirm or (), denied=args.deny or (),
+                                unresolved=args.unresolved, regression_test=args.regression_test,
+                                test_command=args.test_command)
+        elif args.step_action == "end":
+            result = step.end(args.path, change_id=args.change, run_gates=not args.no_gates, dry_run=args.dry_run)
+        elif args.step_action == "widen":
+            result = step.widen(args.path, paths=_csv(args.paths), change_id=args.change)
+        elif args.step_action == "pause":
+            result = step.pause(args.path, change_id=args.change, reason=args.reason or "")
+        elif args.step_action == "resume":
+            result = step.resume(args.path, change_id=args.change)
+        else:
+            raise SystemExit(f"unknown step action: {args.step_action}")
+    except changes.ChangeError as exc:
+        _print_json({"error": str(exc)})
+        return 1
+    _print_json(result)
+    return 0 if result.get("status") not in ("QUESTIONS",) and result.get("ok", True) else 2
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    from kernel import doctor
+    report = doctor.run(args.path, build_parser())
+    if args.errors_only:
+        report["checks"] = [c for c in report["checks"] if not c["ok"]]
+    _print_json(report)
+    return 0 if report["ok"] else 1
+
+
+def cmd_harness(args: argparse.Namespace) -> int:
+    from kernel import install
+    if args.harness_action == "install-hooks":
+        _print_json(install.install_hooks(args.project, engine=args.engine, mode=args.mode, dry_run=args.dry_run))
+        return 0
+    if args.harness_action == "mode":
+        _print_json(install.set_mode(args.project, args.mode, dry_run=args.dry_run))
+        return 0
+    raise SystemExit(f"unknown harness action: {args.harness_action}")
+
+
+def _round_output_args(action_parser: argparse.ArgumentParser) -> None:
+    if not any("--path" in a.option_strings for a in action_parser._actions):
+        action_parser.add_argument("--path", default=".", help="project root")
+    action_parser.add_argument("--append", action="store_true",
+                               help="append the row to rounds.json (validated, atomic, locked)")
+    action_parser.add_argument("--rounds", default=None,
+                               help="rounds file (default: <path>/.spec-master/metrics/rounds.json)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spec-master-cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -737,18 +967,32 @@ def build_parser() -> argparse.ArgumentParser:
     s_setstatus.add_argument("--path", default=".spec-master/state.json")
     s_setstatus.add_argument("--status", required=True)
 
-    s_upsert = state_sub.add_parser("upsert-feature")
+    s_upsert = state_sub.add_parser("upsert-feature", help="record feature metadata (phases change only via transition)")
     s_upsert.add_argument("--path", default=".spec-master/state.json")
     s_upsert.add_argument("--feature-file", dest="feature_file", default=None)
     s_upsert.add_argument("--feature-json", dest="feature_json", default=None)
+    s_upsert.add_argument("--import-unverified", dest="import_unverified", action="store_true",
+                          help="accept phases/COMPLETED for history that never ran through Spec Master "
+                               "(recorded as unverified evidence; requires --reason)")
+    s_upsert.add_argument("--reason", default=None)
 
-    s_trans = state_sub.add_parser("transition")
+    s_trans = state_sub.add_parser("transition", help="move a feature phase; PASSED requires evidence")
     s_trans.add_argument("--path", default=".spec-master/state.json")
     s_trans.add_argument("--feature", required=True)
     s_trans.add_argument("--phase", required=True)
     s_trans.add_argument("--status", required=True)
     s_trans.add_argument("--no-hooks", dest="no_hooks", action="store_true",
                          help="do not emit the phase.transition hook event")
+    s_trans.add_argument("--full", action="store_true", help="print the whole feature record instead of an ack")
+    s_trans.add_argument("--import-unverified", dest="import_unverified", action="store_true",
+                         help="promote without evidence, recorded as unverified (requires --reason)")
+    s_trans.add_argument("--reason", default=None)
+
+    s_evidence = state_sub.add_parser("evidence", help="check or show the evidence behind a feature's phases")
+    s_evidence.add_argument("--path", default=".spec-master/state.json")
+    s_evidence.add_argument("--feature", required=True)
+    s_evidence.add_argument("--phase", default=None, choices=state_mod.FEATURE_PHASES,
+                            help="dry-run the evidence check for this phase")
 
     s_cycle = state_sub.add_parser("analyze-cycle")
     s_cycle.add_argument("--path", default=".spec-master/state.json")
@@ -1011,6 +1255,10 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_record.add_argument("--feature-id", default=None, help="attribute the round to a feature (calibration)")
     metrics_record.add_argument("--tier", default=None, type=str.upper, choices=list(metrics.TIERS),
                                 help="ceremony tier of the feature (calibration)")
+    metrics_record.add_argument("--source", default=None, choices=["manual", metrics.UNVERIFIED_SOURCE],
+                                help="typed-in numbers (manual with 0 tokens is stored as manual-unverified); "
+                                     "host-measured rows come from `telemetry ingest`")
+    _round_output_args(metrics_record)
     metrics_summary = metrics_sub.add_parser("summarize")
     metrics_summary.add_argument("--file", required=True, help="JSON file: list of round metrics")
     metrics_calibrate = metrics_sub.add_parser("calibrate", help="per-tier estimated vs actual cost, drift, thresholds")
@@ -1022,6 +1270,8 @@ def build_parser() -> argparse.ArgumentParser:
                                    help="consecutive same-direction features that count as drift")
     metrics_calibrate.add_argument("--apply", action="store_true",
                                    help="write .spec-master/risk/thresholds.json and log the calibration")
+    metrics_calibrate.add_argument("--require-measured", dest="require_measured", action="store_true",
+                                   help="ignore every round without measured tokens, even in a v1-only file")
     metrics_export_p = metrics_sub.add_parser(
         "export", help="export rounds.json as OTLP/JSON metrics or JSONL (validates first)")
     metrics_export_p.add_argument("--path", default=".", help="project root")
@@ -1034,6 +1284,57 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_validate_p.add_argument("--path", default=".", help="project root")
     metrics_validate_p.add_argument("--rounds", default=None,
                                     help="rounds file (default: <path>/.spec-master/metrics/rounds.json)")
+
+    p_telemetry = sub.add_parser("telemetry", help="host-measured usage (Claude Code transcripts, claude -p JSON)")
+    p_telemetry.set_defaults(func=cmd_telemetry)
+    telemetry_sub = p_telemetry.add_subparsers(dest="telemetry_action", required=True)
+    telemetry_locate = telemetry_sub.add_parser("locate", help="this project's session transcripts, newest first")
+    telemetry_locate.add_argument("--path", default=".", help="project root (where the host was launched)")
+    telemetry_locate.add_argument("--include-subagents", dest="include_subagents", action="store_true")
+    telemetry_ingest = telemetry_sub.add_parser(
+        "ingest", help="build a round from host usage (never message content); --append writes it")
+    telemetry_ingest.add_argument("--path", default=".", help="project root (where the host was launched)")
+    ingest_from = telemetry_ingest.add_mutually_exclusive_group(required=True)
+    ingest_from.add_argument("--latest", action="store_true", help="the newest session transcript of --path")
+    ingest_from.add_argument("--transcript", action="append", help="a session transcript (repeatable)")
+    ingest_from.add_argument("--headless-json", dest="headless_json",
+                             help="a `claude -p --output-format json` result file")
+    telemetry_ingest.add_argument("--main-only", dest="main_only", action="store_true",
+                                  help="leave the session's subagent transcripts out")
+    telemetry_ingest.add_argument("--since", default=None, help="window start (ISO 8601), e.g. the round start")
+    telemetry_ingest.add_argument("--until", default=None, help="window end (ISO 8601)")
+    telemetry_ingest.add_argument("--started-at", dest="started_at", default=None,
+                                  help="round bounds; a headless result needs one of them")
+    telemetry_ingest.add_argument("--ended-at", dest="ended_at", default=None)
+    telemetry_ingest.add_argument("--round-id", dest="round_id", required=True)
+    telemetry_ingest.add_argument("--phase", required=True)
+    telemetry_ingest.add_argument("--feature-id", dest="feature_id", default=None)
+    telemetry_ingest.add_argument("--tier", default=None, type=str.upper, choices=list(metrics.TIERS))
+    telemetry_ingest.add_argument("--lane", default=None, choices=["patch", "standard", "critical"])
+    telemetry_ingest.add_argument("--notes", default=None)
+    telemetry_ingest.add_argument("--work-packages-completed", dest="work_packages_completed", type=int, default=0)
+    telemetry_ingest.add_argument("--features-completed", dest="features_completed", type=int, default=0)
+    _round_output_args(telemetry_ingest)
+
+    p_baseline = sub.add_parser("baseline", help="measured baseline: Spec Master arm vs a direct agentic arm")
+    p_baseline.set_defaults(func=cmd_baseline)
+    baseline_sub = p_baseline.add_subparsers(dest="baseline_action", required=True)
+    for action, text in (("plan", "the run matrix and worst-case spend; executes nothing"),
+                         ("run", "execute the plan with claude -p (SPENDS MONEY: needs --yes)")):
+        baseline_action = baseline_sub.add_parser(action, help=text)
+        baseline_action.add_argument("--cases", required=True, help="cases JSON file (see lib/baseline.py)")
+        baseline_action.add_argument("--arms", default="specmaster,direct", help="comma-separated arm names")
+        baseline_action.add_argument("--runs", type=int, default=3)
+        baseline_action.add_argument("--max-budget-usd", dest="max_budget_usd", type=float, required=True)
+        baseline_action.add_argument("--model", default=None)
+        baseline_action.add_argument("--claude", default="claude", help="the claude executable")
+        if action == "run":
+            baseline_action.add_argument("--out", required=True, help="results directory")
+            baseline_action.add_argument("--timeout", type=float, default=3600.0, help="seconds per run")
+            baseline_action.add_argument("--yes", action="store_true",
+                                         help="the user explicitly agreed to spend the worst-case budget")
+    baseline_summary = baseline_sub.add_parser("summarize", help="medians, cost CV, success and overhead vs direct")
+    baseline_summary.add_argument("--out", required=True, help="results directory of a run")
 
     p_bundle = sub.add_parser("bundle", help="portable single-file bundles for chat UIs without tools")
     p_bundle.set_defaults(func=cmd_bundle)
@@ -1149,12 +1450,82 @@ def build_parser() -> argparse.ArgumentParser:
     budget_file = budget_sub.add_parser("file")
     budget_file.add_argument("--files", required=True, help="comma-separated paths")
     budget_file.add_argument("--token-budget", type=int, default=context_budget.DEFAULT_TOKEN_BUDGET)
+    budget_file.add_argument("--with-content", dest="with_content", action="store_true",
+                             help="also return the content of the selected files")
 
     p_runtime = sub.add_parser("runtime")
     p_runtime.set_defaults(func=cmd_runtime)
     runtime_sub = p_runtime.add_subparsers(dest="runtime_action", required=True)
     runtime_contract_parser = runtime_sub.add_parser("contract")
     runtime_contract_parser.add_argument("--runtime-type", choices=["hosted", "hybrid"], default="hybrid")
+
+    p_lane = sub.add_parser("lane", help="lane triage: how much process a change needs (opt-in lane flow)")
+    p_lane.set_defaults(func=cmd_lane)
+    lane_sub = p_lane.add_subparsers(dest="lane_action", required=True)
+    lane_triage = lane_sub.add_parser("triage", help="decide patch / standard / critical from paths and repo signals")
+    lane_triage.add_argument("--path", default=".", help="project root")
+    lane_triage.add_argument("--intent", required=True, help="the user's request, verbatim")
+    lane_triage.add_argument("--paths", default="", help="comma-separated files the change will touch")
+    lane_triage.add_argument("--confirm", action="append", help="a question's signal the user confirmed")
+    lane_triage.add_argument("--deny", action="append", help="a question's signal the user denied")
+    lane_triage.add_argument("--unresolved", type=int, default=0, help="open UNRESOLVED items")
+    lane_triage.add_argument("--lane", choices=["patch", "standard", "critical"], default=None,
+                             help="requested lane (can only raise)")
+
+    p_step = sub.add_parser("step", help="lane flow steps: next, begin, end, widen, pause, resume")
+    p_step.set_defaults(func=cmd_step)
+    step_sub = p_step.add_subparsers(dest="step_action", required=True)
+    step_next = step_sub.add_parser("next", help="the card for the current step")
+    step_next.add_argument("--path", default=".")
+    step_begin = step_sub.add_parser("begin", help="open a patch change (other lanes go to the full cycle)")
+    step_begin.add_argument("--path", default=".")
+    step_begin.add_argument("--intent", required=True, help="the user's request, verbatim")
+    step_begin.add_argument("--paths", default="", help="comma-separated files the change will touch")
+    step_begin.add_argument("--lane", choices=["patch", "standard", "critical"], default="patch")
+    step_begin.add_argument("--kind", choices=["change", "bugfix"], default="change")
+    step_begin.add_argument("--regression-test", dest="regression_test", default=None)
+    step_begin.add_argument("--test-command", dest="test_command", default=None)
+    step_begin.add_argument("--confirm", action="append")
+    step_begin.add_argument("--deny", action="append")
+    step_begin.add_argument("--unresolved", type=int, default=0)
+    step_end = step_sub.add_parser("end", help="verify the change; PASSED only with evidence")
+    step_end.add_argument("--path", default=".")
+    step_end.add_argument("--change", default=None)
+    step_end.add_argument("--dry-run", dest="dry_run", action="store_true", help="report without changing the record")
+    step_end.add_argument("--no-gates", dest="no_gates", action="store_true",
+                          help="skip running the gates for quick feedback (the change cannot pass this way)")
+    step_widen = step_sub.add_parser("widen", help="add files to the change (re-triages; the lane may go up)")
+    step_widen.add_argument("--path", default=".")
+    step_widen.add_argument("--paths", required=True)
+    step_widen.add_argument("--change", default=None)
+    step_pause = step_sub.add_parser("pause", help="stop the running change on purpose")
+    step_pause.add_argument("--path", default=".")
+    step_pause.add_argument("--change", default=None)
+    step_pause.add_argument("--reason", default=None)
+    step_resume = step_sub.add_parser("resume", help="resume a paused change")
+    step_resume.add_argument("--path", default=".")
+    step_resume.add_argument("--change", required=True)
+
+    p_doctor = sub.add_parser("doctor", help="harness self-checks for CI (conformance, budgets, records)")
+    p_doctor.set_defaults(func=cmd_doctor)
+    doctor_sub = p_doctor.add_subparsers(dest="doctor_action", required=True)
+    doctor_run = doctor_sub.add_parser("run")
+    doctor_run.add_argument("--path", default=".", help="project root")
+    doctor_run.add_argument("--errors-only", dest="errors_only", action="store_true")
+
+    p_harness = sub.add_parser("harness", help="wire the host (hooks) to the kernel")
+    p_harness.set_defaults(func=cmd_harness)
+    harness_sub = p_harness.add_subparsers(dest="harness_action", required=True)
+    harness_hooks = harness_sub.add_parser("install-hooks", help="merge the hookd entries into .claude/settings.json")
+    harness_hooks.add_argument("--project", default=".")
+    harness_hooks.add_argument("--engine", default=None, help="engine directory (default: this one)")
+    harness_hooks.add_argument("--mode", choices=["audit", "block"], default=None,
+                               help="also write hooks_mode to .spec-master/policy.json")
+    harness_hooks.add_argument("--dry-run", dest="dry_run", action="store_true")
+    harness_mode = harness_sub.add_parser("mode", help="set hooks_mode only (hooks installed by the plugin)")
+    harness_mode.add_argument("--project", default=".")
+    harness_mode.add_argument("--mode", choices=["audit", "block"], required=True)
+    harness_mode.add_argument("--dry-run", dest="dry_run", action="store_true")
 
     p_evals = sub.add_parser("evals")
     p_evals.set_defaults(func=cmd_evals)
@@ -1165,12 +1536,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global PRETTY
+    argv = list(sys.argv[1:] if argv is None else argv)
+    PRETTY = "--pretty" in argv or os.environ.get("SPEC_MASTER_PRETTY", "") not in ("", "0")
+    argv = [arg for arg in argv if arg != "--pretty"]
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         return args.func(args)
     except (state_mod.StateError, ValueError) as exc:
-        _print_json({"error": str(exc)})
+        payload = {"error": str(exc)}
+        payload.update(getattr(exc, "payload", None) or {})
+        _print_json(payload)
         return 1
 
 
