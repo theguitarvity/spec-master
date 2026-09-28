@@ -9,6 +9,7 @@
 ![Zero dependências](https://img.shields.io/badge/depend%C3%AAncias-zero%20%28stdlib%29-19e6ff?style=flat-square&labelColor=0b1020)
 ![Spec Kit 0.16.4 a 1.0.x](https://img.shields.io/badge/Spec%20Kit-0.16.4%E2%80%931.0.x-ff8a1f?style=flat-square&labelColor=0b1020)
 ![30+ agentes](https://img.shields.io/badge/agentes-30%2B-ff8a1f?style=flat-square&labelColor=0b1020)
+[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-19e6ff?style=flat-square&labelColor=0b1020)](LICENSE)
 
 [Começo rápido](#começo-rápido) · [Como funciona](#como-funciona) · [Instalação](#instalação) · [Comandos](#referência-de-comandos) · [Roadmap](#roadmap)
 
@@ -608,7 +609,12 @@ python3 -m unittest discover -s spec-master/tests
 python3 spec-master/lib/cli.py doctor run --path .
 ```
 
-## Créditos
+## Licença e créditos
+
+O Spec Master é distribuído sob a [licença MIT](LICENSE). Os arquivos que o
+`specify init` instala neste repositório (`.specify/` e as skills
+`speckit-*`) são do Spec Kit, também MIT, e estão listados em
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 Construído sobre o [GitHub Spec Kit](https://github.com/github/spec-kit): o
 Spec Master orquestra os comandos `speckit.*` e nunca os reimplementa. A logo

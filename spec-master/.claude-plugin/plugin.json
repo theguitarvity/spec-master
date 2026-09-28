@@ -7,5 +7,6 @@
   },
   "homepage": "https://github.com/theguitarvity/spec-master",
   "repository": "https://github.com/theguitarvity/spec-master",
-  "keywords": ["spec-driven-development", "harness", "spec-kit", "hooks"]
+  "keywords": ["spec-driven-development", "harness", "spec-kit", "hooks"],
+  "license": "MIT"
 }
