@@ -9,7 +9,7 @@ ciclo *Specification-Driven Development*: `constitution → specify → clarify
 não tem contexto, `/spec-master new` guia a descoberta da ideia por chat e
 gera o contexto inicial.
 
-`631 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
+`886 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
 
 </div>
 
@@ -30,6 +30,7 @@ gera o contexto inicial.
 - [Team Mode](#team-mode)
 - [Métricas de entrega](#métricas-de-entrega)
 - [Modo guarded (opt-in, experimental)](#modo-guarded-opt-in-experimental)
+- [Harness (opt-in): lanes, hooks e plugin](#harness-opt-in-lanes-hooks-e-plugin)
 - [Arquitetura](#arquitetura)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Testes](#testes)
@@ -144,7 +145,7 @@ Clone (ou já estando neste repo) — nada para instalar, é tudo Python 3
 stdlib:
 
 ```bash
-python3 -m pytest spec-master/tests -q   # 631 testes, ~2s
+python3 -m unittest discover -s spec-master/tests   # 886 testes
 ```
 
 Os entrypoints locais mantidos na raiz deste repositório são só os que
@@ -281,7 +282,12 @@ tanto pelo agente quanto por você, para depurar ou inspecionar o estado:
 | `delta snapshot\|report` | delta ADDED/MODIFIED/REMOVED de spec/plan/tasks (e constitution/contexto) entre execuções, com fases que ficaram stale |
 | `hooks init\|list\|validate\|emit\|firings` | hooks declarativos por evento (`.spec-master/hooks.json`): gate falhou → repair, contrato mudou → revalidar constitution, escalonamentos, sensibilidade de risco |
 | `team roles\|intake\|adopt\|workstreams\|escalate\|resolve\|decisions\|routes` | papeis multiagente, intake guiado, adoção incremental, work packages com peer review, rotas de escalonamento e memória de decisão (nós `Decision` + ADR) |
-| `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada |
+| `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada (`--append` grava em `rounds.json` com lock) |
+| `telemetry locate\|ingest` | lê o uso medido pelo host (transcript do Claude Code ou JSON do `claude -p`) e monta a rodada |
+| `baseline plan\|run\|summarize` | baseline medido: fluxo do Spec Master × braço agentic direto (`run` exige `--yes`) |
+| `lane triage` · `step next\|begin\|end\|widen\|pause\|resume` | fluxo por lane (opt-in): triagem e mudança patch fechada só com evidência |
+| `state evidence` | mostra ou checa a evidência por trás das fases de uma feature |
+| `harness install-hooks\|mode` · `doctor run` | liga os hooks do host ao kernel · autoverificação para CI |
 | `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature = max(escopo, sensibilidade via hooks, override); decide se clarify é pulável, profundidade do analyze, revisores e work packages por papel em L/XL; reclassifica antes do implement |
 | `metrics calibrate` | compara custo real × orçamento de cada tier, detecta drift e propõe (ou, com `--apply`, grava) novos limites em `.spec-master/risk/thresholds.json` |
 | `metrics validate\|export` | valida `rounds.json` contra `schemas/metrics-round.schema.json` e exporta como OTLP/JSON (`/v1/metrics`) ou JSONL; nunca envia nada sozinho |
@@ -400,11 +406,34 @@ Ao final de cada rodada significativa, Spec Master registra métricas em:
 .spec-master/metrics/rounds.json
 ```
 
-Cada rodada guarda fase, início/fim, tokens de entrada/saída quando o adapter
-expor esses dados, pacotes/features concluídos e velocidade calculada. O
-relatório final inclui total de tokens, tokens por minuto, pacotes por hora,
-features por hora e observações quando a plataforma não expõe contagem exata
-de tokens.
+Cada rodada guarda fase, início/fim, tokens, pacotes/features concluídos e
+velocidade calculada. Os números vêm do próprio host, nunca da memória do
+agente, e cada linha diz de onde vieram (`source`):
+
+```bash
+# Claude Code: lê só usage e timestamps do transcript da sessão (nunca o conteúdo)
+python3 spec-master/lib/cli.py telemetry ingest --path . --latest --since <início da rodada> \
+  --round-id r12 --phase plan --feature-id <id> --append
+# execução headless: o JSON de `claude -p --output-format json` traz o custo medido
+python3 spec-master/lib/cli.py telemetry ingest --headless-json result.json --ended-at <fim> \
+  --round-id r13 --phase implement --append
+# host sem contabilidade: fica registrado como manual-unverified
+python3 spec-master/lib/cli.py metrics record-round --round-id r14 --phase tasks \
+  --started-at <início> --ended-at <fim> --source manual --append
+```
+
+`--append` valida a linha e grava de forma atômica, com lock. `metrics
+validate` acusa como erro uma linha medida pelo host com 0 tokens ou que
+termina no futuro, e avisa sobre linhas sem fonte verificada; a calibração
+ignora linhas não medidas. As saídas de subagentes gravadas no transcript são
+um retrato do começo do stream, então `output_tokens` vira um limite inferior
+e a linha diz isso nas `notes`; o custo exato vem do modo headless.
+
+**Baseline medido.** `baseline plan|run|summarize` compara o fluxo do Spec
+Master com um braço agentic direto nos mesmos casos (worktree limpo por
+execução, checagens reais, custo do próprio host). `plan` não executa nada e
+mostra o gasto no pior caso; `run` gasta dinheiro de verdade e só roda com
+`--yes`, depois da concordância explícita do usuário.
 
 ## Modo guarded (opt-in, experimental)
 
@@ -433,6 +462,117 @@ design, contrato de fases e escopo em
 [`docs/spec-master/guarded-mode-spec.md`](docs/spec-master/guarded-mode-spec.md)
 e [`specs/001-guarded-mode-controller/`](specs/001-guarded-mode-controller/).
 
+## Harness (opt-in): lanes, hooks e plugin
+
+O fluxo padrão de `/spec-master` descrito acima **não muda**. Ao lado dele há
+um kernel de harness ([`spec-master/lib/kernel/`](spec-master/lib/kernel/),
+stdlib) que decide quanto processo cada mudança precisa e faz o host
+(Claude Code) cumprir essas decisões por hooks, em vez de depender de o
+agente seguir um protocolo longo. Motivação, medições e ondas seguintes em
+[`docs/harness-reformulation/`](docs/harness-reformulation/).
+
+### Lanes
+
+| Lane | Quando | O que roda |
+|---|---|---|
+| `patch` | até 3 arquivos de produção, 1 módulo, ~50 linhas, com teste declarado e gate executável, sem caminho sensível | `step begin` → implementar → `step end` |
+| `standard` | maior que patch (até 12 arquivos, 3 camadas, 800 linhas) | ciclo completo do `/spec-master` |
+| `critical` | auth, pagamentos, segredos, schema/migração, ações irreversíveis (push, publish, deploy, CI), ou repositório sem gate de teste | ciclo completo do `/spec-master` |
+
+A triagem só sobe de lane: o pedido do usuário (`--lane`) e o
+`min_lane` de `.spec-master/policy.json` nunca baixam o lane calculado. Sinais
+que só aparecem no texto do pedido (ex.: "abrir um PR") viram uma pergunta de
+confirmação, respondida com `--confirm <sinal>` / `--deny <sinal>`, em vez de
+mudar o lane sozinhos.
+
+```bash
+/spec-master --lane add() deve aceitar strings numéricas
+
+python3 spec-master/lib/cli.py lane triage --path . --intent "..." --paths src/calc.py,tests/test_calc.py
+python3 spec-master/lib/cli.py step begin  --path . --intent "..." --paths src/calc.py,tests/test_calc.py
+python3 spec-master/lib/cli.py step end    --path .
+```
+
+`step end` só grava `PASSED` com evidência: uma nota curta
+(`.spec-master/changes/<id>.md`) com `Intent: ... [EXPLICIT]` e cada critério
+apontando o teste que o cobre, os gates reais passando, nenhuma escrita fora
+dos arquivos declarados, e toda citação `[DISCOVERED_FROM_CODEBASE]`
+apontando um `arquivo:linha` que existe. Um bugfix
+(`--kind bugfix --regression-test <teste> --test-command "<cmd>"`) exige que o
+teste de regressão falhe no commit base (num worktree temporário) e passe na
+árvore. Se o diff crescer além do patch, a mudança vira `ESCALATED` e o card
+seguinte manda para o ciclo completo. `step widen`, `step pause` e
+`step resume` cobrem o resto.
+
+### Hooks e plugin
+
+[`hookd`](spec-master/lib/kernel/hookd.py) responde aos eventos do host:
+
+- **PreToolUse** — comandos Bash passam pela política por argv (nega
+  `git reset --hard`, `git clean -f`, qualquer force push, `curl ... | sh`,
+  `sudo`; pergunta antes de `git push`, publish de pacote, `gh pr create`,
+  `terraform apply`); escritas nos arquivos do core (`state.json`,
+  `changes/*.json`, `metrics/rounds.json`, `policy.json`, `gates.json`,
+  `.git/`) são negadas; com uma mudança patch em andamento, escritas fora dos
+  arquivos declarados são negadas (testes sempre permitidos); no fluxo
+  padrão, escrever código antes do `analyze` `PASSED` é negado.
+- **PostToolUse** — avisa quando o diff saiu do lane patch.
+- **Stop** — uma mudança patch em andamento precisa passar por `step end`
+  (no máximo 2 reentradas; depois ela fica `PAUSED`).
+- **SessionStart** — reinjeta o card atual depois de um restart ou
+  compactação.
+
+O modo padrão é `audit`: decide e registra em
+`.spec-master/hooks/decisions.jsonl` sem interferir, para medir falsos
+positivos antes de ligar o bloqueio. `{"hooks_mode": "block"}` em
+`.spec-master/policy.json` passa a aplicar as decisões. Projetos sem
+`.spec-master/` nunca recebem escrita.
+
+```bash
+# por projeto: mescla as entradas em .claude/settings.json (idempotente)
+python3 spec-master/lib/cli.py harness install-hooks --project . --mode audit
+
+# ou como plugin do Claude Code (hooks + skill de lane); o modo, então, só pela política
+claude plugin marketplace add theguitarvity/spec-master
+claude plugin install spec-master@spec-master
+python3 spec-master/lib/cli.py harness mode --project . --mode block
+```
+
+### Doctor
+
+```bash
+python3 spec-master/lib/cli.py doctor run --path .
+```
+
+Autoverificação para CI (sai com código 1 se houver erro): toda invocação
+de `cli.py` nos documentos lidos por agentes existe no parser; orçamentos do
+kernel (≤2500 linhas), do caminho do PreToolUse (≤1500 linhas importadas e
+≤100 ms p50, medidos) e dos cards; versão do Spec Kit fixada; fases `PASSED`
+sem evidência verificada; `rounds.json`, `policy.json` e `gates.json` válidos.
+
+### O que mudou no fluxo padrão
+
+- `state transition ... --status PASSED` exige evidência: artefatos da fase
+  presentes e sem placeholder, `tasks.md` todo marcado no `implement`, ao
+  menos uma linha de rastreabilidade no `validate`. Histórico que nunca rodou
+  pelo Spec Master entra com `--import-unverified --reason "..."` e fica
+  registrado como não verificado; `state evidence --feature <id>` mostra ou
+  checa a evidência.
+- `state upsert-feature` grava só metadados: `phases`, `evidence`,
+  `attempts`, `risk` e `analyze_repair_cycles` pertencem ao core (mudam por
+  `transition`), com a mesma válvula `--import-unverified`.
+- Escritas em `state.json` são atômicas e serializadas por lock.
+- A saída JSON é compacta; `--pretty` (ou `SPEC_MASTER_PRETTY=1`) formata.
+  `state transition` devolve um ack curto (`--full` para o registro inteiro)
+  e `context budget file` devolve só ids (`--with-content` para o conteúdo).
+- Contratos de fase e tentativas são por feature (`specs/<dir>/...`,
+  `<feature>/<fase>`).
+- O tier de risco não é mais inflado pelo texto das tasks; ações
+  irreversíveis (push, PR, publish, deploy) elevam o piso para M.
+- Gates declarados em `.spec-master/gates.json` têm precedência sobre os
+  detectados; suítes `unittest` são detectadas.
+- O Spec Kit é fixado em `v0.16.4` (`SPEC_KIT_REF` no `init.sh`).
+
 ## Arquitetura
 
 ```text
@@ -443,6 +583,8 @@ spec-master/                    engine neutro, na raiz — fora de .claude/, .gi
 ├── templates/                  templates dos 3 docs normalizados + prompts por fase
 ├── lib/                        core determinístico, Python 3 stdlib, zero deps
 │   ├── cli.py                  todos os grupos de comando, JSON no stdout
+│   ├── kernel/                 harness: lanes, step, política, hookd, doctor
+│   ├── evidence.py             evidência exigida para promover uma fase
 │   ├── team_model.py           Team Mode: papeis, intake, adoção, workstreams,
 │   │                           Tech Lead ownership, peer review e escalonamento
 │   ├── decision_memory.py      decisões de escalonamento no grafo + ADR
@@ -461,6 +603,9 @@ spec-master/                    engine neutro, na raiz — fora de .claude/, .gi
 │   ├── web_bundle.py           bundle de arquivo único para chat UIs
 │   └── adapters_gen.py         gera os entrypoints dos 30+ agentes não-bespoke
 │                                (tabela == registro de integrações do Spec Kit)
+├── cards/                      instruções curtas por passo do fluxo por lane
+├── hooks/hooks.json · skills/  componentes do plugin do Claude Code
+├── .claude-plugin/plugin.json  manifesto do plugin
 ├── mcp/spec_master_mcp.py      servidor MCP stdio (todos os comandos como tools)
 ├── schemas/                    JSON schema do registro de rodada de métricas
 └── tests/                      suíte unittest, sem LLM
@@ -508,15 +653,14 @@ Para o detalhamento completo de cada arquivo do core, veja
 ## Testes
 
 ```bash
-python3 -m pytest spec-master/tests -q
+python3 -m unittest discover -s spec-master/tests
 ```
 
-O core é stdlib pura, mas a suíte usa `pytest` (e `PyYAML`, opcional, nos
-testes de grafo/knowledge). Sem pytest, `python3 -m unittest discover -s
-spec-master/tests` roda as suítes `unittest`, e os módulos que importam
-`pytest` aparecem como erro de import.
+O core e a suíte são stdlib pura (Princípios II e III da constitution); o
+`PyYAML`, se instalado, é só um parser mais rápido para o front matter de
+grafo/knowledge.
 
-631 testes, sem depender de nenhum LLM: transições de estado (incluindo o
+886 testes, sem depender de nenhum LLM: transições de estado (incluindo o
 teto de 3 ciclos de repair e a regra de que uma fase não começa antes da
 anterior ter `PASSED`), propagação de staleness por fingerprint, discovery
 de repositório (nunca inventa comando para uma stack sem manifest),
@@ -527,7 +671,12 @@ Team Mode com intake guiado, adoção incremental, papeis, workstreams e peer
 review, métricas de tokens e velocidade de entrega, e cada item do roadmap:
 SAST/secrets, dashboard, servidor MCP, delta entre execuções, hooks, memória
 de decisão, PR opcional, EARS, export OpenTelemetry, web bundle,
-rastreabilidade por feature, tiers de risco e calibração.
+rastreabilidade por feature, tiers de risco e calibração. O harness tem
+evals de replay determinísticas: o lane patch de ponta a ponta num
+repositório git temporário com gate real (inclusive bugfix que precisa
+falhar no commit base), e o `hookd` recebendo os eventos que o host mandaria
+(implementar antes do analyze, editar `state.json`, comando destrutivo, parar
+sem verificar, retomar após compactação), em modo audit e block.
 
 ## Condições de parada
 
@@ -621,7 +770,8 @@ Este repositório é a fonte de um único artefato: a skill `/spec-master`.
 Depois de qualquer mudança:
 
 ```bash
-python3 -m pytest spec-master/tests -q
+python3 -m unittest discover -s spec-master/tests
+python3 spec-master/lib/cli.py doctor run --path .
 ```
 
 ## Créditos

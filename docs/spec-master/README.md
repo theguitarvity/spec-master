@@ -134,7 +134,9 @@ spec-master/                         neutral, top-level package — NOT inside .
 ├── adapters/{claude-code,copilot,codex,qwen,generic}.md
 ├── templates/                       normalized-doc templates + per-phase prompt skeletons
 ├── lib/                             deterministic core, Python 3 stdlib, zero dependencies
-│   ├── cli.py                       every command group below, JSON on stdout
+│   ├── cli.py                       every command group below, compact JSON on stdout (--pretty)
+│   ├── kernel/                      opt-in harness: lanes, step API, argv/write policy, hookd, doctor
+│   ├── evidence.py                  evidence required to promote a feature phase to PASSED
 │   ├── adapters_gen.py              generates entrypoints for every non-bespoke Spec Kit agent
 │   ├── team_model.py                Team Mode roles, guided intake, adoption plan, workstreams, peer review, escalation routes
 │   ├── decision_memory.py           resolved escalations as graph Decision nodes + ADRs
@@ -151,6 +153,9 @@ spec-master/                         neutral, top-level package — NOT inside .
 │   ├── web_bundle.py                single-file bundle of normalized docs for chat UIs
 │   ├── state.py, fingerprint.py, discovery.py, feature_model.py,
 │   │   git_strategy.py, quality_gates.py, constitution_diff.py, controller.py, phase_runner.py
+├── cards/                           short per-step instructions of the lane flow (router, patch, escalated)
+├── hooks/hooks.json, skills/lane/   Claude Code plugin components (hookd on the host's events, lane skill)
+├── .claude-plugin/plugin.json       plugin manifest (the repo root carries the marketplace)
 ├── mcp/spec_master_mcp.py           stdio MCP server exposing every cli.py command as a tool
 ├── schemas/                         JSON schema of the metrics round record
 └── tests/                           unittest suite, no LLM required
@@ -233,13 +238,89 @@ normal fingerprint comparison proves a concrete artifact stale.
 
 ## Metrics
 
-Each significant round can be recorded with `metrics record-round`: intake
-batches, Spec Kit phases, workstream packages, peer reviews, QA validation,
-and quality gates. The row stores timestamps, token counts when the adapter
-exposes them, completed packages/features, tokens per minute, packages per
-hour, and features per hour. If the platform does not expose exact token
-counts, adapters must record `0` and note that limitation instead of
-guessing. `metrics summarize` feeds the final report.
+Each significant round (intake batches, Spec Kit phases, workstream
+packages, peer reviews, QA validation, quality gates) becomes a row in
+`.spec-master/metrics/rounds.json` with timestamps, tokens, completed
+packages/features and derived rates. The numbers come from the host, never
+from the agent's memory, and every row says where they came from (`source`,
+schema 1.1.0):
+
+- `telemetry ingest --path . --latest --since <round start> --round-id ...
+  --phase ... --append` reads only usage and timestamps (never message
+  content) from the Claude Code session transcript (`host-transcript`);
+  subagent output in transcripts is a streaming-start snapshot, so
+  `output_tokens` is flagged as a lower bound in `notes`;
+- `telemetry ingest --headless-json <file> --ended-at <end> ...` reads a
+  `claude -p --output-format json` result, including its measured cost
+  (`host-headless`);
+- `metrics record-round ... --source manual --append` is the fallback for a
+  host with no accounting; zero-token rows are stored as `manual-unverified`.
+
+`--append` validates the row and writes atomically under a lock.
+`metrics validate` rejects host rows with 0 tokens or a future end and warns
+about unverified rows; calibration ignores unmeasured rows
+(`metrics calibrate --require-measured` makes that strict for v1-only
+files). `metrics summarize` feeds the final report.
+
+`baseline plan|run|summarize` measures the Spec Master flow against a direct
+agentic arm on the same cases (fresh worktree per run, real checks, the
+host's own cost). `plan` executes nothing and prints the worst-case spend;
+`run` spends real money and refuses without `--yes`.
+
+## Harness (opt-in)
+
+The default `/spec-master` flow is unchanged. Next to it, `spec-master/lib/kernel/`
+(stdlib) decides how much process a change needs and lets the host enforce
+it through hooks instead of trusting the agent to follow a long protocol.
+Rationale, measurements and later waves: `docs/harness-reformulation/`.
+
+- **Lanes.** `lane triage --path . --intent "<request>" --paths a,b` returns
+  `patch` (≤3 production files, 1 module, ~50 LOC, a declared test and an
+  executable gate, no sensitive path), `standard`, or `critical` (auth,
+  payments, secrets, schema, irreversible actions such as push/publish/deploy
+  or CI files, or no test gate at all). The lane only goes up: `--lane` and
+  `policy.json` `min_lane` never lower it. Signals found only in the request
+  text become `questions` (answered with `--confirm`/`--deny <signal>`).
+- **Step API.** `step begin|end|next|widen|pause|resume` drives a patch
+  change recorded in `.spec-master/changes/<id>.json`. `step end` passes only
+  on evidence: a change note with an `[EXPLICIT]` intent and every acceptance
+  line naming its test, the declared gates passing, no write outside the
+  declared files, `[DISCOVERED_FROM_CODEBASE]` claims citing real
+  `file:line`s, and for `--kind bugfix` a regression test that fails on the
+  base commit (temporary worktree) and passes in the tree. A diff that
+  outgrows the lane is `ESCALATED` to the full cycle.
+- **hookd.** `lib/kernel/hookd.py <event>` answers Claude Code's
+  PreToolUse (argv policy for Bash: deny `git reset --hard`, `git clean -f`,
+  any force push, `curl | sh`, `sudo`; ask before `git push`, publishing,
+  `gh pr create`; deny writes to core-owned files, outside a running patch's
+  declared files, and — in the default flow — to code before `analyze`
+  PASSED), PostToolUse (lane overflow), Stop (a running patch must go through
+  `step end`; 2 re-entries, then PAUSED) and SessionStart (re-inject the
+  current card). `hooks_mode` in `.spec-master/policy.json`: `audit`
+  (default; log to `.spec-master/hooks/decisions.jsonl`, never interfere) or
+  `block`. Projects without `.spec-master/` are never written to.
+- **Install.** `harness install-hooks --project . [--mode audit|block]`
+  merges the entries into `.claude/settings.json` (idempotent); or install
+  the plugin (`claude plugin marketplace add theguitarvity/spec-master`,
+  `claude plugin install spec-master@spec-master`) and set the mode with
+  `harness mode --project . --mode block`.
+- **Doctor.** `doctor run --path .` (CI; exit 1 on errors): every `cli.py`
+  invocation in agent-facing docs exists in the parser; kernel ≤2500 LOC;
+  PreToolUse path ≤1500 imported LOC and ≤100 ms p50 (measured); card sizes;
+  pinned Spec Kit range; PASSED phases without verified evidence; valid
+  `rounds.json`, `policy.json`, `gates.json`.
+
+Behaviour changes in the default flow (wave 0): `state transition ... PASSED`
+requires evidence (`--import-unverified --reason` records history that never
+ran through Spec Master, as unverified; `state evidence` shows it);
+`state upsert-feature` writes metadata only (phases, evidence, attempts, risk
+and repair cycles are core-owned); `state.json` writes are atomic and
+serialized by a lock; JSON output is compact (`--pretty` or
+`SPEC_MASTER_PRETTY=1`), `state transition` prints a short ack (`--full`) and
+`context budget file` prints ids only (`--with-content`); phase contracts
+and attempts are scoped per feature; task prose no longer inflates the risk
+tier while irreversible actions raise the floor to M; `.spec-master/gates.json`
+declared gates win over detected ones; Spec Kit is pinned to `v0.16.4`.
 
 ## Global installation
 
@@ -321,13 +402,12 @@ escalated to the user instead of looping forever or masking the problem.
 ## Tests
 
 ```bash
-python3 -m pytest spec-master/tests -q
+python3 -m unittest discover -s spec-master/tests
 ```
 
-The core is stdlib-only. The test suite needs `pytest`, and `PyYAML` is
-optional for the graph/knowledge tests. Without pytest, `python3 -m unittest
-discover -s spec-master/tests` runs the `unittest` suites, but the modules that
-import `pytest` show up as import errors.
+The core and the suite are stdlib-only (constitution Principles II and III);
+`PyYAML`, when installed, is only an optional faster parser for the
+graph/knowledge front matter.
 
 The tests cover state transitions (including the 3-cycle repair cap and the
 rule that a phase can't start before its predecessor `PASSED`), fingerprint
