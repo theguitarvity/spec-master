@@ -1511,7 +1511,8 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_sub = p_doctor.add_subparsers(dest="doctor_action", required=True)
     doctor_run = doctor_sub.add_parser("run")
     doctor_run.add_argument("--path", default=".", help="project root")
-    doctor_run.add_argument("--errors-only", dest="errors_only", action="store_true")
+    doctor_run.add_argument("--errors-only", dest="errors_only", action="store_true",
+                            help="print only the checks that did not pass (errors and warnings)")
 
     p_harness = sub.add_parser("harness", help="wire the host (hooks) to the kernel")
     p_harness.set_defaults(func=cmd_harness)
