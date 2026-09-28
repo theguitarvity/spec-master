@@ -18,7 +18,7 @@ from typing import Callable
 from .model import Graph, GraphNode, GraphEdge
 from .parser import parse_node_file, wikilinks_to_edges
 from .resolver import EntityResolver
-from .events import append_event, NODE_CREATED, NODE_UPDATED, EDGE_CREATED
+from .events import append_event, NODE_CREATED, NODE_UPDATED, EDGE_CREATED, EDGE_UPDATED
 
 
 class GraphStore(ABC):
@@ -179,30 +179,50 @@ class FileGraphStore(GraphStore):
         return graph
 
     def save_node(self, node: GraphNode) -> None:
-        """Persist a node as a Markdown file and update the manifest."""
+        """Persist a node as a Markdown file and update the manifest.
+
+        The stored graph is loaded before the first mutation, so the manifest
+        rewrite keeps every node and typed edge the store already had. A node
+        whose file already holds the same content is not rewritten or logged.
+        """
+        graph = self.load()
         path = self._node_path(node.id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
+        markdown = self._node_to_markdown(node)
         is_new = not path.exists()
-        path.write_text(self._node_to_markdown(node), encoding="utf-8")
+        unchanged = (not is_new and node.id in graph.nodes
+                     and path.read_text(encoding="utf-8") == markdown)
+        graph.add_node(node)
+        if unchanged:
+            return
 
-        # Update in-memory graph
-        if self._graph is None:
-            self._graph = Graph()
-        self._graph.add_node(node)
-
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown, encoding="utf-8")
         self._update_manifest()
         event_type = NODE_CREATED if is_new else NODE_UPDATED
         append_event(self._events_path, event_type, {"node_id": node.id,
                                                       "type": node.type})
 
     def save_edge(self, edge: GraphEdge) -> None:
-        """Persist a typed edge in the manifest."""
-        if self._graph is None:
-            self._graph = self.load()
-        self._graph.add_edge(edge)
+        """Persist a typed edge in the manifest.
+
+        An edge is identified by (source, relation, target), as in drift
+        detection: saving one already stored unchanged is a no-op, and saving
+        a changed one replaces it instead of adding a duplicate.
+        """
+        graph = self.load()
+        key = (edge.source, edge.relation, edge.target)
+        same_key = [i for i, e in enumerate(graph.edges)
+                    if (e.source, e.relation, e.target) == key]
+        if any(graph.edges[i].to_dict() == edge.to_dict() for i in same_key):
+            return
+        if same_key:
+            graph.edges[same_key[0]] = edge
+            event_type = EDGE_UPDATED
+        else:
+            graph.add_edge(edge)
+            event_type = EDGE_CREATED
         self._update_manifest()
-        append_event(self._events_path, EDGE_CREATED, {
+        append_event(self._events_path, event_type, {
             "source": edge.source,
             "relation": edge.relation,
             "target": edge.target,

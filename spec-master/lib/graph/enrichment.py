@@ -25,9 +25,28 @@ def _slug(name: str) -> str:
     return name.strip("-")
 
 
+def _existing_project_node(root: Path) -> GraphNode | None:
+    """Return the project's graph's `project.*` node if it has exactly one.
+
+    Reads the default store `graph enrich-discovery` saves into, and only
+    when it already exists: FileGraphStore's constructor creates directories.
+    """
+    if not (root / ".spec-master" / "knowledge" / "graph").is_dir():
+        return None
+    from .store import FileGraphStore
+    graph = FileGraphStore(project_root=str(root)).load()
+    projects = [node for node_id, node in graph.nodes.items() if node_id.startswith("project.")]
+    return projects[0] if len(projects) == 1 else None
+
+
 def enrich_from_discovery(discovery_result: dict,
                            project_root: str = ".") -> tuple[list[GraphNode], list[GraphEdge]]:
     """Convert a discovery.scan() result into graph nodes and edges.
+
+    The project node is named after the checkout directory, unless the
+    project's graph already holds exactly one `project.*` node: that node's
+    id and name are reused, so enriching a clone at another path does not
+    mint a second, orphaned project node.
 
     Returns (nodes, edges) — caller is responsible for persisting them.
     """
@@ -36,8 +55,12 @@ def enrich_from_discovery(discovery_result: dict,
     root = Path(project_root).resolve()
 
     # --- Project node ---
-    project_name = root.name
-    project_id = f"project.{_slug(project_name)}"
+    existing_project = _existing_project_node(root)
+    if existing_project is not None:
+        project_id, project_name = existing_project.id, existing_project.name
+    else:
+        project_name = root.name
+        project_id = f"project.{_slug(project_name)}"
     nodes.append(GraphNode(
         id=project_id,
         type="Project",
