@@ -404,10 +404,11 @@ def validate_rounds(rounds, schema: dict | None = None, *, now=None) -> dict:
     `index` is the row's position (None when `rounds` itself is not an
     array); `path` is a JSON Pointer relative to that row ("" = the row).
     Warnings (duplicate round_id, total/ended_at consistency, rows without a
-    verified source, chronology of non-host rows) never make a payload
-    invalid. Errors are schema violations plus the host-row rules: a
-    host-transcript/host-headless row with total_tokens == 0, starting before
-    the previous row, or ending after `now`.
+    verified source, a row starting before the previous one) never make a
+    payload invalid: rows are appended when a round ends, so rounds that ran
+    in parallel legitimately start out of order. Errors are schema violations
+    plus the host-row rules: a host-transcript/host-headless row with
+    total_tokens == 0, or ending after `now`.
 
     `now` bounds `ended_at`: an aware datetime, a naive one (read as UTC), or
     an ISO 8601 string. Default: the current UTC time.
@@ -435,10 +436,10 @@ def validate_rounds(rounds, schema: dict | None = None, *, now=None) -> dict:
             start = _timestamp_or_none(row.get("started_at"))
             if start is not None:
                 if previous_start is not None and start < previous_start[1]:
-                    finding = {"index": index, "path": "/started_at",
-                               "message": (f"{'host-sourced round: ' if host else ''}started_at is earlier than "
-                                           f"the previous round's started_at (index {previous_start[0]})")}
-                    (errors if host else warnings).append(finding)
+                    warnings.append({"index": index, "path": "/started_at",
+                                     "message": (f"started_at is earlier than the previous round's started_at "
+                                                 f"(index {previous_start[0]}): parallel rounds, or a timestamp "
+                                                 "to check")})
                 previous_start = (index, start)
             end = _timestamp_or_none(row.get("ended_at"))
             if end is not None and end > now_dt:

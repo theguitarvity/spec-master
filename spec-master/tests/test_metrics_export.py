@@ -196,15 +196,16 @@ class ProvenanceAndChronologyTests(unittest.TestCase):
         manual = _row("m3", source="manual")
         self.assertEqual(self._report([manual])["warnings"], [])
 
-    def test_started_before_previous_row_warns_or_errors(self):
+    def test_started_before_previous_row_warns(self):
         late, early = ("2026-09-26T10:00:00Z", "2026-09-26T10:30:00Z"), ("2026-09-26T09:00:00Z", "2026-09-26T09:30:00Z")
         manual = self._report([_row("a", *late, source="manual"), _row("b", *early, source="manual")])
         self.assertTrue(manual["valid"])
         self.assertEqual([(w["index"], w["path"]) for w in manual["warnings"]], [(1, "/started_at")])
         self.assertIn("index 0", manual["warnings"][0]["message"])
+        # host rows too: rounds that ran in parallel are appended in the order they ended
         host = self._report([_v2("a", *late), _v2("b", *early)])
-        self.assertFalse(host["valid"])
-        self.assertEqual([(e["index"], e["path"]) for e in host["errors"]], [(1, "/started_at")])
+        self.assertTrue(host["valid"])
+        self.assertEqual([(w["index"], w["path"]) for w in host["warnings"]], [(1, "/started_at")])
         # the previous row is the nearest one with a readable started_at
         skipped = self._report([_row("a", *late, source="manual"), dict(_row("x", source="manual"), started_at="?"),
                                 _row("c", "2026-09-26T09:45:00Z", "2026-09-26T09:50:00Z", source="manual")])

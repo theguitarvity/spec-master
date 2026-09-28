@@ -13,7 +13,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 0.0,
     "features_per_hour": 0.0,
-    "notes": "adapter (Claude Code) does not expose token accounting to this session; token fields recorded as 0 per protocol"
+    "notes": "adapter (Claude Code) does not expose token accounting to this session; token fields recorded as 0 per protocol",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r2-clarify-parallel-worktree-execution",
@@ -29,7 +30,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 0.0,
     "features_per_hour": 0.0,
-    "notes": "adapter (Claude Code) does not expose token accounting to this session; token fields recorded as 0 per protocol. No spec changes: zero critical ambiguities found, one non-blocking item deferred to planning."
+    "notes": "adapter (Claude Code) does not expose token accounting to this session; token fields recorded as 0 per protocol. No spec changes: zero critical ambiguities found, one non-blocking item deferred to planning.",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r3-plan-parallel-worktree-execution",
@@ -45,7 +47,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 0.0,
     "features_per_hour": 0.0,
-    "notes": "adapter does not expose token accounting; recorded 0 per protocol. Generated research.md, data-model.md, contracts/cli-worktree.md, quickstart.md, plan.md; Constitution Check all PASS/N-A, zero violations."
+    "notes": "adapter does not expose token accounting; recorded 0 per protocol. Generated research.md, data-model.md, contracts/cli-worktree.md, quickstart.md, plan.md; Constitution Check all PASS/N-A, zero violations.",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r4-tasks-parallel-worktree-execution",
@@ -61,7 +64,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 0.0,
     "features_per_hour": 0.0,
-    "notes": "adapter does not expose token accounting; recorded 0 per protocol. Generated tasks.md: 23 tasks across Setup/Foundational/US1/US2/US3/Polish."
+    "notes": "adapter does not expose token accounting; recorded 0 per protocol. Generated tasks.md: 23 tasks across Setup/Foundational/US1/US2/US3/Polish.",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r5-analyze-parallel-worktree-execution",
@@ -77,7 +81,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 0.0,
     "features_per_hour": 0.0,
-    "notes": "adapter (Claude Code) does not expose token accounting to this session; analyze repair cycle 1 closed 3 findings (spec.md Edge Case 3/SC-003 task coverage, FR-003 phase-loop isolation contract, worktree-plan mutation-semantics contract mismatch) by repairing research.md, plan.md, data-model.md, tasks.md, and contracts/cli-worktree.md directly, per PROTOCOL.md's analyze-repair override"
+    "notes": "adapter (Claude Code) does not expose token accounting to this session; analyze repair cycle 1 closed 3 findings (spec.md Edge Case 3/SC-003 task coverage, FR-003 phase-loop isolation contract, worktree-plan mutation-semantics contract mismatch) by repairing research.md, plan.md, data-model.md, tasks.md, and contracts/cli-worktree.md directly, per PROTOCOL.md's analyze-repair override",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r6-implement-parallel-worktree-execution",
@@ -93,7 +98,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 78.0,
     "features_per_hour": 0.0,
-    "notes": "adapter (Claude Code) does not expose token accounting to this session; implemented spec-master/lib/worktree.py (run_git, compute_waves, plan_worktree, resolve_project_root, conflicts, aggregate), spec-master/tests/test_worktree.py (11 tests, all passing), wired 'worktree waves|plan|conflicts|aggregate' into cli.py; validated against a real throwaway git repo (idempotent worktree reuse, real conflict detection) in addition to the mocked unit tests; work_packages_completed=26 counts tasks.md T001-T026"
+    "notes": "adapter (Claude Code) does not expose token accounting to this session; implemented spec-master/lib/worktree.py (run_git, compute_waves, plan_worktree, resolve_project_root, conflicts, aggregate), spec-master/tests/test_worktree.py (11 tests, all passing), wired 'worktree waves|plan|conflicts|aggregate' into cli.py; validated against a real throwaway git repo (idempotent worktree reuse, real conflict detection) in addition to the mocked unit tests; work_packages_completed=26 counts tasks.md T001-T026",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r7-validate-parallel-worktree-execution",
@@ -109,7 +115,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 36.0,
     "features_per_hour": 12.0,
-    "notes": "Validate phase executed directly (no Spec Kit prompt template for validate) per PROTOCOL.md Sec.7. Mapped 3 acceptance criteria + 4 SC against test_worktree.py (11 tests, all passing) plus a real throwaway-git-repo smoke test. SC-001 marked PARTIAL/scope-boundary (concurrent execution driver is caller-bounded, out of this feature's plan.md scope) -- documented honestly in validation-report.md, not claimed as fully done. Feature parallel-worktree-execution now COMPLETED across all 7 phases. Token counts are 0: adapter running this session does not expose token accounting to the deterministic core."
+    "notes": "Validate phase executed directly (no Spec Kit prompt template for validate) per PROTOCOL.md Sec.7. Mapped 3 acceptance criteria + 4 SC against test_worktree.py (11 tests, all passing) plus a real throwaway-git-repo smoke test. SC-001 marked PARTIAL/scope-boundary (concurrent execution driver is caller-bounded, out of this feature's plan.md scope) -- documented honestly in validation-report.md, not claimed as fully done. Feature parallel-worktree-execution now COMPLETED across all 7 phases. Token counts are 0: adapter running this session does not expose token accounting to the deterministic core.",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r8-team-mode-parallel-workstreams",
@@ -125,7 +132,8 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 19.636,
     "features_per_hour": 1.091,
-    "notes": "Feature 2 (team-mode-parallel-workstreams) full cycle: specify->clarify->plan->tasks->analyze(1 repair cycle: added missing US3 phase, fixed FR-007/FR-008 mis-citation)->implement(team_workstreams.py + workstreams CLI verbs, 10 new tests, full suite 160/181 pass, 21 pre-existing unrelated pytest-import errors)->validate(PASSED, no scope caveats). Zero changes to team_model.py/worktree.py or their tests (SC-004)."
+    "notes": "Feature 2 (team-mode-parallel-workstreams) full cycle: specify->clarify->plan->tasks->analyze(1 repair cycle: added missing US3 phase, fixed FR-007/FR-008 mis-citation)->implement(team_workstreams.py + workstreams CLI verbs, 10 new tests, full suite 160/181 pass, 21 pre-existing unrelated pytest-import errors)->validate(PASSED, no scope caveats). Zero changes to team_model.py/worktree.py or their tests (SC-004).",
+    "source": "manual-unverified"
   },
   {
     "round_id": "r9-speckit-tracker-orchestration",
@@ -141,6 +149,7 @@
     "tokens_per_minute": 0.0,
     "packages_per_hour": 28.0,
     "features_per_hour": 1.333,
-    "notes": "Feature 3 (speckit-tracker-orchestration) full cycle: specify->clarify->plan->tasks->analyze(1 repair cycle: renumbered lettered task id T005a, which broke speckit-taskstoissues's own \\bT\\d{3,}\\b dedup regex)->implement(tracker_orchestration.py new module: detect_tracker_extensions()/orchestrate(), discovery.py +5 lines additive tracker_extensions field, traceability.py +issue column, cli.py 'tracker orchestrate' verb, 10 new tests, full suite 170/191 pass, 21 pre-existing unrelated pytest-import errors unchanged)->validate(PASSED, no scope caveats). Two implementation-time doc corrections applied directly: fictitious --issue CLI flag (traceability add already takes --row-json/--row-file), and FR-002's contradictory 'unknown' tracker_type enum value. Zero changes to team_model.py/worktree.py/team_workstreams.py or their tests (SC-004)."
+    "notes": "Feature 3 (speckit-tracker-orchestration) full cycle: specify->clarify->plan->tasks->analyze(1 repair cycle: renumbered lettered task id T005a, which broke speckit-taskstoissues's own \\bT\\d{3,}\\b dedup regex)->implement(tracker_orchestration.py new module: detect_tracker_extensions()/orchestrate(), discovery.py +5 lines additive tracker_extensions field, traceability.py +issue column, cli.py 'tracker orchestrate' verb, 10 new tests, full suite 170/191 pass, 21 pre-existing unrelated pytest-import errors unchanged)->validate(PASSED, no scope caveats). Two implementation-time doc corrections applied directly: fictitious --issue CLI flag (traceability add already takes --row-json/--row-file), and FR-002's contradictory 'unknown' tracker_type enum value. Zero changes to team_model.py/worktree.py/team_workstreams.py or their tests (SC-004).",
+    "source": "manual-unverified"
   }
 ]
