@@ -930,6 +930,10 @@ def cmd_harness(args: argparse.Namespace) -> int:
     if args.harness_action == "mode":
         _print_json(install.set_mode(args.project, args.mode, dry_run=args.dry_run))
         return 0
+    if args.harness_action == "audit":
+        from kernel import audit
+        _print_json(audit.report(args.path, save_summary=args.save, flagged_limit=args.limit))
+        return 0
     raise SystemExit(f"unknown harness action: {args.harness_action}")
 
 
@@ -1527,6 +1531,13 @@ def build_parser() -> argparse.ArgumentParser:
     harness_mode.add_argument("--project", default=".")
     harness_mode.add_argument("--mode", choices=["audit", "block"], required=True)
     harness_mode.add_argument("--dry-run", dest="dry_run", action="store_true")
+    harness_audit = harness_sub.add_parser(
+        "audit", help="what the hooks would have blocked: totals, flagged decisions, audit period")
+    harness_audit.add_argument("--path", default=".", help="project root")
+    harness_audit.add_argument("--save", action="store_true",
+                               help="also merge this machine's sessions into .spec-master/hooks/audit.jsonl "
+                                    "(redacted; meant to be committed)")
+    harness_audit.add_argument("--limit", type=int, default=20, help="flagged decisions to show")
 
     p_evals = sub.add_parser("evals")
     p_evals.set_defaults(func=cmd_evals)

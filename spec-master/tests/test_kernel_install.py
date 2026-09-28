@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -60,12 +61,41 @@ class InstallHooksTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             install.set_mode(self.project, "loud")
 
+    def test_audit_mode_records_when_the_audit_started(self):
+        install.set_mode(self.project, "audit")
+        policy_path = os.path.join(self.project, ".spec-master", "policy.json")
+        started = self.read(policy_path)["audit_started_at"]
+        self.assertRegex(started, r"^\d{4}-\d{2}-\d{2}$")
+        with open(policy_path, "w") as fh:
+            json.dump({"hooks_mode": "audit", "audit_started_at": "2026-01-02"}, fh)
+        install.set_mode(self.project, "audit")
+        install.set_mode(self.project, "block")
+        self.assertEqual(self.read(policy_path), {"hooks_mode": "block", "audit_started_at": "2026-01-02"})
+        with open(os.path.join(self.project, ".spec-master", ".gitignore")) as fh:
+            self.assertIn("hooks/decisions.jsonl", fh.read())
+
     def test_hook_commands_point_at_a_real_engine(self):
         with self.assertRaises(ValueError):
             install.install_hooks(self.project, engine=self.project)
         for entry in install.hooks_block(str(install.ENGINE))["PreToolUse"]:
             script = entry["hooks"][0]["command"].split()[1].strip("'")
             self.assertTrue(os.path.isfile(script))
+
+    def test_an_engine_inside_the_project_is_portable_and_fails_open(self):
+        os.symlink(str(install.ENGINE), os.path.join(self.project, "spec-master"))
+        install.install_hooks(self.project, engine=os.path.join(self.project, "spec-master"), mode="block")
+        command = self.read(self.settings)["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        self.assertEqual(command, 'python3 "$CLAUDE_PROJECT_DIR"/spec-master/lib/kernel/hookd.py pre-tool-use || true')
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "git push --force"}})
+
+        def run(project_dir):
+            return subprocess.run(["sh", "-c", command], input=payload, capture_output=True, text=True, timeout=30,
+                                  env={**os.environ, "CLAUDE_PROJECT_DIR": project_dir})
+        enforced = run(self.project)
+        self.assertEqual(enforced.returncode, 0, enforced.stderr)
+        self.assertEqual(json.loads(enforced.stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
+        missing = run(os.path.join(self.project, "nowhere"))  # engine gone: never a blocking error
+        self.assertEqual((missing.returncode, missing.stdout), (0, ""))
 
     def test_plugin_hooks_json_declares_the_same_events(self):
         path = os.path.join(str(install.ENGINE), "hooks", "hooks.json")

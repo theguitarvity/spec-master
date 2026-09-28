@@ -1,0 +1,3 @@
+# Spec Master per-process files
+*.lock
+hooks/decisions.jsonl

@@ -158,6 +158,29 @@ class HookdReplayTests(unittest.TestCase):
         self.assertIn(started["change"], context)
         self.assertIn("Declared files: src/calc.py", context)
 
+    # --- the hooks audit ------------------------------------------------------
+
+    def test_decisions_carry_the_host_session(self):
+        self.hook("pre-tool-use", {"session_id": "sess-1", "tool_name": "Bash", "tool_input": {"command": "ls"}})
+        self.assertEqual(self.decisions()[-1]["session"], "sess-1")
+
+    def test_session_start_asks_for_the_audit_summary_only_during_an_audit(self):
+        self.assertEqual(self.hook("session-start", {"source": "startup"}), (0, None))  # no audit started
+        fx.write(self.root, ".spec-master/policy.json",
+                 json.dumps({"hooks_mode": "audit", "audit_started_at": "2026-09-28"}))
+        _, out = self.hook("session-start", {"source": "startup"})
+        context = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("since 2026-09-28", context)
+        self.assertIn("harness audit --path . --save", context)
+        started = self.start_change()
+        _, out = self.hook("session-start", {"source": "compact"})
+        both = out["hookSpecificOutput"]["additionalContext"]
+        self.assertTrue(both.index(started["change"]) < both.index("harness audit"))
+        fx.write(self.root, ".spec-master/policy.json",
+                 json.dumps({"hooks_mode": "block", "audit_started_at": "2026-09-28"}))
+        _, out = self.hook("session-start", {"source": "startup"})
+        self.assertNotIn("harness audit", out["hookSpecificOutput"]["additionalContext"])
+
     # --- robustness -------------------------------------------------------------
 
     def test_unknown_event_and_garbage_input(self):

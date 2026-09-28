@@ -74,9 +74,11 @@ class TriageTests(unittest.TestCase):
                          {"sensitive:project", "policy"})
 
     def test_invalid_policy_is_an_error(self):
-        fx.write(self.root, ".spec-master/policy.json", json.dumps({"min_lane": "tiny"}))
-        with self.assertRaises(ValueError):
-            self.triage()
+        for policy in ({"min_lane": "tiny"}, {"audit_started_at": "last monday"}):
+            with self.subTest(policy=policy):
+                fx.write(self.root, ".spec-master/policy.json", json.dumps(policy))
+                with self.assertRaises(ValueError):
+                    self.triage()
 
     def test_escalation_directive(self):
         self.assertIsNone(lanes.escalation("patch", self.triage()))

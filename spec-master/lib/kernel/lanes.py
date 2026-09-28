@@ -84,6 +84,9 @@ def load_policy(root: str) -> dict:
         raise ValueError(f"{POLICY_RELPATH}: hooks_mode must be audit or block")
     if not isinstance(data.get("sensitive_paths", []), list):
         raise ValueError(f"{POLICY_RELPATH}: sensitive_paths must be a list of globs")
+    if data.get("audit_started_at") is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",
+                                                                      str(data["audit_started_at"])):
+        raise ValueError(f"{POLICY_RELPATH}: audit_started_at must be a YYYY-MM-DD date")
     return data
 
 

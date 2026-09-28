@@ -292,8 +292,13 @@ def hooks_check(root: Path) -> dict:
             wired = "hookd.py" in settings.read_text(encoding="utf-8")
         except OSError:
             wired = False
-    return _check("hooks", True, "info", "hookd wired in .claude/settings.json" if wired
-                  else "hooks not wired in .claude/settings.json (install the plugin or `harness install-hooks`)")
+    detail = ("hookd wired in .claude/settings.json" if wired
+              else "hooks not wired in .claude/settings.json (install the plugin or `harness install-hooks`)")
+    from kernel import audit
+    window = audit.period(str(root), {})
+    if window["mode"] == "audit" and window["started"] and window["days"] is not None:
+        detail += f"; audit day {window['days']} of {window['period_days']} (`harness audit` for the numbers)"
+    return _check("hooks", True, "info", detail)
 
 
 def run(root: str, parser: argparse.ArgumentParser, *, repo: str | None = None) -> dict:

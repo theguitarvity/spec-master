@@ -171,7 +171,37 @@ def stop(root: str, payload: dict, enforce: bool) -> dict:
             "`step pause --path .` to stop here on purpose."}
 
 
+def _audit_reminder(root: str, enforce: bool) -> str:
+    """While a hooks audit runs (policy `audit_started_at`, audit mode), every
+    session is asked to save its summary: in cloud sessions the local log
+    disappears with the container."""
+    if enforce:
+        return ""
+    policy = _read_json(os.path.join(root, ".spec-master", "policy.json")) or {}
+    started = policy.get("audit_started_at") if isinstance(policy, dict) else None
+    if not started:
+        return ""
+    cli = Path(__file__).resolve().parent.parent / "cli.py"
+    try:
+        relative = os.path.relpath(cli, os.path.realpath(root))
+        cli_path = cli.as_posix() if relative.startswith(os.pardir) else Path(relative).as_posix()
+    except ValueError:  # another drive (Windows)
+        cli_path = cli.as_posix()
+    return (f"[Spec Master] Hooks audit running since {started}: the hooks only log what they would block. "
+            f"Before this session's last commit, run `python3 {cli_path} harness audit --path . --save` "
+            "and commit `.spec-master/hooks/audit.jsonl` with the rest of the work.")
+
+
 def session_start(root: str, payload: dict, enforce: bool) -> dict:
+    verdict = _session_resume(root)
+    reminder = _audit_reminder(root, enforce)
+    if reminder:
+        context = verdict.get("context")
+        verdict = {**verdict, "context": f"{context}\n\n{reminder}" if context else reminder}
+    return verdict
+
+
+def _session_resume(root: str) -> dict:
     record = changes.active(root)
     if record and record.get("status") == "RUNNING":
         from kernel import step  # noqa: E402
@@ -236,7 +266,7 @@ def main(argv: list[str] | None = None, stdin=None) -> int:
         verdict = {"decision": policy.ALLOW, "reason": f"hookd error: {type(exc).__name__}: {exc}"}
     code, out = respond(event, verdict, enforce)
     log_decision(root, {
-        "at": changes.now(), "event": event, "tool": (payload or {}).get("tool_name"),
+        "at": changes.now(), "session": payload.get("session_id"), "event": event, "tool": payload.get("tool_name"),
         "target": verdict.get("target", ""), "decision": verdict["decision"], "reason": verdict["reason"],
         "mode": current_mode, "enforced": bool(out) and verdict["decision"] != policy.ALLOW,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
