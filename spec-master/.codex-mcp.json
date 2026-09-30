@@ -3,10 +3,11 @@
     "spec-master": {
       "command": "python3",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/mcp/spec_master_mcp.py",
+        "./mcp/spec_master_mcp.py",
         "--tools",
         "entrypoint"
-      ]
+      ],
+      "cwd": "."
     }
   }
 }

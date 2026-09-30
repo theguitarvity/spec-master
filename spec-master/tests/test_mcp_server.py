@@ -2,6 +2,7 @@ import _pathfix  # noqa: F401
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -178,6 +179,84 @@ class PromptTest(_ServerCase):
         self.assertEqual(self.get("spec-master-lane")["error"]["code"], mcp.INVALID_PARAMS)
         missing_name = self.server.handle(_request(3, "prompts/get", {}))
         self.assertEqual(missing_name["error"]["code"], mcp.INVALID_PARAMS)
+
+
+class ProjectRootTest(unittest.TestCase):
+    """Plugin hosts often start the server in the plugin directory."""
+
+    def setUp(self):
+        self.project = tempfile.TemporaryDirectory()
+        self.env = mock.patch.dict(os.environ)
+        self.env.start()
+        for name in mcp.PROJECT_ENV_VARS:
+            os.environ.pop(name, None)
+
+    def tearDown(self):
+        self.env.stop()
+        self.project.cleanup()
+
+    def server_in(self, cwd):
+        with mock.patch("os.getcwd", return_value=str(cwd)):
+            return mcp.Server(timeout=30)
+
+    def test_roots_from_the_client_replace_the_plugin_directory(self):
+        server = self.server_in(mcp.PACKAGE_DIR)
+        self.assertEqual(server.project_source, "cwd")
+        server.handle(_request(1, "initialize", {"protocolVersion": "2025-06-18",
+                                                 "capabilities": {"roots": {"listChanged": True}}}))
+        self.assertIsNone(server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
+        request = server.outbox.pop()
+        self.assertEqual(request["method"], "roots/list")
+        uri = Path(self.project.name).resolve().as_uri()
+        self.assertIsNone(server.handle({"jsonrpc": "2.0", "id": request["id"],
+                                         "result": {"roots": [{"uri": "https://example.test"}, {"uri": uri}]}}))
+        self.assertEqual((server.project_root, server.project_source),
+                         (str(Path(self.project.name).resolve()), "roots"))
+
+    def test_no_roots_capability_means_no_request(self):
+        server = self.server_in(self.project.name)
+        server.handle(_request(1, "initialize", {"capabilities": {}}))
+        server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        self.assertEqual(server.outbox, [])
+
+    def test_host_variables_win_over_the_cwd(self):
+        with mock.patch.dict("os.environ", {"CURSOR_PROJECT_DIR": self.project.name}):
+            server = self.server_in(mcp.PACKAGE_DIR)
+        self.assertEqual((server.project_root, server.project_source),
+                         (str(Path(self.project.name).resolve()), "CURSOR_PROJECT_DIR"))
+
+    def test_an_install_directory_never_receives_state(self):
+        server = self.server_in(mcp.PACKAGE_DIR)
+        refused = server.call_tool("state_show", {})
+        self.assertTrue(refused["isError"])
+        self.assertIn("does not know your project directory", refused["content"][0]["text"])
+        allowed = server.call_tool("harness_entrypoint", {"flow": "lane", "argument": "fix it"})
+        self.assertFalse(allowed["isError"], allowed)
+        self.assertIn("cards/router.md", allowed["structuredContent"]["instructions"])
+        self.assertIn("cannot see your project", allowed["structuredContent"]["note"])  # so the agent uses the CLI
+        prompt = server.get_prompt("spec-master-lane", {"request": "fix it"})["messages"][0]["content"]["text"]
+        self.assertIn("cannot see your project", prompt)
+        seeing = self.server_in(self.project.name).call_tool("harness_entrypoint", {"flow": "lane", "argument": "x"})
+        self.assertNotIn("note", seeing["structuredContent"])
+
+    def test_the_plugins_toolset_is_the_entrypoint_alone(self):
+        with mock.patch("os.getcwd", return_value=str(mcp.PACKAGE_DIR)):
+            server = mcp.Server(timeout=30, toolset="entrypoint")
+        self.assertEqual([t["name"] for t in server.list_tools()["tools"]], ["harness_entrypoint"])
+        self.assertIn("CLI", server.instructions())
+        reply = server.call_tool("harness_entrypoint", {"flow": "full-cycle"})
+        self.assertFalse(reply["isError"], reply)
+        self.assertNotIn("note", reply["structuredContent"])  # the instructions already say "CLI"
+        self.assertTrue(server.call_tool("state_show", {})["isError"])
+        self.assertLess(len(json.dumps(server.list_tools())), 2048)
+
+    def test_install_directory_heuristic(self):
+        self.assertTrue(mcp.looks_like_install_dir(mcp.PACKAGE_DIR))
+        self.assertFalse(mcp.looks_like_install_dir(self.project.name))
+        self.assertIsNone(mcp._path_from_uri("https://example.test/x"))
+        spaced = Path(self.project.name, "with space")
+        spaced.mkdir()
+        self.assertEqual(mcp._path_from_uri(spaced.resolve().as_uri()), str(spaced.resolve()))
 
 
 class ToolListTest(_ServerCase):

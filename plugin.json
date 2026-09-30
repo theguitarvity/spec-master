@@ -1,4 +1,5 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "spec-master",
   "version": "0.3.0",
   "description": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle.",
@@ -14,6 +15,5 @@
     "spec-kit",
     "hooks",
     "mcp"
-  ],
-  "displayName": "Spec Master"
+  ]
 }

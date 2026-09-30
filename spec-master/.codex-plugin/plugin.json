@@ -15,5 +15,15 @@
     "hooks",
     "mcp"
   ],
-  "displayName": "Spec Master"
+  "skills": "./skills/",
+  "mcpServers": "./.codex-mcp.json",
+  "hooks": "./hooks/codex-hooks.json",
+  "interface": {
+    "displayName": "Spec Master",
+    "shortDescription": "Harness for spec-driven development",
+    "longDescription": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle.",
+    "developerName": "Spec Master maintainers",
+    "category": "Coding",
+    "capabilities": []
+  }
 }

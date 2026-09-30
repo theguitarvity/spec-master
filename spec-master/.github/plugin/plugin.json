@@ -15,5 +15,5 @@
     "hooks",
     "mcp"
   ],
-  "displayName": "Spec Master"
+  "hooks": "hooks/copilot-hooks.json"
 }

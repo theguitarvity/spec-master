@@ -1,6 +1,6 @@
 {
   "name": "spec-master",
-  "description": "The Spec Master harness plugin for spec-driven development.",
+  "description": "The Spec Master harness for spec-driven development.",
   "owner": {
     "name": "Spec Master maintainers"
   },
@@ -8,7 +8,16 @@
     {
       "name": "spec-master",
       "source": "./spec-master",
-      "description": "Lane triage, evidence-gated steps and host-enforced hooks for spec-driven development."
+      "description": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle.",
+      "version": "0.3.0",
+      "category": "development",
+      "tags": [
+        "spec-driven-development",
+        "harness",
+        "spec-kit",
+        "hooks",
+        "mcp"
+      ]
     }
   ]
 }

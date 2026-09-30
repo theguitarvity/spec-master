@@ -6,9 +6,9 @@ interaction as possible.
 The Spec Master engine is installed at `{engine}`. In the protocol and the
 cards, every path that starts with `spec-master/` means `{engine}/`: run
 the deterministic core from the project root as
-`python3 {engine}/lib/cli.py <group> <action> ...`, or call the matching
-`<group>_<action>` tool of the `spec-master` MCP server, which runs the
-same command.
+`python3 {engine}/lib/cli.py <group> <action> ...` (a `spec-master` MCP
+server registered with all its tools offers the same commands as
+`<group>_<action>` tools).
 
 1. Read `{engine}/PROTOCOL.md` in full and follow it before anything else.
 2. Context file: {context}

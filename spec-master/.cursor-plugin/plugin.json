@@ -15,5 +15,7 @@
     "hooks",
     "mcp"
   ],
-  "displayName": "Spec Master"
+  "skills": "./skills/",
+  "hooks": "./hooks/cursor-hooks.json",
+  "mcpServers": "./.mcp.json"
 }

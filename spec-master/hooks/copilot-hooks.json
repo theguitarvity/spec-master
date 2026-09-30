@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "python3 \"$PLUGIN_ROOT/lib/kernel/hookd.py\" session-start --host copilot || echo '{}'",
+        "timeoutSec": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 \"$PLUGIN_ROOT/lib/kernel/hookd.py\" pre-tool-use --host copilot || echo '{}'",
+        "timeoutSec": 10,
+        "matcher": "bash|edit|create|apply_patch|str_replace_editor"
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 \"$PLUGIN_ROOT/lib/kernel/hookd.py\" post-tool-use --host copilot || echo '{}'",
+        "timeoutSec": 30,
+        "matcher": "edit|create|apply_patch|str_replace_editor"
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "python3 \"$PLUGIN_ROOT/lib/kernel/hookd.py\" stop --host copilot || echo '{}'",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

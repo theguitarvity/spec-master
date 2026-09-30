@@ -28,7 +28,8 @@ que o agente sozinho não garante.
   triagem determinística põe o pedido num lane: *patch* (uma mudança pequena
   e testada, resolvida na própria sessão), *standard* ou *critical* (o ciclo
   completo do Spec Kit).
-- **Que regras o agente não pode furar.** Hooks do Claude Code negam comandos
+- **Que regras o agente não pode furar.** Hooks do host (Claude Code, Codex,
+  Copilot, Cursor, Gemini CLI, Antigravity, Qwen Code, Kiro) negam comandos
   destrutivos, escrita nos arquivos do core e escrita fora do escopo da
   mudança, e não deixam a sessão parar no meio de uma verificação.
 - **Quando algo está pronto.** Uma fase só passa com os artefatos dela no
@@ -73,7 +74,16 @@ problemas, e a reformulação atacou cada um deles:
 
 ## Começo rápido
 
-Tudo é Python 3 stdlib, então não há dependência para instalar.
+Tudo é Python 3 stdlib, então não há dependência para instalar. O caminho
+mais curto é o plugin do seu agente (a tabela com os oito hosts está em
+[Como plugin](#como-plugin-recomendado)), por exemplo no Claude Code:
+
+```bash
+claude plugin marketplace add theguitarvity/spec-master
+claude plugin install spec-master@spec-master
+```
+
+Ou, sem plugin, com o instalador:
 
 ```bash
 git clone https://github.com/theguitarvity/spec-master
@@ -186,8 +196,9 @@ python3 spec-master/lib/cli.py state evidence --feature <id>
 
 ## Hooks e auditoria
 
-[`hookd`](spec-master/lib/kernel/hookd.py) responde aos eventos do Claude
-Code:
+[`hookd`](spec-master/lib/kernel/hookd.py) responde aos eventos de cada host
+no dialeto dele ([`kernel/hosts.py`](spec-master/lib/kernel/hosts.py)); a
+tabela usa os nomes do Claude Code:
 
 | Evento | O que faz |
 |---|---|
@@ -208,13 +219,12 @@ Se o engine ou o `python3` sumirem, os hooks não bloqueiam nada (o comando
 termina em `|| true`), e projetos sem `.spec-master/` nunca recebem escrita.
 
 ```bash
-# por projeto: mescla os hooks em .claude/settings.json (idempotente e portátil)
+# por projeto: mescla os hooks em .claude/settings.json (idempotente e portátil);
+# --host qwen grava em .qwen/settings.json e --host kiro em .kiro/hooks/
 python3 spec-master/lib/cli.py harness install-hooks --project . --mode audit
 python3 spec-master/lib/cli.py harness audit --path .
 
-# ou como plugin do Claude Code (hooks + skill de lane)
-claude plugin marketplace add theguitarvity/spec-master
-claude plugin install spec-master@spec-master
+# os plugins já trazem os hooks (fora Qwen Code e Kiro): veja "Como plugin"
 
 # quando a auditoria aprovar
 python3 spec-master/lib/cli.py harness mode --project . --mode block
@@ -252,6 +262,56 @@ executa nada e mostra o gasto no pior caso; `run` gasta dinheiro de verdade e
 só roda com `--yes`.
 
 ## Instalação
+
+### Como plugin (recomendado)
+
+O repositório é ao mesmo tempo um marketplace de plugins, um pacote
+[Agent Plugins](https://agent-plugins.org/) e uma extensão do Gemini CLI.
+Cada host instala com o próprio comando e recebe as duas skills
+(`spec-master`, o ciclo completo, e `spec-master-lane`, o fluxo por lane), o
+servidor MCP e os hooks no dialeto dele:
+
+| Host | Instalação | Hooks |
+|---|---|---|
+| Claude Code | `claude plugin marketplace add theguitarvity/spec-master`<br>`claude plugin install spec-master@spec-master` | no plugin |
+| OpenAI Codex | `codex plugin marketplace add theguitarvity/spec-master`<br>`codex plugin add spec-master@spec-master` | no plugin; o Codex pede a sua revisão em `/hooks` |
+| GitHub Copilot CLI | `copilot plugin marketplace add theguitarvity/spec-master`<br>`copilot plugin install spec-master@spec-master` | no plugin |
+| VS Code (Copilot) | `"chat.plugins.marketplaces": ["theguitarvity/spec-master"]` no `settings.json`; depois `@agentPlugins` na aba Extensions | no plugin |
+| Cursor | *Customize → Plugins → From GitHub Repository* com `https://github.com/theguitarvity/spec-master`, ou `agent plugin marketplace add https://github.com/theguitarvity/spec-master` | no plugin |
+| Gemini CLI | `gemini extensions install https://github.com/theguitarvity/spec-master` | na extensão |
+| Antigravity | `agy plugin install https://github.com/theguitarvity/spec-master` | no plugin: `PreToolUse` e `Stop` (o Antigravity não tem `SessionStart`) |
+| Qwen Code | `qwen extensions install theguitarvity/spec-master` | por projeto, com `--host qwen` |
+| Kiro | *Powers → Add Custom Power → Import power from GitHub* com `https://github.com/theguitarvity/spec-master` | por projeto, com `--host kiro` |
+
+Um power do Kiro não carrega hooks, e o Qwen Code carrega um pacote Agent
+Plugins só com skills e MCP. Nesses dois, rode uma vez por projeto (o caminho
+do engine vem na resposta da tool `harness_entrypoint`):
+
+```bash
+python3 <engine>/lib/cli.py harness install-hooks --project . --host qwen   # ou --host kiro
+```
+
+Em todos os hosts os hooks começam em modo audit. O que muda de um host para
+outro:
+
+- **Codex** não aceita *ask* num `PreToolUse`: o que pediria confirmação fica
+  com a política de aprovação do próprio Codex.
+- **Kiro** não tem *ask* nos hooks: o bloqueio sai pelo código de saída 2.
+- **Antigravity**: sem objeção, o hook responde `{}` e não `allow`, porque
+  `allow` pularia a aprovação do usuário.
+
+O servidor MCP que os plugins sobem expõe uma tool só, `harness_entrypoint`
+(menos de 1 KB de schema): ela devolve as instruções com os caminhos reais do
+engine, e o core roda pelo CLI. Com todas as tools, a lista passaria de
+49 KB, e o host que carrega os schemas de uma vez pagaria isso em toda
+sessão. Quem registra o servidor à mão continua com todas (veja
+[Servidor MCP](#servidor-mcp)).
+
+Os manifestos, hooks e skills de todos os hosts saem de um único gerador,
+[`spec-master/lib/packaging.py`](spec-master/lib/packaging.py) (`generate` e
+`check`); o `doctor` e os testes falham se um arquivo divergir dele. A
+instalação acima é direto do GitHub; listar o Spec Master nos catálogos
+oficiais de cada host é uma submissão à parte.
 
 ### Uso local (só este repositório)
 
@@ -319,16 +379,6 @@ O `init.sh` também confere se o Spec Kit está inicializado no projeto
 (`SPEC_KIT_REF`, hoje `v0.16.4`). Sem terminal interativo, ele pula o passo e
 imprime o comando manual em vez de travar.
 
-### Plugin do Claude Code
-
-O plugin traz os hooks e a skill de lane, e custa cerca de 94 tokens fixos
-por sessão:
-
-```bash
-claude plugin marketplace add theguitarvity/spec-master
-claude plugin install spec-master@spec-master
-```
-
 ### Servidor MCP
 
 [`spec-master/mcp/spec_master_mcp.py`](spec-master/mcp/spec_master_mcp.py) é
@@ -345,8 +395,11 @@ JSON e os mesmos códigos de saída. Para registrar no projeto:
 ```
 
 Com o engine global, aponte para `~/.spec-master-engine/mcp/spec_master_mcp.py`
-e passe `--project <repo>` (ou `SPEC_MASTER_PROJECT`). Detalhes em
-[`spec-master/mcp/README.md`](spec-master/mcp/README.md).
+e passe `--project <repo>` (ou `SPEC_MASTER_PROJECT`). Sem `--project`, o
+servidor usa as *roots* que o cliente informa e, se o host o iniciou na
+própria pasta de instalação sem informar nenhuma, recusa as tools que mexem
+no projeto. `--tools entrypoint` limita a lista a `harness_entrypoint`, como
+nos plugins. Detalhes em [`spec-master/mcp/README.md`](spec-master/mcp/README.md).
 
 ## Referência de comandos
 
@@ -473,12 +526,17 @@ spec-master/                  engine neutro, compartilhado por todos os adapters
 │   ├── risk_profile.py · hooks.py · quality_gates.py · discovery.py
 │   ├── team_model.py · decision_memory.py · traceability.py · context_delta.py
 │   └── adapters_gen.py       entrypoints dos 30+ agentes, a partir de uma tabela
-├── .claude-plugin/ · hooks/ · skills/   plugin do Claude Code
+├── .claude-plugin/ · .codex-plugin/ · .cursor-plugin/ · .github/plugin/
+│   hooks/ · skills/          plugin de cada host, gerado por lib/packaging.py
 ├── mcp/                      servidor MCP stdio
 ├── docs/                     referência do protocolo e do Team Mode, lida sob demanda
 └── tests/                    suíte unittest, sem LLM
 
 .claude/ · .github/ · .agents/ · .qwen/   entrypoints finos de cada agente
+plugin.json · mcp.json · skills/          pacote Agent Plugins (Kiro, Qwen Code, Antigravity)
+gemini-extension.json · hooks/            extensão do Gemini CLI
+hooks.json · mcp_config.json              hooks e MCP do Antigravity
+.claude-plugin/ · .cursor-plugin/         marketplaces (Claude, Codex, Copilot, VS Code, Cursor)
 .github/workflows/ci.yml      suíte e doctor em Python 3.10 a 3.13
 init.sh                       instalador global e `link` por projeto
 docs/                         referência técnica, reformulação do harness e a logo

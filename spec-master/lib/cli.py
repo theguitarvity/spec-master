@@ -922,6 +922,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if report["ok"] else 1
 
 
+ENGINE_DIR = Path(__file__).resolve().parent.parent
+ENTRYPOINT_TEMPLATES = {"full-cycle": ("full-cycle.md", "context"), "lane": ("lane.md", "request")}
+
+
+def entrypoint_text(flow: str, argument: str = "") -> str:
+    """The host-neutral entrypoint (templates/entrypoints/) with this engine's
+    absolute path filled in: whatever directory a host installed the plugin
+    into, the instructions point at the real files."""
+    template, placeholder = ENTRYPOINT_TEMPLATES[flow]
+    value = (argument or "").strip()
+    if placeholder == "context":
+        value = (f"`{value}`" if value else
+                 "none was given: start the guided discovery that PROTOCOL.md describes for `new`")
+    elif not value:
+        raise ValueError("the lane flow needs the change request (--argument)")
+    text = (ENGINE_DIR / "templates" / "entrypoints" / template).read_text(encoding="utf-8")
+    return text.replace("{engine}", ENGINE_DIR.as_posix()).replace("{" + placeholder + "}", value)
+
+
 def cmd_harness(args: argparse.Namespace) -> int:
     from kernel import install
     if args.harness_action == "install-hooks":
@@ -934,6 +953,10 @@ def cmd_harness(args: argparse.Namespace) -> int:
     if args.harness_action == "audit":
         from kernel import audit
         _print_json(audit.report(args.path, save_summary=args.save, flagged_limit=args.limit))
+        return 0
+    if args.harness_action == "entrypoint":
+        text = entrypoint_text(args.flow, args.argument)
+        _print_json({"flow": args.flow, "engine": ENGINE_DIR.as_posix(), "instructions": text})
         return 0
     raise SystemExit(f"unknown harness action: {args.harness_action}")
 
@@ -1543,6 +1566,11 @@ def build_parser() -> argparse.ArgumentParser:
                                help="also merge this machine's sessions into .spec-master/hooks/audit.jsonl "
                                     "(redacted; meant to be committed)")
     harness_audit.add_argument("--limit", type=int, default=20, help="flagged decisions to show")
+    harness_entry = harness_sub.add_parser(
+        "entrypoint", help="the full-cycle or lane instructions with this engine's path filled in")
+    harness_entry.add_argument("--flow", choices=sorted(ENTRYPOINT_TEMPLATES), required=True)
+    harness_entry.add_argument("--argument", default="",
+                               help="full-cycle: the context file (empty: guided discovery); lane: the request")
 
     p_evals = sub.add_parser("evals")
     p_evals.set_defaults(func=cmd_evals)

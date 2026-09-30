@@ -6,9 +6,14 @@
 as it is for the CLI).
 
 ```bash
-python3 spec-master/mcp/spec_master_mcp.py [--project PATH] [--timeout SECONDS]
+python3 spec-master/mcp/spec_master_mcp.py [--project PATH] [--timeout SECONDS] [--tools all|entrypoint]
 python3 spec-master/mcp/spec_master_mcp.py --list-tools   # print the tools as JSON and exit
 ```
+
+`--tools entrypoint` (or `SPEC_MASTER_MCP_TOOLS=entrypoint`) lists only
+`harness_entrypoint`. The plugins start the server that way: their skills
+need only that tool, and a host that loads every schema at session start
+would otherwise carry the whole list (about 49 KB) in each session.
 
 Register it in Claude Code with a project `.mcp.json`:
 
@@ -28,6 +33,26 @@ After `init.sh`, the global engine copy lives at
 `~/.spec-master-engine/mcp/spec_master_mcp.py`; pass `--project` (or set
 `SPEC_MASTER_PROJECT`) when the client does not start servers in the project
 root.
+
+## Project root
+
+In order: `--project`, `SPEC_MASTER_PROJECT`, the host's own variable
+(`CLAUDE_PROJECT_DIR`, `CURSOR_PROJECT_DIR`, `GEMINI_PROJECT_DIR`), then the
+working directory. When the root came from the working directory and the
+client supports MCP roots, the server asks for them after
+`notifications/initialized` (and again on `roots/list_changed`) and takes the
+first one. Plugin hosts often start servers in the plugin's own directory:
+while the root still looks like an install directory, every tool except
+`harness_entrypoint` is refused with a pointer to the CLI, so nothing is ever
+written inside the plugin.
+
+## Entrypoints
+
+`harness_entrypoint {"flow": "full-cycle"|"lane", "argument": ...}` returns
+the instructions for a run with this engine's absolute paths filled in, which
+is how the path-free plugin skills find the engine on any host. The same
+texts are served as MCP prompts: `spec-master` (argument `context`, optional)
+and `spec-master-lane` (argument `request`, required).
 
 ## Tools
 
@@ -74,7 +99,9 @@ not protocol errors.
 Newline-delimited JSON-RPC 2.0 on stdin/stdout; logs go to stderr only.
 Methods: `initialize` (echoes a supported `protocolVersion` —
 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05 — else answers 2025-06-18),
-`notifications/*` (no reply), `ping`, `tools/list`, `tools/call`. Errors:
+`notifications/*` (no reply), `ping`, `tools/list`, `tools/call`,
+`prompts/list`, `prompts/get`; the server itself sends `roots/list` (see
+[Project root](#project-root)). Errors:
 -32700 parse, -32600 invalid request, -32601 unknown method, -32602 invalid
 params. JSON arrays are handled as JSON-RPC 2.0 batches (array reply of the
 non-notification responses; empty batch -> -32600). Requests are processed

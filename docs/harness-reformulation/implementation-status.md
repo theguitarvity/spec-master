@@ -40,7 +40,7 @@ foi aprovada e aplicada, e os hooks estão em auditoria neste repositório.
 | `gates detect` no próprio repo / erros no `unittest` | `[]` / 21 | `python3 -m unittest discover -s spec-master/tests` / **0** | ≠ `[]` / 0 | CLI e suíte |
 | Rodadas com usage vindo do host | 0/9 | as 9 antigas são `manual-unverified`; o protocolo manda gravar as novas com `telemetry ingest` | 100% das novas | `metrics validate` |
 | `PROTOCOL.md` | 49,8 KB | 37,9 KB | — | `wc -c`; referência sob demanda em `spec-master/docs/` |
-| Testes | 631 com pytest; com `unittest`, 21 módulos com erro de import | **896** com `unittest`, todos passando, em Python 3.10 a 3.13 | verde | `python3 -m unittest discover -s spec-master/tests`, também no CI |
+| Testes | 631 com pytest; com `unittest`, 21 módulos com erro de import | **945** com `unittest`, todos passando, em Python 3.10 a 3.13 | verde | `python3 -m unittest discover -s spec-master/tests`, também no CI |
 
 ### Limites da telemetria (medidos, não resolvidos)
 
@@ -67,7 +67,7 @@ foi aprovada e aplicada, e os hooks estão em auditoria neste repositório.
 | Kernel: `lanes`, `step`, cards, `policy`, `hookd`, `verify:post`, proveniência v1 | feito | `lib/kernel/` (1.212 LOC; orçamento 2.500) |
 | `step next\|begin\|end\|widen\|pause\|resume` | feito | `kernel/step.py` |
 | Cards (roteador ≤5 KB, core, patch, bugfix, escalada) | feito | `spec-master/cards/` (roteador 1,7 KB) |
-| Plugin do Claude Code (skill de lane, `hooks.json`) | feito, `claude plugin validate` passa | `spec-master/.claude-plugin/`, `.claude-plugin/marketplace.json` |
+| Plugins para oito hosts (duas skills, hooks no dialeto de cada host, MCP com `harness_entrypoint`) | feito, 0.3.0; validado nas CLIs de cada host (tabela abaixo) | `lib/packaging.py`, `kernel/hosts.py`, `spec-master/.*-plugin/`, raiz do repositório |
 | Instalação dos hooks por projeto | feito (`harness install-hooks`, `harness mode`) | `kernel/install.py` |
 | Hooks em audit por padrão, bloqueio por política | feito | `.spec-master/policy.json` `hooks_mode` |
 | Lane Patch de ponta a ponta, com bugfix | feito | `test_kernel_step` (git real, gate real, regressão no commit base) |
@@ -81,13 +81,52 @@ foi aprovada e aplicada, e os hooks estão em auditoria neste repositório.
 - Instruções para fazer um patch: entrypoint + `router.md` + `core.md` + card
   de implementação ≈ 7,3 KB, contra 55,1 KB do bootstrap do fluxo completo
   (meta ≤8 KB).
-- `hookd` no PreToolUse: 6 módulos, 742 LOC importadas, **~38–40 ms p50**
-  (máximo ~39–53 ms), medido pelo `doctor` com `-X importtime` (orçamento
-  1.500 LOC e 100 ms p50; a proposta pede p95 ≤50 ms).
-- Plugin: **~94 tokens** fixos por sessão; a skill de lane custa ~460 tokens
-  quando é chamada.
+- `hookd` no PreToolUse: 7 módulos (com o adaptador de hosts), 827 LOC
+  importadas, **~39–43 ms p50**, medido pelo `doctor` com `-X importtime`
+  (orçamento 1.500 LOC e 100 ms p50; a proposta pede p95 ≤50 ms).
+- Plugin: **~340 tokens** fixos por sessão (1,3 KB: o frontmatter das duas
+  skills, o schema de `harness_entrypoint` e as instruções do servidor MCP).
+  Com as 94 tools, a lista do MCP passaria de 49 KB (~12 mil tokens) em cada
+  sessão de um host que carrega os schemas de uma vez; por isso os plugins
+  sobem o servidor com `--tools entrypoint`. Chamar uma skill custa ~530
+  tokens (o `SKILL.md` e a resposta de `harness_entrypoint`).
 - Patch: 3 chamadas estruturais (`lane triage`, `step begin`, `step end`), 0
   gates humanos, nota da mudança com meta de 1 KB (recusada acima de 4 KB).
+
+### Plugins por host (0.3.0)
+
+Um gerador ([`lib/packaging.py`](../../spec-master/lib/packaging.py)) escreve
+os manifestos, hooks e skills de todos os hosts; o `doctor` e
+`test_packaging` falham se um arquivo divergir. O `hookd` fala o protocolo de
+cada host ([`kernel/hosts.py`](../../spec-master/lib/kernel/hosts.py)).
+Validação feita em 2026-09-30, com as CLIs reais instaladas numa `HOME`
+descartável:
+
+| Host | Versão | Como foi validado | Resultado |
+|---|---|---|---|
+| Claude Code | 2.1.285 | `claude plugin validate --strict` (plugin e marketplace), instalação pelo marketplace, `claude mcp list` | passou; MCP conectado |
+| OpenAI Codex | 0.159.1 | `plugin marketplace add` + `plugin add`; `hooks/list`, `skills/list` e `mcpServerStatus/list` pelo app-server; hook com `apply_patch` simulado | 2 skills, 4 hooks (aguardando a revisão do usuário, como o Codex exige), MCP 0.3.0; `deny` correto |
+| GitHub Copilot CLI | 1.0.89 | `plugin marketplace add` + `plugin install`; `copilot mcp get` | 2 skills e o MCP; os hooks conferem com a referência de hooks (disparar exige login) |
+| Gemini CLI | 0.62.0 | `extensions validate`, `extensions install`, sessão headless com chave falsa | 2 skills, MCP conectado, o `SessionStart` rodou o `hookd` |
+| Antigravity | 1.2.13 | `agy plugin validate` + `agy plugin install`; payloads simulados no plugin instalado | 2 skills, MCP e hooks; `deny`/`ask` corretos e `{}` sem objeção |
+| Qwen Code | 0.24.7 | `extensions install`, `harness install-hooks --host qwen`, sessão headless | 2 skills; o MCP achou o projeto pelas *roots*; 4 hooks e o `SessionStart` rodou o `hookd` |
+| Cursor | 2026.09.28 | validador oficial do repositório `cursor/plugins` | passou (rodar o agente exige login) |
+| Kiro | — | sem CLI no ambiente: manifesto contra o schema Agent Plugins 1.0.0; hooks do instalador com payloads simulados | `deny` sai com código 2; engine ausente não bloqueia |
+| VS Code | — | não testado (lê o mesmo marketplace do Claude Code) | — |
+
+Achados que mudaram o desenho:
+
+- O Qwen Code carrega como Agent Plugins qualquer pacote com `plugin.json`
+  de `$schema` 1.0.0 e aí ignora hooks; o Kiro exige esse manifesto. Os dois
+  recebem os hooks por projeto (`install-hooks --host qwen|kiro`).
+- Codex e Copilot preferem um manifesto Agent Plugins quando ele existe, e o
+  Codex 0.159.1 não carrega hooks nesse formato: por isso ele fica na raiz e
+  o plugin de `spec-master/` mantém os manifestos nativos.
+- No Antigravity, `allow` num `PreToolUse` aprova a ferramenta sem perguntar
+  ao usuário: o hook responde `{}` quando não tem objeção.
+- Codex e Antigravity sobem o MCP na pasta do plugin sem informar o projeto;
+  com `--tools entrypoint` isso não importa, porque a única tool não toca o
+  projeto.
 
 ### Correções feitas na revisão final
 
@@ -124,10 +163,16 @@ foi aprovada e aplicada, e os hooks estão em auditoria neste repositório.
    - `init.sh link --hooks` (hoje o caminho é `harness install-hooks` ou o
      plugin);
    - agents no plugin.
-4. **Ondas 2 a 4** (Standard, subagentes com `PhaseResult`, `claude plugin
+4. **Plugins**: submeter aos catálogos oficiais (Claude, Codex, Cursor,
+   galeria do Gemini, marketplace do Antigravity) é uma decisão sua; o
+   Codex hoje recusa plugins com hooks no portal. Faltam rodadas reais no
+   Cursor, Copilot, VS Code e Kiro, que exigem login ou o aplicativo. O
+   Antigravity não tem `SessionStart`; o `PreInvocation` pode fazer esse
+   papel quando a semântica de `invocationNum` estiver documentada.
+5. **Ondas 2 a 4** (Standard, subagentes com `PhaseResult`, `claude plugin
    eval` com braço sem plugin, compat do Spec Kit 1.x, paralelismo):
    não começaram. Cada uma depende do go/no-go da anterior.
-5. **Avisos atuais do `doctor`** (esperados):
+6. **Avisos atuais do `doctor`** (esperados):
    - `step_path_budget`: 4.830 LOC contra a meta de 4.500 para a onda 3;
    - `evidence`: 3 features do dogfood têm fases `PASSED` de antes da
      promoção por evidência, sem evidência verificada.

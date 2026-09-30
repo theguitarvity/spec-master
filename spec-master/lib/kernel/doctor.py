@@ -9,6 +9,8 @@ Each check is deterministic and cheap. `error` checks fail the command
   kernel and in what the hooks and the step API import — the guard against
   the harness itself growing into the overengineering it removes.
 - cards: the router card stays under 5 KB and every other card under 3 KB.
+- packaging: in the Spec Master repository, every host's plugin manifest,
+  hooks file and skill matches what `lib/packaging.py` renders.
 - speckit_version: the installed Spec Kit is inside the supported range.
 - evidence / metrics / policy / gates / hooks: the project's own records.
 """
@@ -220,6 +222,17 @@ def cards() -> dict:
 
 # --------------------------------------------------------------------------- project records
 
+def packaging_check(repo: Path) -> dict:
+    if not (repo / ".claude-plugin" / "marketplace.json").is_file():
+        return _check("packaging", True, "info", "not the Spec Master repository: no plugin packages to check")
+    import packaging
+    drifted = packaging.check(repo)
+    return _check("packaging", not drifted, "error",
+                  f"plugin packages for every host match packaging.py (version {packaging.VERSION})" if not drifted
+                  else f"{len(drifted)} generated file(s) drifted: run `python3 spec-master/lib/packaging.py "
+                       "generate`", drifted=drifted)
+
+
 def _version_tuple(text: str):
     match = re.match(r"v?(\d+)\.(\d+)\.(\d+)", text or "")
     return tuple(int(part) for part in match.groups()) if match else None
@@ -313,6 +326,7 @@ def run(root: str, parser: argparse.ArgumentParser, *, repo: str | None = None) 
                      else f"{len(problems)} invocation(s) do not exist in the CLI", problems=problems[:20])]
     checks += budgets()
     checks.append(cards())
+    checks.append(packaging_check(repo_path))
     for probe in (speckit_version, evidence_check, metrics_check, policy_check, gates_check, hooks_check):
         try:
             checks.append(probe(root_path))

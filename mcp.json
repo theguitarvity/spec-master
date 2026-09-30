@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "spec-master": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${PLUGIN_ROOT}/spec-master/mcp/spec_master_mcp.py",
+        "--tools",
+        "entrypoint"
+      ]
+    }
+  }
+}
