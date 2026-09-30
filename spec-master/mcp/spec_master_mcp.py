@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Spec Master MCP server (stdio transport, stdlib only).
 
-Exposes every `spec-master/lib/cli.py` command as an MCP tool. The tool list
+Exposes every `spec-master/lib/cli.py` command as an MCP tool, and the two
+entrypoints as MCP prompts (`spec-master` for the full cycle, `spec-master-lane`
+for the lane flow), which most hosts offer as slash commands. The prompt text
+comes from `templates/entrypoints/` with this engine's absolute path filled
+in, so the same package works wherever a host installs it. The tool list
 is built at startup by introspecting `cli.build_parser()`, so CLI groups added
 later appear automatically:
 
@@ -48,6 +52,17 @@ STDERR_TAIL_CHARS = 4000
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent  # spec-master/
 LIB_DIR = PACKAGE_DIR / "lib"
+ENTRYPOINTS_DIR = PACKAGE_DIR / "templates" / "entrypoints"
+
+# name -> (template, title, description, argument name, argument description, argument required)
+PROMPTS = {
+    "spec-master": ("full-cycle.md", "Spec Master: full cycle",
+                    "Run the whole spec-driven cycle (constitution to validate) from a context file.",
+                    "context", "Context file (e.g. CLAUDE.md); leave empty for the guided discovery", False),
+    "spec-master-lane": ("lane.md", "Spec Master: lane flow",
+                         "Triage a change into patch, standard or critical; a patch closes only on evidence.",
+                         "request", "The change, in the user's words (optionally starting with a lane)", True),
+}
 CLI_PATH = LIB_DIR / "cli.py"
 
 PARSE_ERROR = -32700
@@ -587,13 +602,35 @@ class Server:
         version = requested if requested in SUPPORTED_PROTOCOL_VERSIONS else LATEST_PROTOCOL_VERSION
         return {
             "protocolVersion": version,
-            "capabilities": {"tools": {"listChanged": False}},
+            "capabilities": {"tools": {"listChanged": False}, "prompts": {"listChanged": False}},
             "serverInfo": {"name": SERVER_NAME, "title": SERVER_TITLE, "version": SERVER_VERSION},
             "instructions": self.instructions(),
         }
 
     def list_tools(self) -> dict:
         return {"tools": [t.to_mcp() for t in self.tools]}
+
+    def list_prompts(self) -> dict:
+        return {"prompts": [
+            {"name": name, "title": title, "description": description,
+             "arguments": [{"name": arg, "description": arg_help, "required": required}]}
+            for name, (_template, title, description, arg, arg_help, required) in PROMPTS.items()]}
+
+    def get_prompt(self, name: str, arguments) -> dict:
+        """The entrypoint text with this engine's path filled in."""
+        if name not in PROMPTS:
+            raise ArgumentError(f"unknown prompt: {name!r}")
+        template, _title, description, arg, _arg_help, required = PROMPTS[name]
+        value = str((arguments or {}).get(arg) or "").strip()
+        if required and not value:
+            raise ArgumentError(f"prompt {name!r} needs the {arg!r} argument")
+        if arg == "context":
+            value = (f"`{value}`" if value else
+                     "none was given: start the guided discovery that PROTOCOL.md describes for `new`")
+        text = (ENTRYPOINTS_DIR / template).read_text(encoding="utf-8")
+        text = text.replace("{engine}", PACKAGE_DIR.as_posix()).replace("{" + arg + "}", value)
+        return {"description": description,
+                "messages": [{"role": "user", "content": {"type": "text", "text": text}}]}
 
     def call_tool(self, name: str, arguments) -> dict:
         if self.load_error:
@@ -695,6 +732,19 @@ class Server:
             if arguments is not None and not isinstance(arguments, dict):
                 return _error(msg_id, INVALID_PARAMS, "Invalid params: 'arguments' must be an object")
             return _result(msg_id, self.call_tool(name, arguments))
+        if method == "prompts/list":
+            return _result(msg_id, self.list_prompts())
+        if method == "prompts/get":
+            name = params.get("name")
+            arguments = params.get("arguments")
+            if not isinstance(name, str) or not name:
+                return _error(msg_id, INVALID_PARAMS, "Invalid params: prompts/get requires a string 'name'")
+            if arguments is not None and not isinstance(arguments, dict):
+                return _error(msg_id, INVALID_PARAMS, "Invalid params: 'arguments' must be an object")
+            try:
+                return _result(msg_id, self.get_prompt(name, arguments))
+            except ArgumentError as exc:
+                return _error(msg_id, INVALID_PARAMS, f"Invalid params: {exc}")
         return _error(msg_id, METHOD_NOT_FOUND, f"Method not found: {method}")
 
 

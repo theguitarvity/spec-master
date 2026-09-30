@@ -48,7 +48,8 @@ class ProtocolTest(_ServerCase):
         result = response["result"]
         self.assertEqual(response["id"], 1)
         self.assertEqual(result["protocolVersion"], "2025-03-26")
-        self.assertEqual(result["capabilities"], {"tools": {"listChanged": False}})
+        self.assertEqual(result["capabilities"], {"tools": {"listChanged": False},
+                                                  "prompts": {"listChanged": False}})
         self.assertEqual(result["serverInfo"]["name"], "spec-master")
         self.assertIn("version", result["serverInfo"])
         self.assertIn(self.server.project_root, result["instructions"])
@@ -140,6 +141,43 @@ class ProtocolTest(_ServerCase):
         result = server.call_tool("state_show", {})
         self.assertTrue(result["isError"])
         self.assertIn("boom", result["content"][0]["text"])
+
+
+class PromptTest(_ServerCase):
+    def test_prompts_are_listed_with_their_argument(self):
+        prompts = {p["name"]: p for p in self.server.handle(_request(1, "prompts/list"))["result"]["prompts"]}
+        self.assertEqual(sorted(prompts), ["spec-master", "spec-master-lane"])
+        self.assertEqual(prompts["spec-master-lane"]["arguments"][0]["name"], "request")
+        self.assertTrue(prompts["spec-master-lane"]["arguments"][0]["required"])
+        self.assertFalse(prompts["spec-master"]["arguments"][0]["required"])
+
+    def get(self, name, arguments=None):
+        return self.server.handle(_request(2, "prompts/get", {"name": name, "arguments": arguments or {}}))
+
+    def text(self, name, arguments=None):
+        return self.get(name, arguments)["result"]["messages"][0]["content"]["text"]
+
+    def test_the_engine_path_is_filled_in(self):
+        engine = mcp.PACKAGE_DIR.as_posix()
+        full = self.text("spec-master", {"context": "docs/context.md"})
+        self.assertIn(f"`{engine}/PROTOCOL.md`", full)
+        self.assertIn(f"python3 {engine}/lib/cli.py", full)
+        self.assertIn("`docs/context.md`", full)
+        self.assertNotIn("{engine}", full)
+        self.assertTrue((mcp.PACKAGE_DIR / "PROTOCOL.md").is_file())
+        lane = self.text("spec-master-lane", {"request": "fix the rounding"})
+        self.assertIn(f"`{engine}/cards/router.md`", lane)
+        self.assertIn("The request: fix the rounding", lane)
+        self.assertTrue((mcp.PACKAGE_DIR / "cards" / "router.md").is_file())
+
+    def test_no_context_means_guided_discovery(self):
+        self.assertIn("guided discovery", self.text("spec-master"))
+
+    def test_bad_prompt_requests(self):
+        self.assertEqual(self.get("nope")["error"]["code"], mcp.INVALID_PARAMS)
+        self.assertEqual(self.get("spec-master-lane")["error"]["code"], mcp.INVALID_PARAMS)
+        missing_name = self.server.handle(_request(3, "prompts/get", {}))
+        self.assertEqual(missing_name["error"]["code"], mcp.INVALID_PARAMS)
 
 
 class ToolListTest(_ServerCase):
