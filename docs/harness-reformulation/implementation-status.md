@@ -114,6 +114,13 @@ descartável:
 | Kiro | — | sem CLI no ambiente: manifesto contra o schema Agent Plugins 1.0.0; hooks do instalador com payloads simulados | `deny` sai com código 2; engine ausente não bloqueia |
 | VS Code | — | não testado (lê o mesmo marketplace do Claude Code) | — |
 
+Depois do push, Claude Code, Codex, Copilot CLI, Gemini CLI e Antigravity
+instalaram direto do GitHub (commit `2b98c80`), com o mesmo resultado, e o
+CI passou em Python 3.10 a 3.13. O Qwen Code achou o marketplace no GitHub,
+mas roda o `git clone` sem as variáveis de proxy, e este ambiente só sai pela
+proxy: instalado de um clone do mesmo commit, deu o mesmo resultado. Numa
+máquina com acesso direto, o clone do repositório público funciona.
+
 Achados que mudaram o desenho:
 
 - O Qwen Code carrega como Agent Plugins qualquer pacote com `plugin.json`
