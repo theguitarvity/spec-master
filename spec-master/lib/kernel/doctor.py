@@ -284,16 +284,19 @@ def gates_check(root: Path) -> dict:
                   else "no executable test gate — `step end` cannot verify anything here")
 
 
+HOOK_SETTINGS = (".claude/settings.json", ".qwen/settings.json", ".kiro/hooks/spec-master.json")
+
+
 def hooks_check(root: Path) -> dict:
-    settings = root / ".claude" / "settings.json"
-    wired = False
-    if settings.is_file():
+    wired = []
+    for relative in HOOK_SETTINGS:
         try:
-            wired = "hookd.py" in settings.read_text(encoding="utf-8")
+            if "hookd.py" in (root / relative).read_text(encoding="utf-8"):
+                wired.append(relative)
         except OSError:
-            wired = False
-    detail = ("hookd wired in .claude/settings.json" if wired
-              else "hooks not wired in .claude/settings.json (install the plugin or `harness install-hooks`)")
+            continue
+    detail = (f"hookd wired in {', '.join(wired)}" if wired
+              else "no hooks in the project settings (a plugin brings them, or `harness install-hooks`)")
     from kernel import audit
     window = audit.period(str(root), {})
     if window["mode"] == "audit" and window["started"] and window["days"] is not None:

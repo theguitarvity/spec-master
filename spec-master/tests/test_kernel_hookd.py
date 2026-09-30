@@ -24,23 +24,24 @@ HOOKD = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "lib
 class HookdReplayTests(unittest.TestCase):
     def setUp(self):
         self.root = fx.make_repo()
-        self.env_backup = os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        self.env_backup = {name: os.environ.pop(name, None) for name in ("CLAUDE_PROJECT_DIR", "GEMINI_PROJECT_DIR")}
 
     def tearDown(self):
-        if self.env_backup is not None:
-            os.environ["CLAUDE_PROJECT_DIR"] = self.env_backup
+        for name, value in self.env_backup.items():
+            if value is not None:
+                os.environ[name] = value
         fx.remove(self.root)
 
     def block_mode(self):
         fx.write(self.root, ".spec-master/policy.json", json.dumps({"hooks_mode": "block"}))
 
-    def hook(self, event, payload):
+    def hook(self, event, payload, *flags):
         payload = {"cwd": self.root, **payload}
         out = io.StringIO()
         stdout = sys.stdout
         sys.stdout = out
         try:
-            code = hookd.main([event], stdin=io.StringIO(json.dumps(payload)))
+            code = hookd.main([event, *flags], stdin=io.StringIO(json.dumps(payload)))
         finally:
             sys.stdout = stdout
         text = out.getvalue().strip()
@@ -180,6 +181,98 @@ class HookdReplayTests(unittest.TestCase):
                  json.dumps({"hooks_mode": "block", "audit_started_at": "2026-09-28"}))
         _, out = self.hook("session-start", {"source": "startup"})
         self.assertNotIn("harness audit", out["hookSpecificOutput"]["additionalContext"])
+
+    # --- other hosts -------------------------------------------------------------
+
+    def gemini(self, event, hook_event, payload):
+        return self.hook(event, {"hook_event_name": hook_event, "session_id": "g1", **payload}, "--host", "gemini")
+
+    def test_gemini_tools_and_replies(self):
+        self.block_mode()
+        _, out = self.gemini("pre-tool-use", "BeforeTool",
+                             {"tool_name": "run_shell_command", "tool_input": {"command": "git push -f origin main"}})
+        self.assertEqual(out["decision"], "deny")
+        self.assertIn("[Spec Master]", out["reason"])
+        _, out = self.gemini("pre-tool-use", "BeforeTool",
+                             {"tool_name": "run_shell_command", "tool_input": {"command": "git push origin main"}})
+        self.assertEqual(out["decision"], "ask")
+        _, out = self.gemini("pre-tool-use", "BeforeTool", {"tool_name": "write_file", "tool_input": {
+            "file_path": os.path.join(self.root, ".spec-master", "state.json"), "content": "{}"}})
+        self.assertEqual(out["decision"], "deny")
+        self.assertEqual(self.gemini("pre-tool-use", "BeforeTool", {"tool_name": "replace", "tool_input": {
+            "file_path": "src/calc.py", "old_string": "a", "new_string": "b"}}), (0, None))
+        last = self.decisions()[-1]
+        self.assertEqual((last["host"], last["tool"], last["session"]), ("gemini", "replace", "g1"))
+
+    def test_gemini_is_detected_without_the_flag(self):
+        self.block_mode()
+        _, out = self.hook("pre-tool-use", {"hook_event_name": "BeforeTool", "tool_name": "run_shell_command",
+                                            "tool_input": {"command": "git reset --hard"}})
+        self.assertEqual(out, {"decision": "deny", "reason": out["reason"]})
+
+    def test_gemini_stop_retries_and_post_tool_use_informs(self):
+        self.block_mode()
+        self.start_change()
+        _, out = self.gemini("stop", "AfterAgent", {"stop_hook_active": False})
+        self.assertEqual(out["decision"], "deny")
+        self.assertIn("step end", out["reason"])
+        fx.write(self.root, "src/calc.py", fx.CALC + "".join(f"\ndef f{i}():\n    return {i}\n" for i in range(30)))
+        _, out = self.gemini("post-tool-use", "AfterTool", {"tool_name": "write_file",
+                                                          "tool_input": {"file_path": "src/calc.py"}})
+        self.assertIn("no longer fits the patch lane", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_gemini_audit_mode_and_session_start(self):
+        _, out = self.gemini("pre-tool-use", "BeforeTool",
+                             {"tool_name": "run_shell_command", "tool_input": {"command": "git push -f"}})
+        self.assertIsNone(out)
+        self.assertEqual(self.decisions()[-1]["decision"], "deny")
+        started = self.start_change()
+        _, out = self.gemini("session-start", "SessionStart", {"source": "startup"})
+        self.assertIn(started["change"], out["hookSpecificOutput"]["additionalContext"])
+
+    def antigravity(self, event, payload):
+        # Antigravity runs hooks from the plugin's directory: only `workspacePaths` names the project.
+        payload = {"conversationId": "a1", "workspacePaths": [self.root], "cwd": os.path.dirname(HOOKD), **payload}
+        return self.hook(event, payload, "--host", "antigravity")
+
+    def test_antigravity_gates_tools_in_its_workspace(self):
+        self.block_mode()
+
+        def run(command):
+            return self.antigravity("pre-tool-use", {"toolCall": {"name": "run_command", "args": {
+                "CommandLine": command, "Cwd": self.root, "WaitMsBeforeAsync": 5000}}, "stepIdx": 1})[1]
+        self.assertEqual(run("git push --force origin main")["decision"], "deny")
+        self.assertEqual(run("git push origin main")["decision"], "ask")
+        self.assertEqual(run("ls"), {})  # no opinion: never "allow", which would skip the user's approval
+        _, out = self.antigravity("pre-tool-use", {"toolCall": {"name": "write_to_file", "args": {
+            "TargetFile": os.path.join(self.root, ".spec-master", "state.json"), "CodeContent": "{}"}}})
+        self.assertEqual(set(out), {"decision", "reason"})  # protojson: known fields only
+        last = self.decisions()[-1]
+        self.assertEqual((last["host"], last["tool"], last["session"]), ("antigravity", "write_to_file", "a1"))
+
+    def test_antigravity_stop_continues_the_loop(self):
+        self.start_change()
+        self.assertEqual(self.antigravity("stop", {"executionNum": 1, "terminationReason": "model_stop",
+                                                   "fullyIdle": True})[1], {})  # audit mode
+        self.block_mode()
+        _, out = self.antigravity("stop", {"executionNum": 2, "terminationReason": "model_stop", "fullyIdle": True})
+        self.assertEqual(out["decision"], "continue")
+        self.assertIn("step end", out["reason"])
+
+    def test_enforced_means_the_host_got_another_answer(self):
+        self.block_mode()
+        self.hook("pre-tool-use", {"tool_name": "Bash", "tool_input": {"command": "git push origin main"}},
+                  "--host", "codex")  # an "ask" Codex cannot show: its own approvals decide
+        self.pre_bash("git push origin main")
+        codex, claude = self.decisions()[-2:]
+        self.assertEqual((codex["decision"], codex["enforced"]), ("ask", False))
+        self.assertEqual((claude["decision"], claude["enforced"]), ("ask", True))
+
+    def test_qwen_speaks_claude(self):
+        self.block_mode()
+        _, out = self.hook("pre-tool-use", {"tool_name": "Bash", "tool_input": {"command": "git clean -fdx"}},
+                           "--host", "qwen")
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
 
     # --- robustness -------------------------------------------------------------
 

@@ -97,6 +97,55 @@ class InstallHooksTests(unittest.TestCase):
         missing = run(os.path.join(self.project, "nowhere"))  # engine gone: never a blocking error
         self.assertEqual((missing.returncode, missing.stdout), (0, ""))
 
+    def test_qwen_gets_the_same_hooks_in_its_settings(self):
+        os.symlink(str(install.ENGINE), os.path.join(self.project, "spec-master"))
+        result = install.install_hooks(self.project, engine=os.path.join(self.project, "spec-master"), host="qwen")
+        path = os.path.join(self.project, ".qwen", "settings.json")
+        self.assertEqual((result["host"], result["settings"]), ("qwen", path))
+        hooks = self.read(path)["hooks"]
+        self.assertEqual(sorted(hooks), sorted(install.EVENTS))
+        self.assertEqual(hooks["PreToolUse"][0]["hooks"][0]["command"],
+                         'python3 "$QWEN_PROJECT_DIR"/spec-master/lib/kernel/hookd.py pre-tool-use --host qwen || true')
+        self.assertFalse(os.path.exists(self.settings))
+
+    def test_kiro_gets_its_own_hooks_file(self):
+        os.symlink(str(install.ENGINE), os.path.join(self.project, "spec-master"))
+        engine = os.path.join(self.project, "spec-master")
+        result = install.install_hooks(self.project, engine=engine, mode="block", host="kiro")
+        path = os.path.join(self.project, ".kiro", "hooks", "spec-master.json")
+        self.assertEqual((result["host"], result["settings"]), ("kiro", path))
+        first = self.read(path)
+        install.install_hooks(self.project, engine=engine, host="kiro")  # rewritten, never duplicated
+        hooks = self.read(path)
+        self.assertEqual(hooks, first)
+        self.assertEqual(hooks["version"], "v1")
+        self.assertEqual([h["trigger"] for h in hooks["hooks"]], list(install.KIRO_EVENTS))
+        self.assertFalse(os.path.exists(self.settings))
+        pre = hooks["hooks"][0]
+        self.assertEqual(pre["action"]["command"], "test -f spec-master/lib/kernel/hookd.py && "
+                                                   "python3 spec-master/lib/kernel/hookd.py pre-tool-use --host kiro")
+        with self.assertRaises(ValueError):
+            install.install_hooks(self.project, host="vim")
+
+    def test_kiro_blocks_through_exit_code_two_and_fails_open(self):
+        os.symlink(str(install.ENGINE), os.path.join(self.project, "spec-master"))
+        install.install_hooks(self.project, engine=os.path.join(self.project, "spec-master"), mode="block", host="kiro")
+        command = self.read(os.path.join(self.project, ".kiro", "hooks", "spec-master.json"))["hooks"][0]["action"]["command"]
+
+        def run(cwd, tool, tool_input):  # Kiro runs command hooks from the project root
+            payload = {"hook_event_name": "preToolUse", "cwd": cwd, "tool_name": tool, "tool_input": tool_input}
+            return subprocess.run(["sh", "-c", command], input=json.dumps(payload), capture_output=True, text=True,
+                                  timeout=30, cwd=cwd)
+        denied = run(self.project, "execute_bash", {"command": "git push --force origin main"})
+        self.assertEqual(denied.returncode, 2, denied.stdout)
+        self.assertIn("[Spec Master]", denied.stderr)
+        state = os.path.join(self.project, ".spec-master", "state.json")
+        self.assertEqual(run(self.project, "fs_write", {"command": "create", "path": state}).returncode, 2)
+        self.assertEqual(run(self.project, "execute_bash", {"command": "ls"}).returncode, 0)
+        os.unlink(os.path.join(self.project, "spec-master"))
+        gone = run(self.project, "execute_bash", {"command": "git push --force"})
+        self.assertNotEqual(gone.returncode, 2)  # a missing engine only warns
+
     def test_plugin_hooks_json_declares_the_same_events(self):
         path = os.path.join(str(install.ENGINE), "hooks", "hooks.json")
         declared = self.read(path)["hooks"]

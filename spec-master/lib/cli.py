@@ -925,7 +925,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def cmd_harness(args: argparse.Namespace) -> int:
     from kernel import install
     if args.harness_action == "install-hooks":
-        _print_json(install.install_hooks(args.project, engine=args.engine, mode=args.mode, dry_run=args.dry_run))
+        _print_json(install.install_hooks(args.project, engine=args.engine, mode=args.mode, dry_run=args.dry_run,
+                                         host=args.host))
         return 0
     if args.harness_action == "mode":
         _print_json(install.set_mode(args.project, args.mode, dry_run=args.dry_run))
@@ -1521,8 +1522,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_harness = sub.add_parser("harness", help="wire the host (hooks) to the kernel")
     p_harness.set_defaults(func=cmd_harness)
     harness_sub = p_harness.add_subparsers(dest="harness_action", required=True)
-    harness_hooks = harness_sub.add_parser("install-hooks", help="merge the hookd entries into .claude/settings.json")
+    harness_hooks = harness_sub.add_parser(
+        "install-hooks", help="merge the hookd entries into the host's project settings")
     harness_hooks.add_argument("--project", default=".")
+    harness_hooks.add_argument("--host", choices=["claude", "qwen", "kiro"], default="claude",
+                               help="claude: .claude/settings.json; qwen: .qwen/settings.json; "
+                                    "kiro: .kiro/hooks/spec-master.json")
     harness_hooks.add_argument("--engine", default=None, help="engine directory (default: this one)")
     harness_hooks.add_argument("--mode", choices=["audit", "block"], default=None,
                                help="also write hooks_mode to .spec-master/policy.json")

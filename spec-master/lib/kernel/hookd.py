@@ -3,7 +3,11 @@
 with the kernel's decisions (Claude Code hook protocol; stdin JSON in, JSON
 or exit code out).
 
-    python3 hookd.py pre-tool-use | post-tool-use | stop | subagent-stop | session-start
+    python3 hookd.py pre-tool-use | post-tool-use | stop | subagent-stop | session-start [--host HOST]
+
+`--host` picks the protocol (claude, qwen, codex, copilot, gemini, cursor,
+kiro, antigravity; see `kernel/hosts.py`); without it, the payload identifies
+Gemini, Cursor and Antigravity, and anything else is read as Claude Code.
 
 - pre-tool-use  — `Bash` commands through the argv policy; file writes against
                   the core-owned files, the running change's envelope and,
@@ -31,7 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import state as state_mod  # noqa: E402
-from kernel import changes, paths, policy  # noqa: E402
+from kernel import changes, hosts, paths, policy  # noqa: E402
 
 DECISIONS_RELPATH = os.path.join(".spec-master", "hooks", "decisions.jsonl")
 WRITE_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -41,7 +45,11 @@ PRE_IMPLEMENT_PHASES = ("specify", "clarify", "plan", "tasks", "analyze")
 
 
 def project_root(payload: dict) -> str:
-    return os.path.abspath(os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd())
+    roots = payload.get("workspace_roots")
+    first_root = roots[0] if isinstance(roots, list) and roots and isinstance(roots[0], str) else None
+    return os.path.abspath(os.environ.get("CLAUDE_PROJECT_DIR") or os.environ.get("CURSOR_PROJECT_DIR")
+                           or os.environ.get("GEMINI_PROJECT_DIR") or first_root
+                           or payload.get("cwd") or os.getcwd())
 
 
 def _read_json(path: str):
@@ -114,17 +122,26 @@ def pre_tool_use(root: str, payload: dict, enforce: bool) -> dict:
         verdict = policy.decide_command(tool_input.get("command") or "", root=root)
         return {**verdict, "target": (tool_input.get("command") or "")[:200]}
     if tool in WRITE_TOOLS:
-        target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+        targets = tool_input.get("file_paths") or [tool_input.get("file_path") or tool_input.get("notebook_path") or ""]
         record = changes.active(root)
         running = bool(record and record.get("status") == "RUNNING")
-        envelope = None
-        if running and not paths.is_test_path(_relative(root, target)):  # tests are always part of a change
-            envelope = list(record.get("envelope") or []) + [changes.note_relpath(record["id"])]
-        verdict = policy.decide_write(target, root=root, envelope=envelope)
-        if verdict["decision"] == policy.ALLOW and not running:
-            verdict = _phase_write(root, target) or verdict
-        return {**verdict, "target": target}
+        verdicts = [_write_verdict(root, target, record if running else None) for target in targets]
+        worst = max(verdicts, key=lambda v: _SEVERITY.get(v["decision"], 0))
+        return {**worst, "target": ", ".join(targets)[:200] if len(targets) > 1 else worst["target"]}
     return {"decision": policy.ALLOW, "reason": "tool not governed", "target": ""}
+
+
+_SEVERITY = {policy.ALLOW: 0, policy.ASK: 1, policy.DENY: 2}
+
+
+def _write_verdict(root: str, target: str, running: dict | None) -> dict:
+    envelope = None
+    if running and not paths.is_test_path(_relative(root, target)):  # tests are always part of a change
+        envelope = list(running.get("envelope") or []) + [changes.note_relpath(running["id"])]
+    verdict = policy.decide_write(target, root=root, envelope=envelope)
+    if verdict["decision"] == policy.ALLOW and not running:
+        verdict = _phase_write(root, target) or verdict
+    return {**verdict, "target": target}
 
 
 def post_tool_use(root: str, payload: dict, enforce: bool) -> dict:
@@ -227,27 +244,22 @@ HANDLERS = {
 }
 
 
-def respond(event: str, verdict: dict, enforce: bool) -> tuple[int, str]:
-    """(exit code, stdout) in the host's hook protocol."""
-    decision, reason = verdict["decision"], verdict["reason"]
-    if event == "session-start" and verdict.get("context"):
-        return 0, json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                                     "additionalContext": verdict["context"]}})
-    if not enforce or decision == policy.ALLOW:
-        return 0, ""
-    if event == "pre-tool-use" and decision in (policy.DENY, policy.ASK):
-        return 0, json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                                     "permissionDecision": decision,
-                                                     "permissionDecisionReason": f"[Spec Master] {reason}"}})
-    if event in ("post-tool-use", "stop") and decision in ("block", "escalate"):
-        return 0, json.dumps({"decision": "block", "reason": f"[Spec Master] {reason}"})
-    return 0, ""
+def _arguments(argv: list[str]) -> tuple[str, str | None]:
+    event, host, rest = "", None, list(argv)
+    while rest:
+        item = rest.pop(0)
+        if item == "--host" and rest:
+            host = rest.pop(0)
+        elif item.startswith("--host="):
+            host = item.split("=", 1)[1]
+        elif not event:
+            event = item
+    return event, host
 
 
 def main(argv: list[str] | None = None, stdin=None) -> int:
     started = time.perf_counter()
-    argv = sys.argv[1:] if argv is None else argv
-    event = argv[0] if argv else ""
+    event, requested_host = _arguments(sys.argv[1:] if argv is None else argv)
     handler = HANDLERS.get(event)
     if handler is None:
         print(f"unknown hook event: {event!r} (known: {', '.join(HANDLERS)})", file=sys.stderr)
@@ -257,6 +269,8 @@ def main(argv: list[str] | None = None, stdin=None) -> int:
     except ValueError:
         payload = {}
     payload = payload if isinstance(payload, dict) else {}
+    host = hosts.detect(payload, requested_host)
+    payload = hosts.normalize(payload)
     root = project_root(payload)
     current_mode = mode(root)
     enforce = current_mode == "block"
@@ -264,15 +278,20 @@ def main(argv: list[str] | None = None, stdin=None) -> int:
         verdict = handler(root, payload, enforce)
     except Exception as exc:  # noqa: BLE001 - a hook failure must never break the host
         verdict = {"decision": policy.ALLOW, "reason": f"hookd error: {type(exc).__name__}: {exc}"}
-    code, out = respond(event, verdict, enforce)
+    code, out, err = hosts.render(host, event, verdict, enforce)
+    # Enforced only when the host got another answer than audit mode gives (Codex and Kiro ignore an "ask").
+    enforced = enforce and (code, out, err) != hosts.render(host, event, verdict, False)
     log_decision(root, {
-        "at": changes.now(), "session": payload.get("session_id"), "event": event, "tool": payload.get("tool_name"),
+        "at": changes.now(), "session": payload.get("session_id"), "host": host, "event": event,
+        "tool": payload.get("host_tool_name") or payload.get("tool_name"),
         "target": verdict.get("target", ""), "decision": verdict["decision"], "reason": verdict["reason"],
-        "mode": current_mode, "enforced": bool(out) and verdict["decision"] != policy.ALLOW,
+        "mode": current_mode, "enforced": enforced,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
     })
     if out:
         print(out)
+    if err:
+        print(err, file=sys.stderr)
     return code
 
 

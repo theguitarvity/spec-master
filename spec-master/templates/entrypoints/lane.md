@@ -11,3 +11,9 @@ The request: {request}
 If its first word is `patch`, `standard` or `critical`, that is the lowest
 lane the user asked for (pass it as `--lane` to `lane triage`) and the rest,
 verbatim, is `--intent`; otherwise all of it is `--intent`.
+
+Hooks only log what they would block until the project opts in with
+`python3 {engine}/lib/cli.py harness mode --project . --mode block`. A plugin
+install already brings the hooks, except in Kiro and Qwen Code: there, run
+`harness install-hooks --project . --host kiro` (or `--host qwen`) once per
+project.
