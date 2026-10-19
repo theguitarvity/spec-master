@@ -478,7 +478,42 @@ def _metrics(root: str, errors: list) -> dict | None:
         return None
 
 
+_GRAPH_CACHE: dict = {}
+
+
+def _graph_signature(graph_dir: str) -> tuple:
+    """(relative path, size, mtime_ns) of every file under the graph dir."""
+    entries = []
+    for top, _dirs, files in os.walk(graph_dir):
+        for name in files:
+            path = os.path.join(top, name)
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            entries.append((os.path.relpath(path, graph_dir), st.st_size, st.st_mtime_ns))
+    return tuple(sorted(entries))
+
+
 def _graph(root: str, errors: list) -> dict:
+    """The graph section, cached per root and keyed by the graph files'
+    path/size/mtime so an unchanged graph is not re-parsed on every render."""
+    graph_dir = os.path.join(root, GRAPH_RELPATH)
+    if not os.path.isdir(graph_dir):
+        return {"present": False, "nodes": 0, "edges": 0, "system_map": None, "truncated": False}
+    signature = _graph_signature(graph_dir)
+    cached = _GRAPH_CACHE.get(root)
+    if cached and cached[0] == signature:
+        return dict(cached[1])
+    local_errors: list = []
+    out = _load_graph_section(root, local_errors)
+    errors.extend(local_errors)
+    if not local_errors:
+        _GRAPH_CACHE[root] = (signature, dict(out))
+    return out
+
+
+def _load_graph_section(root: str, errors: list) -> dict:
     out = {"present": False, "nodes": 0, "edges": 0, "system_map": None, "truncated": False}
     if not os.path.isdir(os.path.join(root, GRAPH_RELPATH)):
         return out  # never instantiate FileGraphStore here: its constructor mkdirs

@@ -93,6 +93,45 @@ CEREMONY_PROFILES = {
                    "Very large: full cycle, work packages, ADR check, Tech Lead and Architect approval."),
 }
 
+# Per-phase model/effort hints (roadmap P3). Host-neutral classes, never vendor
+# model names: `model` is fast|balanced|deep, `effort` is low|medium|high. Each row
+# lists XS, S, M, L, XL; cost never decreases with the tier.
+PHASE_HINT_TABLE = {
+    "specify": ("fast/low", "balanced/low", "balanced/medium", "deep/medium", "deep/high"),
+    "clarify": ("fast/low", "fast/low", "balanced/medium", "balanced/medium", "deep/medium"),
+    "plan": ("fast/low", "balanced/medium", "deep/medium", "deep/high", "deep/high"),
+    "tasks": ("fast/low", "fast/medium", "balanced/medium", "balanced/medium", "balanced/high"),
+    "analyze": ("fast/low", "fast/low", "deep/medium", "deep/high", "deep/high"),
+    "implement": ("fast/low", "balanced/low", "balanced/medium", "balanced/high", "deep/high"),
+    "validate": ("fast/low", "fast/low", "fast/medium", "balanced/medium", "balanced/high"),
+}
+
+
+def _hints_for(index: int) -> dict:
+    hints = {}
+    for phase, row in PHASE_HINT_TABLE.items():
+        model, effort = row[index].split("/")
+        hints[phase] = {"model": model, "effort": effort}
+    return hints
+
+
+for _index, _tier in enumerate(("XS", "S", "M", "L", "XL")):
+    CEREMONY_PROFILES[_tier]["hints"] = _hints_for(_index)
+
+
+def hint_for(tier: str, phase: str) -> dict:
+    """The `{model, effort}` hint of `phase` under `tier`'s ceremony profile."""
+    hints = CEREMONY_PROFILES[normalize_tier(tier)]["hints"]
+    if phase not in hints:
+        raise ValueError(f"unknown phase: {phase}")
+    return dict(hints[phase])
+
+
+def hint_text(tier: str, phase: str) -> str:
+    hint = hint_for(tier, phase)
+    return f"Hint (tier {normalize_tier(tier)}): model class {hint['model']}, reasoning effort {hint['effort']}."
+
+
 # Work packages for L/XL, chained in this order (each depends on the previous).
 WORK_PACKAGE_TEMPLATE = (
     {"kind": "contract", "owner_agent": "architect", "title": "Define or confirm the interface contracts"},

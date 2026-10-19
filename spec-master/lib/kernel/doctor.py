@@ -8,7 +8,7 @@ Each check is deterministic and cheap. `error` checks fail the command
 - kernel_budget / hook_path_budget / step_path_budget: lines of code in the
   kernel and in what the hooks and the step API import — the guard against
   the harness itself growing into the overengineering it removes.
-- cards: the router card stays under 5 KB and every other card under 3 KB.
+- cards: the router cards (router.md, full-cycle.md) stay under 5 KB and every other card under 3 KB.
 - packaging: in the Spec Master repository, every host's plugin manifest,
   hooks file and skill matches what `lib/packaging.py` renders.
 - speckit_version: the installed Spec Kit is inside the supported range.
@@ -212,7 +212,7 @@ def budgets() -> list[dict]:
 def cards() -> dict:
     oversized = []
     for card in sorted((ENGINE / "cards").glob("*.md")):
-        limit = ROUTER_CARD_BYTES if card.name == "router.md" else CARD_BYTES
+        limit = ROUTER_CARD_BYTES if card.name in ("router.md", "full-cycle.md") else CARD_BYTES
         size = card.stat().st_size
         if size > limit:
             oversized.append(f"{card.name}: {size} B > {limit} B")

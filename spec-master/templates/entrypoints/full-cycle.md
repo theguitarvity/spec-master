@@ -10,12 +10,14 @@ the deterministic core from the project root as
 server registered with all its tools offers the same commands as
 `<group>_<action>` tools).
 
-1. Read `{engine}/PROTOCOL.md` in full and follow it before anything else.
+1. Read the router `{engine}/cards/full-cycle.md` and the card for the current step
+   (`python3 {engine}/lib/cli.py protocol show --section "Step N"` prints one
+   section of `{engine}/PROTOCOL.md`, read only the parts you need); follow them first.
 2. Context file: {context}
 3. Delegate every structural decision (state, fingerprints, dependency
    order, git strategy, quality gates, constitution diff, traceability) to
    the core and act on its JSON; never re-derive it in prose.
-4. Ask the user only at the gates PROTOCOL.md defines, all the questions of
+4. Ask the user only at the gates the protocol defines, all the questions of
    a gate in one message, at phase boundaries.
 5. Between phases print short progress lines (`[Spec Master] ...`), never
    raw internal output.

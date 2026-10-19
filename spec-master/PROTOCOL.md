@@ -318,7 +318,12 @@ specify -> clarify -> plan -> tasks -> analyze(+repair, max 3) -> implement -> v
 
 using `state transition --feature <id> --phase <phase> --status <status>`
 before/after each step (the core rejects starting phase N before phase N-1
-`PASSED` — trust that guard, don't bypass it). `--status PASSED` also needs
+`PASSED` — trust that guard, don't bypass it). `state advance` takes the same
+arguments and does the transition, the round (`--round-json`, source `manual`)
+and the traceability rows (`--trace-json`) in one call, then answers with a
+`next` block (phase, ceremony tier, model/effort `hint`); the full-cycle router
+`cards/full-cycle.md` uses it, and `protocol show --section "<heading>"`
+prints one section of this file instead of all of it. `--status PASSED` also needs
 evidence (constitution Principle IV): the phase's artifact in the feature's
 `spec_directory`, non-empty and without template placeholders; for
 `implement`, every task in `tasks.md` checked; for `validate`, at least one

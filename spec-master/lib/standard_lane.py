@@ -18,6 +18,7 @@ import tdd_gates
 import verify_pre
 from kernel import changes, lanes, step, verify
 from kernel import paths as paths_mod
+from standard_lane_args import register  # noqa: F401 - re-exported for callers
 
 SPECS_DIR = "specs"
 
@@ -192,28 +193,6 @@ def end(root: str, record: dict, *, runner=subprocess.run, run_gates: bool = Tru
 
 
 # --------------------------------------------------------------------------- CLI
-
-def register(sub) -> None:
-    parser = sub.add_parser("standard", help="Standard lane: begin, verify-pre, red, green (finish with `step end`)")
-    parser.set_defaults(standard=True)
-    actions = parser.add_subparsers(dest="standard_action", required=True)
-    begin_p = actions.add_parser("begin", help="open a standard change (spec-lite + test-first)")
-    begin_p.add_argument("--intent", required=True, help="the user's request, verbatim")
-    begin_p.add_argument("--paths", default="", help="comma-separated files the change will touch")
-    begin_p.add_argument("--test-command", dest="test_command", default=None)
-    begin_p.add_argument("--spec-dir", dest="spec_dir", default=None)
-    begin_p.add_argument("--confirm", action="append")
-    begin_p.add_argument("--deny", action="append")
-    begin_p.add_argument("--unresolved", type=int, default=0)
-    pre_p = actions.add_parser("verify-pre", help="deterministic analyze: gate before implement")
-    pre_p.add_argument("--spec-dir", dest="spec_dir", default=None, help="check a spec directory without a change")
-    for name, text in (("red", "run the tests: they must fail"), ("green", "run the tests: they must pass")):
-        run_p = actions.add_parser(name, help=text)
-        run_p.add_argument("--test-command", dest="test_command", default=None)
-    for action in actions.choices.values():
-        action.add_argument("--path", default=".")
-        action.add_argument("--change", default=None)
-
 
 def run(args, csv=lambda value: [p for p in (value or "").split(",") if p.strip()]) -> dict:
     try:

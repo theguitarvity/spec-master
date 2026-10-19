@@ -9,6 +9,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -96,11 +97,24 @@ _SNAPSHOT_IGNORED_DIR_NAMES = (
     ".venv",
     "venv",
     "node_modules",
+    # Build output and vendored trees (roadmap P4): never a phase's deliverable.
+    "dist",
+    "build",
+    "target",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".next",
+    "coverage",
+    "vendor",
+    "vendored",
 )
 _SNAPSHOT_IGNORED_RELATIVE_PREFIXES = (
     ".spec-master/failed-attempts/",
     ".spec-master/logs/",
+    ".spec-master/cache/",
 )
+SNAPSHOT_CACHE = ".spec-master/cache/snapshot.json"
 _SNAPSHOT_IGNORED_RELATIVE_PATHS = (
     ".spec-master/state.json",
 )
@@ -178,15 +192,77 @@ def _snapshot_ignored(relative: str) -> bool:
     return any(relative.startswith(prefix) for prefix in _SNAPSHOT_IGNORED_RELATIVE_PREFIXES)
 
 
+def walk_project(project: Path):
+    """Yield the project's files as relative posix paths, pruning ignored
+    directories during the walk instead of filtering after a full rglob.
+    Reusable by discovery."""
+    root = str(project)
+    for top, dirs, files in os.walk(root):
+        rel_top = os.path.relpath(top, root).replace(os.sep, "/")
+        rel_top = "" if rel_top == "." else rel_top
+        kept = []
+        for name in dirs:
+            rel = f"{rel_top}/{name}" if rel_top else name
+            if name in _SNAPSHOT_IGNORED_DIR_NAMES:
+                continue
+            if any((rel + "/").startswith(prefix) for prefix in _SNAPSHOT_IGNORED_RELATIVE_PREFIXES):
+                continue
+            kept.append(name)
+        dirs[:] = kept
+        for name in files:
+            rel = f"{rel_top}/{name}" if rel_top else name
+            if not _snapshot_ignored(rel):
+                yield rel
+
+
+def _sha256_file(path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _load_snapshot_cache(project: Path) -> dict:
+    try:
+        data = json.loads((project / SNAPSHOT_CACHE).read_text(encoding="utf-8"))
+        files = data.get("files")
+        return files if isinstance(files, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _save_snapshot_cache(project: Path, files: dict) -> None:
+    target = project / SNAPSHOT_CACHE
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(target.name + f".{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"files": files}, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, target)
+    except OSError:
+        pass
+
+
 def snapshot(project: Path) -> dict[str, str]:
-    result = {}
-    for path in project.rglob("*"):
-        if not path.is_file():
+    """sha256 per file; unchanged files (same size and mtime_ns) reuse the
+    cached hash from `.spec-master/cache/snapshot.json`."""
+    cache = _load_snapshot_cache(project)
+    result: dict[str, str] = {}
+    fresh: dict[str, list] = {}
+    for relative in walk_project(project):
+        path = project / relative
+        try:
+            if not path.is_file():
+                continue
+            st = path.stat()
+            entry = cache.get(relative)
+            if (isinstance(entry, list) and len(entry) == 3 and entry[0] == st.st_size
+                    and entry[1] == st.st_mtime_ns and isinstance(entry[2], str)):
+                digest = entry[2]
+            else:
+                digest = _sha256_file(path)
+        except OSError:
             continue
-        relative = path.relative_to(project).as_posix()
-        if _snapshot_ignored(relative):
-            continue
-        result[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+        result[relative] = digest
+        fresh[relative] = [st.st_size, st.st_mtime_ns, digest]
+    if fresh != cache:
+        _save_snapshot_cache(project, fresh)
     return result
 
 
