@@ -12,8 +12,13 @@ change needs **before** any artifact exists. Follow these steps; read
    - `questions` not empty: ask them all in one `AskUserQuestion` batch, then
      re-run with `--confirm <signal>` / `--deny <signal>` for each answer.
    - `lane: patch`: go to step 3.
-   - `lane: standard` or `critical`: this change needs the full cycle. Put the
-     request, verbatim, in a context file and run `/spec-master <context file>`
+   - `lane: standard`: a spec-lite plus test-first work, no Spec Kit skill:
+     `python3 spec-master/lib/cli.py standard begin --path . --intent "<the request>" --paths <a,b,...>`
+     and follow the card it prints (`standard verify-pre`, `standard red`,
+     `standard green`, then `step end`). Prefer the full cycle below when the
+     user asked for `/speckit.analyze` or for the complete Spec Kit artifacts.
+   - `lane: critical`: this change needs the full cycle. Put the request,
+     verbatim, in a context file and run `/spec-master <context file>`
      (`PROTOCOL.md`).
 3. **Begin**:
    `python3 spec-master/lib/cli.py step begin --path . --lane patch --intent "<the request>" --paths <a,b,...>`

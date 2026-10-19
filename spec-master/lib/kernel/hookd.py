@@ -141,6 +141,9 @@ def _write_verdict(root: str, target: str, running: dict | None) -> dict:
     verdict = policy.decide_write(target, root=root, envelope=envelope)
     if verdict["decision"] == policy.ALLOW and not running:
         verdict = _phase_write(root, target) or verdict
+    if verdict["decision"] == policy.ALLOW and running and running.get("lane") == "standard":
+        import tdd_gates  # TDD guard of the Standard lane (enforced only when hooks_mode=block)
+        verdict = tdd_gates.guard(running, _relative(root, target)) or verdict
     return {**verdict, "target": target}
 
 

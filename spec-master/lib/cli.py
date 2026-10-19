@@ -915,6 +915,13 @@ def cmd_lane(args: argparse.Namespace) -> int:
     raise SystemExit(f"unknown lane action: {args.lane_action}")
 
 
+def cmd_standard(args: argparse.Namespace) -> int:
+    import standard_lane
+    result = standard_lane.run(args, _csv)
+    _print_json(result)
+    return 0 if result.get("status") not in ("QUESTIONS", "ERROR") and result.get("ok", True) else 2
+
+
 def cmd_step(args: argparse.Namespace) -> int:
     from kernel import changes, step
     try:
@@ -1584,6 +1591,10 @@ def build_parser() -> argparse.ArgumentParser:
     step_resume = step_sub.add_parser("resume", help="resume a paused change")
     step_resume.add_argument("--path", default=".")
     step_resume.add_argument("--change", required=True)
+
+    import standard_lane as _standard_lane
+    _standard_lane.register(sub)
+    sub.choices["standard"].set_defaults(func=cmd_standard)
 
     p_doctor = sub.add_parser("doctor", help="harness self-checks for CI (conformance, budgets, records)")
     p_doctor.set_defaults(func=cmd_doctor)
