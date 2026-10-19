@@ -80,8 +80,9 @@ def render(payload: dict) -> str:
 
 def main() -> int:
     try:
-        payload = json.loads(sys.stdin.read() or "{}")
-        line = render(payload if isinstance(payload, dict) else {})
+        payload = json.loads(sys.stdin.read())
+        # no usable host payload: print nothing rather than guess from the cwd
+        line = render(payload) if isinstance(payload, dict) and payload else ""
     except Exception:  # a status line must never break the host
         line = ""
     print(line)
