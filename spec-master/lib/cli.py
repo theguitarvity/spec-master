@@ -211,7 +211,36 @@ def cmd_fingerprint(args: argparse.Namespace) -> int:
 
 
 def cmd_discovery(args: argparse.Namespace) -> int:
-    _print_json(discovery.scan(args.path))
+    _print_json(discovery.scan(args.path, scope=getattr(args, "scope", None)))
+    return 0
+
+
+def cmd_tracks(args: argparse.Namespace) -> int:
+    import tracks  # lazy: keeps the shared import block untouched
+
+    action = args.tracks_action
+    if action == "greenfield-intake":
+        _print_json(tracks.greenfield_intake())
+    elif action == "greenfield-propose":
+        _print_json(tracks.greenfield_propose(args.path, args.stack, args.name))
+    elif action == "greenfield-apply":
+        try:
+            _print_json(tracks.greenfield_apply(args.path, args.stack, args.name, confirmed=args.confirm))
+        except tracks.ConfirmationRequired as exc:
+            _print_json({"error": str(exc)})
+            return 2
+    elif action == "brownfield-characterize":
+        _print_json({"targets": tracks.characterization_targets(args.path, args.scope, args.limit)})
+    else:
+        mapping = tracks.map_codebase(args.path, args.scope)
+        if action == "brownfield-map":
+            payload, doc, name = mapping, tracks.render_codebase_map(mapping), "codebase-map.md"
+        else:
+            payload = tracks.propose_constitution(mapping)
+            doc, name = payload["markdown"], "constitution-proposal.md"
+        if args.write:
+            payload["written"] = tracks.write_new_file(os.path.abspath(args.path), f".spec-master/context/{name}", doc)
+        _print_json(payload)
     return 0
 
 
@@ -1041,6 +1070,28 @@ def build_parser() -> argparse.ArgumentParser:
     disc_sub = p_disc.add_subparsers(dest="disc_action", required=True)
     disc_scan = disc_sub.add_parser("scan")
     disc_scan.add_argument("--path", default=".")
+    disc_scan.add_argument("--scope", default=None, help="repository-relative directory to scope the scan to")
+
+    p_tracks = sub.add_parser("tracks", help="brownfield intake and greenfield bootstrap (proposals only)")
+    p_tracks.set_defaults(func=cmd_tracks)
+    tracks_sub = p_tracks.add_subparsers(dest="tracks_action", required=True)
+    for tr_name in ("brownfield-map", "brownfield-constitution", "brownfield-characterize"):
+        tr_p = tracks_sub.add_parser(tr_name)
+        tr_p.add_argument("--path", default=".")
+        tr_p.add_argument("--scope", default=None, help="repository-relative directory (partial adoption)")
+        if tr_name == "brownfield-characterize":
+            tr_p.add_argument("--limit", type=int, default=10)
+        else:
+            tr_p.add_argument("--write", action="store_true",
+                              help="write the doc under .spec-master/context/ (never overwrites)")
+    tracks_sub.add_parser("greenfield-intake")
+    for tr_name in ("greenfield-propose", "greenfield-apply"):
+        tr_p = tracks_sub.add_parser(tr_name)
+        tr_p.add_argument("--path", default=".")
+        tr_p.add_argument("--stack", required=True)
+        tr_p.add_argument("--name", required=True)
+        if tr_name == "greenfield-apply":
+            tr_p.add_argument("--confirm", action="store_true", help="explicit confirmation to write the proposal")
 
     p_feat = sub.add_parser("features")
     p_feat.set_defaults(func=cmd_features)

@@ -300,5 +300,60 @@ class SpecKitEntrypointTests(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(REPO_ROOT, path)), path)
 
 
+class MonorepoDiscoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _monorepo(self):
+        _write_json(self.tmp, "packages/a/package.json", {"scripts": {"test": "jest"}})
+        _write(self.tmp, "services/b/go.mod", "module b\n")
+        _write_json(self.tmp, "node_modules/x/package.json", {"scripts": {"test": "x"}})
+        _write(self.tmp, "vendor/y/go.mod", "module y\n")
+
+    def test_walk_pruned_skips_pruned_and_hidden_dirs(self):
+        for name in ("node_modules", ".git", "dist", "build", "target", ".venv", "vendor", "__pycache__", ".hidden"):
+            _write(self.tmp, f"{name}/deep/file.txt")
+        _write(self.tmp, "src/ok.txt")
+        seen = {os.path.relpath(d, self.tmp) for d, _, _ in discovery._walk_pruned(self.tmp, 4)}
+        self.assertEqual(seen, {".", "src"})
+
+    def test_walk_pruned_honours_max_depth(self):
+        _write(self.tmp, "a/b/c/d/e.txt")
+        seen = {os.path.relpath(d, self.tmp) for d, _, _ in discovery._walk_pruned(self.tmp, 2)}
+        self.assertIn(os.path.join("a", "b"), seen)
+        self.assertNotIn(os.path.join("a", "b", "c"), seen)
+
+    def test_scan_lists_subpackages_with_own_stacks(self):
+        self._monorepo()
+        packages = discovery.scan(self.tmp)["packages"]
+        self.assertEqual([p["path"] for p in packages], ["packages/a", "services/b"])
+        self.assertEqual(packages[0]["stacks"][0]["language"], "node")
+        self.assertEqual(packages[0]["stacks"][0]["commands"], {"test": "npm run test"})
+        self.assertEqual(packages[1]["stacks"][0]["commands"]["test"], "go test ./...")
+
+    def test_single_package_repo_has_no_packages_and_unchanged_stacks(self):
+        _write(self.tmp, "go.mod", "module a\n")
+        result = discovery.scan(self.tmp)
+        self.assertEqual(result["packages"], [])
+        self.assertIsNone(result["scope"])
+        self.assertEqual(result["stacks"][0]["language"], "go")
+
+    def test_scope_limits_stacks_and_packages(self):
+        self._monorepo()
+        _write(self.tmp, "services/b/inner/Cargo.toml", "[package]\n")
+        result = discovery.scan(self.tmp, scope="services/b")
+        self.assertEqual(result["scope"], "services/b")
+        self.assertEqual([s["language"] for s in result["stacks"]], ["go"])
+        self.assertEqual([p["path"] for p in result["packages"]], ["services/b/inner"])
+
+    def test_bad_scope_is_rejected(self):
+        for bad in ("../x", "/etc", "missing"):
+            with self.assertRaises(ValueError):
+                discovery.scan(self.tmp, scope=bad)
+
+
 if __name__ == "__main__":
     unittest.main()
