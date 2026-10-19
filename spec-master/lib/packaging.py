@@ -66,6 +66,8 @@ MCP_ARGS = ["--tools", "entrypoint"]
 # Spec Master event -> (timeout in seconds). The host-specific event names
 # and matchers live with each host below.
 EVENTS = {"pre-tool-use": 10, "post-tool-use": 30, "stop": 10, "session-start": 10}
+# Only Claude Code has subagent hooks; they feed the token ledger's attribution events.
+CLAUDE_ONLY_EVENTS = {"subagent-start": 10, "subagent-stop": 10}
 
 SKILLS = {
     "spec-master": {
@@ -144,9 +146,12 @@ def claude_style_hooks(host: str) -> dict:
         "Stop": (None, "stop"),
         "SessionStart": ("startup|resume|compact", "session-start"),
     }
+    if host == "claude":
+        layout |= {"SubagentStart": (None, "subagent-start"), "SubagentStop": (None, "subagent-stop")}
     hooks = {}
     for host_event, (matcher, event) in layout.items():
-        entry = {"hooks": [{"type": "command", "command": _command(host, event), "timeout": EVENTS[event]}]}
+        timeout = (EVENTS | CLAUDE_ONLY_EVENTS)[event]
+        entry = {"hooks": [{"type": "command", "command": _command(host, event), "timeout": timeout}]}
         hooks[host_event] = [{"matcher": matcher, **entry} if matcher else entry]
     return {"hooks": hooks}
 

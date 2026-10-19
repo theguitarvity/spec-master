@@ -452,5 +452,60 @@ class ToRoundTests(_TranscriptCase):
         self.assertEqual(row["source"], "manual-unverified")
 
 
+class ReadResponsesTests(_TranscriptCase):
+    def test_one_record_per_response_with_max_usage(self):
+        records, offset = telemetry.read_responses(self.main)
+        by_key = {r["key"]: r for r in records}
+        self.assertEqual(sorted(by_key), ["msg_A", "msg_B", "msg_C", "msg_D", "msg_S1"])
+        self.assertEqual(by_key["msg_D"]["tokens"]["output_tokens"], 900)
+        self.assertTrue(by_key["msg_D"]["final"])
+        self.assertEqual(by_key["msg_A"]["request_id"], "req-msg_A")
+        self.assertEqual(by_key["msg_A"]["session_id"], SESSION)
+        self.assertEqual(by_key["msg_A"]["model"], MODEL)
+        self.assertEqual(by_key["msg_A"]["ts"], _ts("10:00:05.000"))
+        self.assertEqual(offset, os.path.getsize(self.main))
+
+    def test_sidechain_records_carry_agent_id_and_are_not_final(self):
+        records, _ = telemetry.read_responses(self.agent)
+        self.assertEqual({r["agent_id"] for r in records}, {"abc"})
+        self.assertTrue(all(r["sidechain"] and not r["final"] for r in records))
+        self.assertEqual(sorted(r["key"] for r in records), ["msg_X", "msg_Y"])
+
+    def test_resume_from_offset_yields_only_new_responses(self):
+        _, offset = telemetry.read_responses(self.main)
+        with open(self.main, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(_assistant("12:00:00.000", "msg_N", _usage(1, 2, 3, 4), stop="end_turn")) + "\n")
+        records, new_offset = telemetry.read_responses(self.main, offset)
+        self.assertEqual([r["key"] for r in records], ["msg_N"])
+        self.assertEqual(new_offset, os.path.getsize(self.main))
+        self.assertEqual(telemetry.read_responses(self.main, new_offset), ([], new_offset))
+
+    def test_partial_last_line_is_not_consumed(self):
+        with open(self.main, "a", encoding="utf-8") as fh:
+            fh.write('{"type": "assistant", "message": {"id": "msg_P"')
+        size = os.path.getsize(self.main)
+        records, offset = telemetry.read_responses(self.main)
+        self.assertNotIn("msg_P", [r["key"] for r in records])
+        self.assertLess(offset, size)
+
+    def test_synthetic_responses_are_ignored(self):
+        records, _ = telemetry.read_responses(self.main)
+        self.assertNotIn("synthetic-1", [r["key"] for r in records])
+
+    def test_offset_beyond_file_yields_nothing(self):
+        beyond = os.path.getsize(self.main) + 100
+        self.assertEqual(telemetry.read_responses(self.main, beyond), ([], beyond))
+
+    def test_no_message_content_in_records(self):
+        records, _ = telemetry.read_responses(self.main)
+        self.assertNotIn(SECRET, json.dumps(records))
+
+    def test_aggregate_totals_match_per_response_sum(self):
+        records, _ = telemetry.read_responses(self.main)
+        usage = telemetry.read_transcript_usage(self.main)
+        for field in telemetry.TOKEN_FIELDS:
+            self.assertEqual(sum(r["tokens"][field] for r in records), usage[field])
+
+
 if __name__ == "__main__":
     unittest.main()

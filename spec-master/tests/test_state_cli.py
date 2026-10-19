@@ -70,6 +70,13 @@ class TransitionEvidenceTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("before 'clarify'", payload["error"])
 
+    def test_transitions_append_phase_events_for_the_token_ledger(self):
+        self.transition("specify", "RUNNING")
+        self.transition("specify", "BLOCKED")
+        lines = [json.loads(line) for line in open(os.path.join(self.root, ".spec-master", "events.jsonl"))]
+        self.assertEqual([(e["type"], e["feature_id"], e["phase"], e["status"]) for e in lines],
+                         [("phase.started", "f1", "specify", "RUNNING"), ("phase.finished", "f1", "specify", "BLOCKED")])
+
     def test_non_passing_statuses_need_no_evidence(self):
         code, payload = self.transition("specify", "RUNNING")
         self.assertEqual(code, 0)

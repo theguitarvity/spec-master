@@ -355,6 +355,71 @@ def _user_line_kind(obj: dict, origin_aware: bool) -> str:
     return "human"
 
 
+def _absorb_response(responses: dict, obj: dict, moment, sidechain: bool, fallback_key: str) -> bool:
+    """Fold one assistant line into `responses` (keyed by API message id).
+
+    The one place that understands an assistant line; both the aggregate
+    reader and `read_responses` use it. Returns False for client-made
+    (synthetic / API-error) lines, which are not API responses.
+    """
+    message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
+    model = message.get("model")
+    if model == SYNTHETIC_MODEL or obj.get("isApiErrorMessage") is True:
+        return False
+    key = message.get("id") or obj.get("requestId") or obj.get("uuid") or fallback_key
+    response = responses.get(key)
+    if response is None:
+        agent = obj.get("agentId") if sidechain and isinstance(obj.get("agentId"), str) else None
+        session = obj.get("sessionId") if isinstance(obj.get("sessionId"), str) else None
+        request = obj.get("requestId") if isinstance(obj.get("requestId"), str) else None
+        response = responses[key] = {"tokens": dict.fromkeys(TOKEN_FIELDS, 0), "first": moment, "first_raw": obj.get("timestamp"),
+                                     "sidechain": sidechain, "final": False, "agent_id": agent,
+                                     "session_id": session, "request_id": request,
+                                     "model": model if isinstance(model, str) else None}
+    elif moment is not None and (response["first"] is None or moment < response["first"]):
+        response["first"] = moment
+        response["first_raw"] = obj.get("timestamp")
+    if isinstance(message.get("stop_reason"), str) and message["stop_reason"]:
+        response["final"] = True
+    usage = message.get("usage") if isinstance(message.get("usage"), dict) else {}
+    for field in TOKEN_FIELDS:
+        response["tokens"][field] = max(response["tokens"][field], _count(usage.get(field)))
+    return True
+
+
+def read_responses(path, offset: int = 0) -> tuple[list[dict], int]:
+    """Per-response usage records from `offset` bytes on, plus the new offset.
+
+    Only newline-terminated lines are consumed, so a line the host is still
+    writing is read on the next call. Lines of one API response (one per
+    content block) are merged exactly as `read_transcript_usage` does. A
+    response whose lines straddle two calls is reported by both; callers
+    de-duplicate on `key`. Records carry metadata only: `key`, `request_id`,
+    `session_id`, `agent_id` (subagent lines), `sidechain`, `model`, `ts`
+    (first line's raw timestamp), `tokens` (TOKEN_FIELDS), `final`.
+    """
+    responses: dict[str, dict] = {}
+    consumed = int(offset)
+    with open(os.fspath(path), "rb") as fh:
+        fh.seek(consumed)
+        for number, raw in enumerate(fh, 1):
+            if not raw.endswith(b"\n"):
+                break
+            consumed += len(raw)
+            try:
+                obj = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(obj, dict) and obj.get("type") == "assistant":
+                _absorb_response(responses, obj, _parse_time(obj.get("timestamp")),
+                                 obj.get("isSidechain") is True, f"{consumed}:{number}")
+    records = [{"key": key, "request_id": r["request_id"], "session_id": r["session_id"],
+                "agent_id": r["agent_id"], "sidechain": r["sidechain"], "model": r["model"],
+                "ts": r["first_raw"], "tokens": r["tokens"], "final": r["final"]}
+               for key, r in responses.items()]
+    return records, consumed
+
+
 def read_transcript_usage(path, since=None, until=None) -> dict:
     """Aggregate host-measured usage from Claude Code transcript JSONL.
 
@@ -426,24 +491,7 @@ def read_transcript_usage(path, since=None, until=None) -> dict:
                 if kind == "assistant":
                     if not sidechain and moment is not None and (wait_start is None or moment > wait_start):
                         wait_start = moment
-                    message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
-                    model = message.get("model")
-                    if model == SYNTHETIC_MODEL or obj.get("isApiErrorMessage") is True:
-                        continue
-                    key = message.get("id") or obj.get("requestId") or obj.get("uuid") \
-                        or f"{file_index}:{line_number}"
-                    response = responses.get(key)
-                    if response is None:
-                        response = responses[key] = {"tokens": dict.fromkeys(TOKEN_FIELDS, 0), "first": moment,
-                                                     "sidechain": sidechain, "final": False,
-                                                     "model": model if isinstance(model, str) else None}
-                    elif moment is not None and (response["first"] is None or moment < response["first"]):
-                        response["first"] = moment
-                    if isinstance(message.get("stop_reason"), str) and message["stop_reason"]:
-                        response["final"] = True
-                    usage = message.get("usage") if isinstance(message.get("usage"), dict) else {}
-                    for field in TOKEN_FIELDS:
-                        response["tokens"][field] = max(response["tokens"][field], _count(usage.get(field)))
+                    _absorb_response(responses, obj, moment, sidechain, f"{file_index}:{line_number}")
                 elif kind == "user" and not sidechain:
                     origin_aware = origin_aware or _origin_kind(obj) is not None
                     line_kind = _user_line_kind(obj, origin_aware)

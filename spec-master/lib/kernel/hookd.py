@@ -3,7 +3,7 @@
 with the kernel's decisions (Claude Code hook protocol; stdin JSON in, JSON
 or exit code out).
 
-    python3 hookd.py pre-tool-use | post-tool-use | stop | subagent-stop | session-start [--host HOST]
+    python3 hookd.py pre-tool-use | post-tool-use | stop | subagent-start | subagent-stop | session-start [--host HOST]
 
 `--host` picks the protocol (claude, qwen, codex, copilot, gemini, cursor,
 kiro, antigravity; see `kernel/hosts.py`); without it, the payload identifies
@@ -237,12 +237,19 @@ def _session_resume(root: str) -> dict:
     return {"decision": policy.ALLOW, "reason": "nothing to resume"}
 
 
+def _subagent(kind: str, root: str, payload: dict) -> dict:
+    """Subagents are not governed; their start/stop only feed the token ledger's attribution."""
+    import events  # noqa: E402 - imported on subagent events only
+    events.on_agent(root, kind, payload)
+    return {"decision": policy.ALLOW, "reason": "subagents are not governed yet"}
+
+
 HANDLERS = {
     "pre-tool-use": pre_tool_use,
     "post-tool-use": post_tool_use,
     "stop": stop,
-    "subagent-stop": lambda root, payload, enforce: {"decision": policy.ALLOW,
-                                                     "reason": "subagents are not governed yet"},
+    "subagent-start": lambda root, payload, enforce: _subagent("start", root, payload),
+    "subagent-stop": lambda root, payload, enforce: _subagent("stop", root, payload),
     "session-start": session_start,
 }
 

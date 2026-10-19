@@ -168,6 +168,9 @@ def cmd_state(args: argparse.Namespace) -> int:
                     evidence_entry = evidence.record(f, result)
                 if args.phase == state_mod.FEATURE_PHASES[-1]:
                     f["status"] = "COMPLETED"
+        if args.status != previous:  # attribution stream for the token ledger (best effort)
+            import events  # noqa: E402 - additive: keeps the import block untouched
+            events.on_phase(root, args.feature, args.phase, args.status)
         fired = None if args.no_hooks else hooks.safe_emit(
             root, "phase.transition",
             {"feature": args.feature, "phase": args.phase, "status": args.status, "previous": previous},
@@ -665,6 +668,18 @@ def cmd_telemetry(args: argparse.Namespace) -> int:
         _emit_round(args, row)
         return 0
     raise SystemExit(f"unknown telemetry action: {args.telemetry_action}")
+
+
+def cmd_tokens(args: argparse.Namespace) -> int:
+    import ledger
+    root = os.path.abspath(args.path)
+    if args.tokens_action == "ingest":
+        _print_json(ledger.ingest(root, transcripts=args.transcript or None))
+        return 0
+    if args.tokens_action == "summary":
+        _print_json(ledger.summary(root, since=args.since))
+        return 0
+    raise SystemExit(f"unknown tokens action: {args.tokens_action}")
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
@@ -1401,6 +1416,16 @@ def build_parser() -> argparse.ArgumentParser:
     telemetry_ingest.add_argument("--work-packages-completed", dest="work_packages_completed", type=int, default=0)
     telemetry_ingest.add_argument("--features-completed", dest="features_completed", type=int, default=0)
     _round_output_args(telemetry_ingest)
+
+    p_tokens = sub.add_parser("tokens", help="token ledger: per-response usage by feature/phase/agent (docs/token-ledger.md)")
+    p_tokens.set_defaults(func=cmd_tokens)
+    tokens_sub = p_tokens.add_subparsers(dest="tokens_action", required=True)
+    tokens_ingest = tokens_sub.add_parser("ingest", help="append new transcript usage to .spec-master/metrics/tokens.jsonl")
+    tokens_ingest.add_argument("--path", default=".", help="project root")
+    tokens_ingest.add_argument("--transcript", action="append", default=None, help="transcript file (repeatable); default: discover")
+    tokens_summary = tokens_sub.add_parser("summary", help="aggregate the ledger (spec-master.tokens-summary/v1)")
+    tokens_summary.add_argument("--path", default=".", help="project root")
+    tokens_summary.add_argument("--since", default=None, help="window start (ISO 8601)")
 
     p_baseline = sub.add_parser("baseline", help="measured baseline: Spec Master arm vs a direct agentic arm")
     p_baseline.set_defaults(func=cmd_baseline)
