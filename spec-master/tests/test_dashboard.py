@@ -428,6 +428,18 @@ class LiveModelKeysTests(DashboardTestBase):
         self.assertEqual(model["completeness"]["done"], 8)
         self.assertEqual(model["completeness"]["total"], 21)
 
+    def test_cycle_with_every_feature_done_reads_completed(self):
+        outside = {"mode": "agentic-outside-spec-master", "date": "2026-09-26"}
+        self._features(
+            {"id": "old", "name": "Old", "status": "COMPLETED", "delivery": outside},
+            {"id": "new1", "name": "New1", "cycle": 2, "phases": {**ALL_PASSED}, "status": "COMPLETED"},
+            cycles=[{"id": 1, "status": "COMPLETED"}, {"id": 2, "status": "RUNNING"}])
+        model = dashboard.build_model(self.tmp)
+        cycles = {c["id"]: c for c in model["cycles"]}
+        self.assertEqual((cycles[2]["status"], cycles[2]["declared_status"]), ("COMPLETED", "RUNNING"))
+        # features completed outside the flow count as done in the global counter too
+        self.assertEqual((model["completeness"]["features_done"], model["completeness"]["features"]), (2, 2))
+
     def test_cycles_derived_when_state_has_no_cycle_list(self):
         self._features({"id": "a", "name": "A", "cycle": 3})
         model = dashboard.build_model(self.tmp)

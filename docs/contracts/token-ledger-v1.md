@@ -62,9 +62,15 @@ Saída JSON (`schema: "spec-master.tokens-summary/v1"`):
   "by_agent": {"<agent_id>": {"agent_type":"…", …}},
   "by_model": {"<model>": {…}},
   "burn_rate_tokens_per_min": 0.0,
+  "recent_burn_rate_tokens_per_min": 0.0,
+  "recent_window_minutes": 60,
   "window": {"first_ts":"…","last_ts":"…"}
 }
 ```
+
+`burn_rate_tokens_per_min` é a média da janela inteira (dilui em dias ociosos);
+`recent_burn_rate_tokens_per_min` soma só as linhas dos últimos `recent_window_minutes`
+até a linha mais nova e divide por esse total de minutos (campos aditivos, mesmo schema v1).
 
 `cache_hit_ratio = cache_read_input / (input + cache_read_input + cache_creation_input)`; 0 quando o denominador é 0.
 

@@ -215,11 +215,15 @@ def _finish(group: dict) -> dict:
     return group
 
 
+RECENT_WINDOW_MIN = 60
+
+
 def summary(root: str, since=None, session_id=None) -> dict:
     """Aggregate of the ledger (contract §3). Cost sums only lines with a known price (null if none)."""
     floor = events.parse_ts(since) if since else None
     totals, by_feature, by_phase, by_agent, by_model = _blank(), {}, {}, {}, {}
     first = last = None
+    timed = []  # (moment, tokens) for the recent burn rate
     for line in read(root):
         moment = events.parse_ts(line.get("ts"))
         if floor is not None and (moment is None or moment < floor):
@@ -237,12 +241,15 @@ def summary(root: str, since=None, session_id=None) -> dict:
             _add(group, line)
         _add(by_model.setdefault(line.get("model") or "unknown", _blank()), line)
         if moment is not None:
+            timed.append((moment, (line.get("input_tokens") or 0) + (line.get("output_tokens") or 0)))
             if first is None or moment < first[0]:
                 first = (moment, line["ts"])
             if last is None or moment > last[0]:
                 last = (moment, line["ts"])
     _finish(totals)
     minutes = (last[0] - first[0]).total_seconds() / 60 if first and last else 0.0
+    # the whole-window rate dilutes over idle days; the recent rate is the last hour up to the newest line
+    recent = sum(n for moment, n in timed if (last[0] - moment).total_seconds() <= RECENT_WINDOW_MIN * 60) if last else 0
     return {
         "schema": SUMMARY_SCHEMA,
         "totals": totals,
@@ -251,5 +258,7 @@ def summary(root: str, since=None, session_id=None) -> dict:
         "by_agent": {key: _finish(group) for key, group in by_agent.items()},
         "by_model": {key: _finish(group) for key, group in by_model.items()},
         "burn_rate_tokens_per_min": round(totals["total_tokens"] / minutes, 3) if minutes > 0 else 0.0,
+        "recent_burn_rate_tokens_per_min": round(recent / RECENT_WINDOW_MIN, 3),
+        "recent_window_minutes": RECENT_WINDOW_MIN,
         "window": {"first_ts": first[1] if first else None, "last_ts": last[1] if last else None},
     }

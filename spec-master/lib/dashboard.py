@@ -343,6 +343,11 @@ def _decisions(root: str, errors: list) -> tuple[list, int]:
     return latest, len(decisions)
 
 
+def _feature_done(feature: dict) -> bool:
+    """COMPLETED in state (also features delivered outside the flow) or every phase passed."""
+    return (feature["status"] or "").upper() == "COMPLETED" or bool(feature["total"] and feature["done"] == feature["total"])
+
+
 def _cycles(state: dict | None, features: list) -> list:
     """Per-cycle progress so cycle-1 features (delivered outside the flow) never dilute cycle 2."""
     declared = {}
@@ -356,12 +361,16 @@ def _cycles(state: dict | None, features: list) -> list:
         done = sum(f["done"] for f in members)
         total = sum(f["total"] for f in members)
         eff = [f["effective_percent"] for f in members]
+        status = _text(declared.get(cycle_id, {}).get("status"))
+        completed = sum(1 for f in members if _feature_done(f))
         out.append({
             "id": cycle_id,
-            "status": _text(declared.get(cycle_id, {}).get("status")),
+            # a cycle whose features are all done reads COMPLETED even if state was never closed
+            "status": "COMPLETED" if members and completed == len(members) else status,
+            "declared_status": status,
             "context": _text(declared.get(cycle_id, {}).get("context")),
             "features": len(members),
-            "features_completed": sum(1 for f in members if (f["status"] or "").upper() == "COMPLETED"),
+            "features_completed": completed,
             "done": done,
             "total": total,
             "percent": _pct(done, total),
@@ -636,7 +645,7 @@ def _build(root: str) -> dict:
             "total": total,
             "percent": _pct(done, total),
             "features": len(features),
-            "features_done": sum(1 for f in features if f["total"] and f["done"] == f["total"]),
+            "features_done": sum(1 for f in features if _feature_done(f)),
         },
         "phase_totals": phase_totals,
         "features": features,

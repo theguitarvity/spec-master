@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Badge, Bar, Card, Empty, Stat, Table, fmt, fmtCost, fmtPct, shortTime } from "./ui.jsx";
+import { Badge, Bar, Card, Empty, Stat, Table, fmt, fmtCost, fmtPct, shortDateTime, shortTime } from "./ui.jsx";
 
 const PHASES = ["specify", "clarify", "plan", "tasks", "analyze", "implement", "validate"];
 
@@ -162,10 +162,11 @@ export function Tokens({ model }) {
   const totals = t.totals || {};
   return (
     <>
-      <Card title="Totals" aside={t.window ? `${shortTime(t.window.first_ts)} → ${shortTime(t.window.last_ts)}` : "no window"}>
+      <Card title="Totals" aside={t.window?.first_ts ? `${shortDateTime(t.window.first_ts)} → ${shortDateTime(t.window.last_ts)}` : "no window"}>
         <div className="stats">
           <Stat label="Total tokens" value={fmt(totals.total_tokens)} />
-          <Stat label="Burn rate" value={`${fmt(t.burn_rate_tokens_per_min)} /min`} />
+          <Stat label="Burn rate" value={`${fmt(t.recent_burn_rate_tokens_per_min ?? t.burn_rate_tokens_per_min)} /min`}
+                hint={`last ${t.recent_window_minutes ?? 60} min · window avg ${fmt(t.burn_rate_tokens_per_min)} /min`} />
           <Stat label="Cache hit" value={fmtPct((totals.cache_hit_ratio ?? 0) * 100)} />
           <Stat label="Cost" value={fmtCost(totals.cost_usd)} />
           <Stat label="Tier budget" value="not configured" hint="no budget set" />

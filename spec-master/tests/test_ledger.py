@@ -197,6 +197,16 @@ class SummaryTests(_LedgerCase):
         self.assertEqual(summary["window"]["first_ts"], "2026-09-27T10:00:05.000Z")
         self.assertGreater(summary["burn_rate_tokens_per_min"], 0)
 
+    def test_recent_burn_rate_counts_only_the_last_hour(self):
+        self.ingest()
+        summary = ledger.summary(self.root)
+        self.assertEqual(summary["recent_window_minutes"], 60)
+        newest = events.parse_ts(summary["window"]["last_ts"])
+        recent = sum(line["input_tokens"] + line["output_tokens"] for line in self.lines()
+                     if (newest - events.parse_ts(line["ts"])).total_seconds() <= 3600)
+        self.assertEqual(summary["recent_burn_rate_tokens_per_min"], round(recent / 60, 3))
+        self.assertEqual(ledger.summary(self.root, session_id="nope")["recent_burn_rate_tokens_per_min"], 0.0)
+
     def test_since_filters_by_ts(self):
         self.ingest()
         later = ledger.summary(self.root, since="2026-09-27T11:00:00Z")
