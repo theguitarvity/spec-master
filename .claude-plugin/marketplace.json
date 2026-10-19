@@ -9,7 +9,7 @@
       "name": "spec-master",
       "source": "./spec-master",
       "description": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "category": "development",
       "tags": [
         "spec-driven-development",
