@@ -340,20 +340,74 @@ def _is_git_repo(root: str) -> bool:
         return False
 
 
-def scan(root: str = ".") -> dict:
+# --- Monorepo sub-package discovery -------------------------------------------
+
+# Directories that never hold first-party packages. Hidden directories are
+# skipped as well. Follow-up: unify with the shared pruned walker of the
+# protocol-and-cli-performance feature once both are merged.
+PRUNED_DIRS = frozenset({".git", "node_modules", "dist", "build", "target", ".venv", "vendor", "__pycache__"})
+MAX_PACKAGE_DEPTH = 4
+
+
+def _walk_pruned(root: str, max_depth: int):
+    """Like `os.walk(root)` (top-down, sorted) but never enters pruned or
+    hidden directories and stops `max_depth` levels below `root`."""
     root = os.path.abspath(root)
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = 0 if dirpath == root else os.path.relpath(dirpath, root).count(os.sep) + 1
+        dirnames[:] = sorted(
+            d for d in dirnames if d not in PRUNED_DIRS and not d.startswith(".") and depth < max_depth
+        )
+        yield dirpath, dirnames, sorted(filenames)
+
+
+def _stacks_in(directory: str) -> list[dict]:
     stacks = []
     for fn in (
-        lambda: _scan_node(root, os.path.join(root, "package.json")),
-        lambda: _scan_python(root),
-        lambda: _scan_go(root),
-        lambda: _scan_rust(root),
-        lambda: _scan_maven(root),
-        lambda: _scan_gradle(root),
+        lambda: _scan_node(directory, os.path.join(directory, "package.json")),
+        lambda: _scan_python(directory),
+        lambda: _scan_go(directory),
+        lambda: _scan_rust(directory),
+        lambda: _scan_maven(directory),
+        lambda: _scan_gradle(directory),
     ):
         result = fn()
         if result:
             stacks.append(result)
+    return stacks
+
+
+def _find_packages(base: str, repo_root: str) -> list[dict]:
+    """Sub-packages below `base` (excluding `base` itself) that carry a manifest."""
+    packages = []
+    for dirpath, _dirs, _files in _walk_pruned(base, MAX_PACKAGE_DEPTH):
+        if dirpath == base:
+            continue
+        stacks = _stacks_in(dirpath)
+        if not stacks:
+            continue
+        for stack in stacks:
+            stack["manifest"] = os.path.relpath(stack["manifest"], repo_root).replace(os.sep, "/")
+        packages.append({"path": os.path.relpath(dirpath, repo_root).replace(os.sep, "/"), "stacks": stacks})
+    return packages
+
+
+def _resolve_scope(root: str, scope: str) -> str:
+    """Absolute path of a repository-relative `scope` directory, or ValueError."""
+    parts = posixpath.normpath(scope.replace("\\", "/")).split("/")
+    if parts[0].startswith("/") or ":" in parts[0] or ".." in parts or parts == ["."]:
+        raise ValueError(f"scope must be a repository-relative directory: {scope!r}")
+    target = os.path.join(root, *parts)
+    if not os.path.isdir(target):
+        raise ValueError(f"scope is not an existing directory inside the repository: {scope!r}")
+    return target
+
+
+def scan(root: str = ".", scope: str | None = None) -> dict:
+    root = os.path.abspath(root)
+    scope_dir = _resolve_scope(root, scope) if scope else root
+    stacks = _stacks_in(scope_dir)
+    packages = _find_packages(scope_dir, root)
 
     ci_present = os.path.isdir(os.path.join(root, ".github", "workflows")) or any(
         os.path.exists(os.path.join(root, name))
@@ -393,6 +447,8 @@ def scan(root: str = ".") -> dict:
 
     return {
         "stacks": stacks,
+        "packages": packages,
+        "scope": posixpath.normpath(scope.replace("\\", "/")) if scope else None,
         "ci_present": ci_present,
         "spec_kit_present": spec_kit_present,
         "constitution_present": constitution_present,
