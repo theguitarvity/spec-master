@@ -28,6 +28,9 @@ def render(name: str, **values) -> str:
 
 
 def _implement_card(record: dict) -> str:
+    if record.get("lane") == "standard":
+        import standard_lane
+        return standard_lane.card(record)
     bugfix = record.get("bugfix") or {}
     block = render("patch-bugfix", regression_test=bugfix.get("test", ""),
                    test_command=bugfix.get("command", "")) if record.get("kind") == "bugfix" else ""
@@ -144,6 +147,9 @@ def end(root: str, *, change_id: str | None = None, runner=subprocess.run, run_g
     """Verify the change; PASSED only with every check green (fail-closed)."""
     root = os.path.abspath(root)
     record = _require_running(root, change_id)
+    if record.get("lane") == "standard":
+        import standard_lane
+        return standard_lane.end(root, record, runner=runner, run_gates=run_gates, dry_run=dry_run)
     result = verify.post(root, record, runner=runner, run_gates=run_gates)
     failed = [c for c in result["checks"] if not c["ok"]]
     if dry_run:
