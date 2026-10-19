@@ -26,8 +26,9 @@ STDIO_SERVER_KEYS = {"type", "command", "args", "env", "cwd"}
 ROOT_VARIABLES = {"${CLAUDE_PLUGIN_ROOT}": ENGINE, "${PLUGIN_ROOT}": ENGINE, "$PLUGIN_ROOT": ENGINE,
                   "${CURSOR_PLUGIN_ROOT}": ENGINE, "${extensionPath}": ROOT}
 ALL_EVENTS = set(packaging.EVENTS)
+CLAUDE_EVENTS = ALL_EVENTS | set(packaging.CLAUDE_ONLY_EVENTS)  # Claude Code alone has subagent hooks
 HOOK_FILES = {  # generated hooks file -> (host whose dialect its commands ask for, events it wires)
-    "spec-master/hooks/hooks.json": ("claude", ALL_EVENTS),
+    "spec-master/hooks/hooks.json": ("claude", CLAUDE_EVENTS),
     "spec-master/hooks/codex-hooks.json": ("codex", ALL_EVENTS),
     "spec-master/hooks/copilot-hooks.json": ("copilot", ALL_EVENTS),
     "spec-master/hooks/cursor-hooks.json": ("cursor", ALL_EVENTS),

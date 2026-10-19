@@ -255,6 +255,17 @@ saídas de subagentes gravadas no transcript são um retrato do começo do
 stream, então `output_tokens` vira um limite inferior e a linha avisa isso; o
 custo exato vem do modo headless.
 
+**Ledger de tokens e statusline.** `tokens ingest|summary` mantém
+`.spec-master/metrics/tokens.jsonl`: uma linha por resposta do modelo, lida de
+forma incremental do transcript e atribuída a feature, fase e agente. Para ver
+o consumo ao vivo, aponte o `statusLine` do Claude Code para o script:
+
+```json
+{ "statusLine": { "type": "command", "command": "python3 spec-master/lib/statusline.py" } }
+```
+
+Detalhes, custo estimado e limites em [docs/token-ledger.md](docs/token-ledger.md).
+
 **Baseline.** `baseline plan|run|summarize` compara o fluxo do Spec Master
 com um agente trabalhando direto nos mesmos casos: worktree limpo por
 execução, checagens reais e custo medido pelo próprio host. `plan` não
@@ -425,6 +436,7 @@ JSON compacto; `--pretty` (ou `SPEC_MASTER_PRETTY=1`) formata.
 | Ciclo | `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature: se o clarify é pulável, a profundidade do analyze, revisores e work packages |
 | Métricas | `telemetry locate\|ingest` | uso medido pelo host (transcript do Claude Code ou JSON do `claude -p`) |
 | Métricas | `metrics record-round\|summarize\|validate\|export\|calibrate` | rodadas, velocidade, validação do schema, export OTLP/JSONL e calibração dos tiers |
+| Métricas | `tokens ingest\|summary` | ledger de tokens por feature, fase e agente, lido do transcript (`statusline.py` mostra ao vivo) |
 | Métricas | `baseline plan\|run\|summarize` | fluxo do Spec Master × agente direto nos mesmos casos (`run` exige `--yes`) |
 | Team Mode | `team roles\|intake\|adopt\|workstreams\|escalate\|resolve\|decisions\|routes` | papéis, intake guiado, adoção incremental, work packages, escalonamento e memória de decisão |
 | Team Mode | `workstreams review\|integrate\|aggregate` | vereditos de peer review e integração dos pacotes paralelos |
@@ -522,7 +534,7 @@ spec-master/                  engine neutro, compartilhado por todos os adapters
 │   ├── cli.py                todos os grupos de comando
 │   ├── kernel/               harness: lanes, step, política, verify, hookd, auditoria, doctor
 │   ├── state.py · evidence.py   estado atômico sob lock e evidência por fase
-│   ├── telemetry.py · baseline.py · metrics*.py   métricas medidas pelo host
+│   ├── telemetry.py · ledger.py · events.py · statusline.py · baseline.py · metrics*.py   métricas e ledger de tokens
 │   ├── risk_profile.py · hooks.py · quality_gates.py · discovery.py
 │   ├── team_model.py · decision_memory.py · traceability.py · context_delta.py
 │   └── adapters_gen.py       entrypoints dos 30+ agentes, a partir de uma tabela

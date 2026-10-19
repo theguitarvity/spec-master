@@ -43,7 +43,11 @@ EVENTS = {
     "Stop": (None, "stop", 10),
     "SessionStart": ("startup|resume|compact", "session-start", 10),
 }
-
+# Claude Code alone has subagent hooks; they feed the token ledger's attribution events.
+CLAUDE_EVENTS = {
+    "SubagentStart": (None, "subagent-start", 10),
+    "SubagentStop": (None, "subagent-stop", 10),
+}
 
 HOSTS = ("claude", "qwen", "kiro")
 SETTINGS = {"claude": os.path.join(".claude", "settings.json"), "qwen": os.path.join(".qwen", "settings.json")}
@@ -95,9 +99,13 @@ def kiro_hooks(engine: str, project: str | None = None) -> dict:
     return {"version": "v1", "hooks": hooks}
 
 
+def hooks_events(host: str) -> dict:
+    return EVENTS | CLAUDE_EVENTS if host == "claude" else EVENTS
+
+
 def hooks_block(engine: str, project: str | None = None, host: str = "claude") -> dict:
     block = {}
-    for host_event, (matcher, event, timeout) in EVENTS.items():
+    for host_event, (matcher, event, timeout) in hooks_events(host).items():
         command = hook_command(engine, event, project, host)
         entry = {"hooks": [{"type": "command", "command": command, "timeout": timeout}]}
         if matcher:
@@ -169,7 +177,7 @@ def install_hooks(project: str, *, engine: str | None = None, mode: str | None =
         settings_path, events = os.path.join(project, KIRO_HOOKS), KIRO_EVENTS
         content = kiro_hooks(engine, project)
     else:
-        settings_path, events = os.path.join(project, SETTINGS[host]), EVENTS
+        settings_path, events = os.path.join(project, SETTINGS[host]), hooks_events(host)
         current = {}
         if os.path.isfile(settings_path):
             with open(settings_path, "r", encoding="utf-8") as fh:

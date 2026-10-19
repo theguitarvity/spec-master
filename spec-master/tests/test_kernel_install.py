@@ -33,8 +33,11 @@ class InstallHooksTests(unittest.TestCase):
         pre = merged["hooks"]["PreToolUse"]
         self.assertEqual(pre[0]["hooks"][0]["command"], "lint.sh")
         self.assertIn("kernel/hookd.py", pre[1]["hooks"][0]["command"])
-        self.assertEqual(sorted(merged["hooks"]), sorted(install.EVENTS))
-        self.assertEqual(result["events"], sorted(install.EVENTS))
+        claude = sorted({**install.EVENTS, **install.CLAUDE_EVENTS})
+        self.assertEqual(sorted(merged["hooks"]), claude)
+        self.assertEqual(result["events"], claude)
+        self.assertIn("subagent-start", merged["hooks"]["SubagentStart"][0]["hooks"][0]["command"])
+        self.assertIn("subagent-stop", merged["hooks"]["SubagentStop"][0]["hooks"][0]["command"])
 
     def test_is_idempotent(self):
         install.install_hooks(self.project)
@@ -149,8 +152,8 @@ class InstallHooksTests(unittest.TestCase):
     def test_plugin_hooks_json_declares_the_same_events(self):
         path = os.path.join(str(install.ENGINE), "hooks", "hooks.json")
         declared = self.read(path)["hooks"]
-        self.assertEqual(sorted(declared), sorted(install.EVENTS))
-        for event, (matcher, name, _timeout) in install.EVENTS.items():
+        self.assertEqual(sorted(declared), sorted({**install.EVENTS, **install.CLAUDE_EVENTS}))
+        for event, (matcher, name, _timeout) in {**install.EVENTS, **install.CLAUDE_EVENTS}.items():
             with self.subTest(event=event):
                 entry = declared[event][0]
                 self.assertEqual(entry.get("matcher"), matcher)

@@ -291,6 +291,19 @@ class HookdReplayTests(unittest.TestCase):
             os.chdir(cwd)
         self.assertEqual(code, 0)
 
+    def test_subagent_hooks_write_attribution_events_and_allow(self):
+        code, out = self.hook("subagent-start", {"session_id": "s1", "agent_id": "a1", "agent_type": "Explore"})
+        self.assertEqual(code, 0)
+        code, _ = self.hook("subagent-stop", {"session_id": "s1", "agent_id": "a1", "agent_type": "Explore",
+                                              "agent_transcript_path": "/t/agent-a1.jsonl"})
+        self.assertEqual(code, 0)
+        path = os.path.join(self.root, ".spec-master", "events.jsonl")
+        with open(path, encoding="utf-8") as fh:
+            lines = [json.loads(line) for line in fh]
+        self.assertEqual([line["type"] for line in lines], ["agent.started", "agent.finished"])
+        self.assertEqual(lines[1]["transcript_path"], "/t/agent-a1.jsonl")
+        self.assertEqual({line["agent_id"] for line in lines}, {"a1"})
+
     def test_projects_without_spec_master_are_never_written_to(self):
         bare = fx.make_repo(with_tests=False)  # no .spec-master/ at all
         try:
