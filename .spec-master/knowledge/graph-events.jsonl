@@ -13,3 +13,6 @@
 {"event": "EDGE_CREATED", "timestamp": "2026-08-31T19:39:42.932995+00:00", "source": "project.spec-master", "relation": "CONTAINS", "target": "artifact.readme"}
 {"event": "EDGE_CREATED", "timestamp": "2026-08-31T19:39:42.933218+00:00", "source": "project.spec-master", "relation": "CONTAINS", "target": "artifact.docs"}
 {"event": "EDGE_CREATED", "timestamp": "2026-08-31T19:39:42.933422+00:00", "source": "project.spec-master", "relation": "CONTAINS", "target": "package.spec-master"}
+{"event": "NODE_CREATED", "timestamp": "2026-10-19T11:25:13.651925+00:00", "node_id": "decision.architecture-inconsistency-adr-check-for-harness-f48e2b65", "type": "Decision"}
+{"event": "NODE_CREATED", "timestamp": "2026-10-19T11:25:13.652226+00:00", "node_id": "agent.architect", "type": "Agent"}
+{"event": "EDGE_CREATED", "timestamp": "2026-10-19T11:25:13.652317+00:00", "source": "decision.architecture-inconsistency-adr-check-for-harness-f48e2b65", "relation": "DECIDED_BY", "target": "agent.architect"}

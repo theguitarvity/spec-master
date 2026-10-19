@@ -321,13 +321,14 @@ escalated to the user instead of looping forever or masking the problem.
 ## Tests
 
 ```bash
-python3 -m pytest spec-master/tests -q
+python3 -m unittest discover -s spec-master/tests
 ```
 
-The core is stdlib-only. The test suite needs `pytest`, and `PyYAML` is
-optional for the graph/knowledge tests. Without pytest, `python3 -m unittest
-discover -s spec-master/tests` runs the `unittest` suites, but the modules that
-import `pytest` show up as import errors.
+The core and the test suite are stdlib-only: every test module is a
+`unittest.TestCase`, so nothing needs to be installed. pytest, if you have it,
+runs the same suite from the repository root with no extra options
+(`python3 -m pytest -q`); `spec-master/tests/conftest.py` only adjusts
+`sys.path`.
 
 The tests cover state transitions (including the 3-cycle repair cap and the
 rule that a phase can't start before its predecessor `PASSED`), fingerprint

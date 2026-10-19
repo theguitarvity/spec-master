@@ -152,3 +152,15 @@ real do `/spec-master` neste próprio repositório (dogfooding).
 | Layout de módulos existentes (state.py, git_strategy.py, etc.) | DISCOVERED_FROM_CODEBASE | DISCOVERED_FROM_CODEBASE |
 | Nenhuma dependência nova obrigatória no core | docs/market-benchmark-roadmap.md | EXPLICIT |
 | CI não configurado | DISCOVERED_FROM_CODEBASE (discovery scan) | DISCOVERED_FROM_CODEBASE |
+
+---
+
+## Ciclo 2 (2026-10-19)
+
+- Core continua Python 3 stdlib (`spec-master/lib/`), novos módulos previstos:
+  ledger de tokens, receptor OTLP/HTTP JSON, servidor SSE, manifest de dispatch (INFERRED).
+- Nova exceção documentada (Princípio IX): UI React + Vite em diretório próprio,
+  fora do import path do core, com bundle buildado versionado (EXPLICIT, decisão D1).
+- Fontes de tokens: transcript JSONL do Claude Code (`message.usage`, verificado
+  localmente), hooks `SubagentStart/Stop`, OTel `claude_code.api_request`;
+  Codex via `[otel]`/`exec --json`; Copilot não verificado (DISCOVERED + MARKET).

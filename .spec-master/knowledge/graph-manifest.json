@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0",
-  "total_nodes": 4,
-  "total_edges": 3,
+  "total_nodes": 6,
+  "total_edges": 4,
   "nodes": [
     {
-      "id": "project.spec-master",
-      "type": "Project",
-      "name": "spec-master",
+      "id": "artifact.docs",
+      "type": "Artifact",
+      "name": "Documentation",
       "status": "active",
-      "confidence": 1.0,
+      "confidence": 0.95,
       "tags": [
-        "project"
+        "documentation"
       ],
       "aliases": []
     },
@@ -26,17 +26,6 @@
       "aliases": []
     },
     {
-      "id": "artifact.docs",
-      "type": "Artifact",
-      "name": "Documentation",
-      "status": "active",
-      "confidence": 0.95,
-      "tags": [
-        "documentation"
-      ],
-      "aliases": []
-    },
-    {
       "id": "package.spec-master",
       "type": "Package",
       "name": "Spec Master Engine Package",
@@ -45,6 +34,47 @@
       "tags": [
         "harness",
         "engine"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "project.spec-master",
+      "type": "Project",
+      "name": "spec-master",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "project"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "decision.architecture-inconsistency-adr-check-for-harness-f48e2b65",
+      "type": "Decision",
+      "name": "ADR check for harness-hygiene (tier L)",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "decision",
+        "kind:architecture_inconsistency",
+        "decided-by:architect",
+        "raised-by:tech-lead",
+        "involves:architect",
+        "involves:tech-lead",
+        "involves:scrum-master",
+        "feature:harness-hygiene"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "agent.architect",
+      "type": "Agent",
+      "name": "architect agent",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "agent",
+        "role:architect"
       ],
       "aliases": []
     }
@@ -94,18 +124,47 @@
       "valid_from": null,
       "valid_to": null,
       "status": "active"
+    },
+    {
+      "source": "decision.architecture-inconsistency-adr-check-for-harness-f48e2b65",
+      "relation": "DECIDED_BY",
+      "target": "agent.architect",
+      "provenance": "EXPLICIT",
+      "confidence": 1.0,
+      "evidence": {
+        "description": "escalation architecture_inconsistency resolved"
+      },
+      "first_seen": {
+        "at": "2026-10-19T11:25:13Z"
+      },
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
     }
   ],
   "types": [
+    "Agent",
     "Artifact",
+    "Decision",
     "Package",
     "Project"
   ],
   "aliases": {},
   "tags": [
+    "agent",
+    "decided-by:architect",
+    "decision",
     "documentation",
     "engine",
+    "feature:harness-hygiene",
     "harness",
-    "project"
+    "involves:architect",
+    "involves:scrum-master",
+    "involves:tech-lead",
+    "kind:architecture_inconsistency",
+    "project",
+    "raised-by:tech-lead",
+    "role:architect"
   ]
 }

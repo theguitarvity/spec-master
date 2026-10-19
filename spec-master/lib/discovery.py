@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 import sast_gates
 import tracker_orchestration
@@ -74,6 +75,89 @@ def _scan_python(root: str) -> dict | None:
     return {"language": "python", "commands": commands, "manifest": manifest}
 
 
+# Manifest-less Python test suites (feature harness-hygiene, H3). Bounded to
+# the scan root and its immediate children: no recursive walk.
+_SUITE_DIR_NAMES = ("tests", "test")
+_SUITE_SKIP_DIRS = frozenset({
+    "node_modules", "venv", "env", "build", "dist", "target", "site-packages", "__pycache__",
+})
+_PYTEST_IMPORT = re.compile(r"^\s*(import pytest|from pytest\b)", re.MULTILINE)
+
+
+def _is_test_module(name: str) -> bool:
+    return name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))
+
+
+_TOP_LEVEL_TEST_FN = re.compile(r"^def test\w*\s*\(", re.MULTILINE)
+_UNITTEST_IMPORT = re.compile(r"^\s*(import unittest\b|from unittest\b)", re.MULTILINE)
+
+
+def _read_text(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def _suite_uses_pytest(suite_dir: str, modules: list[str]) -> bool:
+    """pytest when the suite needs it: a module or ``conftest.py`` imports pytest,
+    or a module holds plain top-level ``def test_*`` functions without importing
+    unittest (pytest-style tests that ``unittest discover`` would not collect)."""
+    if _PYTEST_IMPORT.search(_read_text(os.path.join(suite_dir, "conftest.py"))):
+        return True
+    for name in modules:
+        text = _read_text(os.path.join(suite_dir, name))
+        if _PYTEST_IMPORT.search(text):
+            return True
+        if _TOP_LEVEL_TEST_FN.search(text) and not _UNITTEST_IMPORT.search(text):
+            return True
+    return False
+
+
+def _scan_python_test_suites(root: str) -> list[dict]:
+    """Detect Python test suites that have no manifest (pyproject/setup.cfg/requirements).
+
+    Each suite becomes its own stack with a ``scope`` (suite dir relative to
+    the root). The runner is derived from the suite itself: pytest when any
+    module imports pytest, stdlib unittest otherwise.
+    """
+    candidates = list(_SUITE_DIR_NAMES)
+    try:
+        children = sorted(os.listdir(root))
+    except OSError:
+        children = []
+    for child in children:
+        if child.startswith(".") or child in _SUITE_SKIP_DIRS:
+            continue
+        if not os.path.isdir(os.path.join(root, child)):
+            continue
+        candidates.extend(f"{child}/{name}" for name in _SUITE_DIR_NAMES)
+    stacks = []
+    for rel in candidates:
+        suite_dir = os.path.join(root, *rel.split("/"))
+        if not os.path.isdir(suite_dir):
+            continue
+        try:
+            modules = sorted(n for n in os.listdir(suite_dir) if _is_test_module(n))
+        except OSError:
+            continue
+        if not modules:
+            continue
+        if _suite_uses_pytest(suite_dir, modules):
+            command = f"python3 -m pytest {rel}"
+        else:
+            command = f"python3 -m unittest discover -s {rel}"
+        stacks.append({
+            "language": "python",
+            "commands": {"test": command},
+            "manifest": suite_dir,
+            "scope": rel,
+            "detected_from": "test-suite",
+        })
+    return stacks
+
+
 def _scan_go(root: str) -> dict | None:
     manifest = os.path.join(root, "go.mod")
     if not os.path.exists(manifest):
@@ -117,6 +201,8 @@ def scan(root: str = ".") -> dict:
         result = fn()
         if result:
             stacks.append(result)
+    if not any(stack["language"] == "python" for stack in stacks):
+        stacks.extend(_scan_python_test_suites(root))
 
     ci_present = os.path.isdir(os.path.join(root, ".github", "workflows")) or any(
         os.path.exists(os.path.join(root, name))

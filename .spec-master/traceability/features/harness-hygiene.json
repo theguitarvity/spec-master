@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "feature": "harness-hygiene",
+  "rows": [
+    {
+      "requirement": "unittest discover passes without pytest installed",
+      "source": "EXPLICIT",
+      "feature": "harness-hygiene",
+      "spec": "specs/013-harness-hygiene/spec.md",
+      "plan": "FR-001..FR-003, SC-001",
+      "task": "T002-T006",
+      "test": "unittest discover: Ran 658 OK; AST name/assert diff 25/25 modules",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Suite runs from repo root without manual pythonpath",
+      "source": "EXPLICIT",
+      "feature": "harness-hygiene",
+      "spec": "specs/013-harness-hygiene/spec.md",
+      "plan": "FR-004, SC-002",
+      "task": "T007-T008",
+      "test": "pytest -q (root) 658 passed; spec-master/tests/conftest.py",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "discovery/gates detect Python stack and a test gate in this repo",
+      "source": "EXPLICIT",
+      "feature": "harness-hygiene",
+      "spec": "specs/013-harness-hygiene/spec.md",
+      "plan": "FR-005..FR-007, SC-003",
+      "task": "T009-T012",
+      "test": "test_discovery (8 suite tests), test_quality_gates (2); gates detect --path . -> test (python: spec-master/tests)",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Owner inference matches whole words, not substrings",
+      "source": "EXPLICIT",
+      "feature": "harness-hygiene",
+      "spec": "specs/013-harness-hygiene/spec.md",
+      "plan": "FR-008, SC-004",
+      "task": "T013-T014",
+      "test": "test_team_model: test_owner_inference_* (3 tests)",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Tasks without explicit depends_on are not chained serially by default",
+      "source": "EXPLICIT",
+      "feature": "harness-hygiene",
+      "spec": "specs/013-harness-hygiene/spec.md",
+      "plan": "FR-009, SC-005",
+      "task": "T013-T014",
+      "test": "test_team_model: test_tasks_without_depends_on_are_independent, test_explicit_depends_on_is_preserved",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "metrics record-round --append writes the row atomically",
+      "source": "EXPLICIT",
+      "feature": "harness-hygiene",
+      "spec": "specs/013-harness-hygiene/spec.md",
+      "plan": "FR-010, FR-011, SC-006",
+      "task": "T015-T016",
+      "test": "test_metrics: test_append_round_* (6), test_cli_record_round_* (4), test_concurrent_cli_appends_keep_every_row",
+      "status": "COVERED",
+      "issue": ""
+    }
+  ]
+}

@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "context": "docs/market-benchmark-roadmap.md",
+  "workflow": "trunk",
+  "status": "PAUSED",
+  "constitution": {
+    "status": "APPLIED",
+    "additions": [
+      "VII. Reuse the Ecosystem Before Reimplementing It",
+      "VIII. Auto-Detected Quality Gates, Never Hardcoded",
+      "IX. Scoped, Documented Dependency Exceptions",
+      "X. Irreversible Publishing Actions Require Explicit Confirmation"
+    ]
+  },
+  "features": [
+    {
+      "id": "context-delta-reporting",
+      "name": "Context delta reporting on resume",
+      "description": "Report an explicit ADDED/MODIFIED/REMOVED delta for spec/plan/tasks between executions on resume, analogous to the existing constitution diff, instead of only deciding staleness internally.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-7"
+      ],
+      "acceptance_criteria": [
+        "On resume, a human-readable ADDED/MODIFIED/REMOVED delta is produced for spec/plan/tasks artifacts that changed since the last run",
+        "The delta reuses the existing fingerprint/staleness mechanism as its data source, not a parallel diffing mechanism",
+        "The report format mirrors the existing constitution diff output style for consistency"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/009-context-delta-reporting",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "declarative-event-hooks",
+      "name": "Declarative event-driven hooks",
+      "description": "Support declarative hooks for events such as a failed quality gate triggering repair, or a public-contract change triggering constitution revalidation, reusing the escalation logic already present in Team Mode playbooks.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-8"
+      ],
+      "acceptance_criteria": [
+        "Hooks are declared data (not new imperative code paths) and are evaluated deterministically against workflow events",
+        "The escalation logic already used by Team Mode playbooks is reused, not duplicated",
+        "A hook firing is recorded in a way traceable back to the event that triggered it"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/010-declarative-event-hooks",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "dedicated-mcp-server",
+      "name": "Dedicated MCP server",
+      "description": "Expose spec-master/lib/cli.py capabilities (state, traceability, graph query, quality gates) as MCP tools via a dedicated, isolated server component.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-6"
+      ],
+      "acceptance_criteria": [
+        "MCP tools map 1:1 to existing deterministic CLI capabilities, no new business logic duplicated in the server",
+        "Any dependency the MCP server needs beyond stdlib is isolated to this component only, per constitution Principle IX",
+        "The core (spec-master/lib/) remains fully functional and independently testable with the MCP server absent"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/008-dedicated-mcp-server",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "local-dashboard",
+      "name": "Local static dashboard",
+      "description": "Generate a lightweight, dependency-free, self-contained HTML dashboard from .spec-master/state.json, workstreams.json, and the knowledge graph (reusing graph/maps.py::render_system_map), with no server required.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-5"
+      ],
+      "acceptance_criteria": [
+        "A single self-contained HTML file is generated with no new runtime dependency",
+        "The dashboard reflects current state.json/workstreams.json/knowledge graph data at generation time",
+        "graph/maps.py::render_system_map is reused, not reimplemented"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/007-local-dashboard",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "optional-pr-open-step",
+      "name": "Optional PR-open step in Git Flow",
+      "description": "Offer an optional step to open a pull request at the end of a feature under Git Flow, always gated on explicit user confirmation, attaching the traceability matrix and final report as the PR description.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-10"
+      ],
+      "acceptance_criteria": [
+        "The PR-open step never runs automatically; it always requires an explicit confirmed answer from the user first, per constitution Principle X",
+        "When confirmed, the PR description includes the traceability matrix and final report content",
+        "Under trunk-based workflow (this repository's current strategy), the step is a documented no-op, not silently skipped without explanation"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/012-optional-pr-open-step",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "parallel-worktree-execution",
+      "name": "Parallel worktree execution",
+      "description": "Execute independent features in parallel using isolated git worktrees, aggregating and merging results.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-1"
+      ],
+      "acceptance_criteria": [
+        "Features with no dependency edge between them can execute in isolated git worktrees concurrently",
+        "Each worktree runs exactly one feature's full phase loop without touching another feature's files",
+        "Results (branch/diff/status) are aggregated back and merge conflicts are reported, never auto-resolved"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/003-parallel-worktree-execution",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 1,
+      "phases": {
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
+      }
+    },
+    {
+      "id": "role-decision-memory",
+      "name": "Role-scoped decision memory in the knowledge graph",
+      "description": "Record decision nodes (who decided what, why, when) in the knowledge graph during Team Mode escalations, queryable via knowledge for-role.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-2-item-9"
+      ],
+      "acceptance_criteria": [
+        "A decision node is written to the knowledge graph at the moment a Team Mode escalation is resolved",
+        "Decision nodes are queryable via the existing knowledge for-role command",
+        "No new storage mechanism is introduced beyond the existing knowledge graph"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/011-role-decision-memory",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "sast-quality-gate",
+      "name": "Auto-detected SAST quality gate",
+      "description": "Detect already-configured SAST scanners (e.g. Semgrep config, CodeQL workflow) in the target repository and promote them to a blocking quality gate, following the same auto-detection pattern as build/test/lint gates in quality_gates.py.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-4"
+      ],
+      "acceptance_criteria": [
+        "A SAST scanner already configured in the target repo is detected without any hardcoded tool name/command",
+        "When detected, the gate is blocking, not merely a manual Security Agent suggestion",
+        "When no SAST scanner is configured, the gate is absent (not a failure) — consistent with existing gate-detection behavior"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/006-sast-quality-gate",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "delivery": {
+        "mode": "agentic-outside-spec-master",
+        "date": "2026-09-26",
+        "note": "Implemented directly in code (docs/market-benchmark-roadmap.md) after the user paused this cycle; Spec Kit phases never ran, so they stay PENDING on purpose. Evidence: tests in spec-master/tests and the status table in the roadmap."
+      }
+    },
+    {
+      "id": "speckit-tracker-orchestration",
+      "name": "Tracker orchestration via existing Spec Kit extensions",
+      "description": "Orchestrate existing Spec Kit tracker integrations (Jira, Azure DevOps, Linear, GitHub Issues) by reusing/extending the speckit-taskstoissues skill, instead of building new integrations from scratch.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-3"
+      ],
+      "acceptance_criteria": [
+        "No new bespoke tracker client is written where an existing Spec Kit extension/skill already covers that tracker",
+        "speckit-taskstoissues is reused or extended, not duplicated",
+        "Tracker selection is auto-detected from the target repository's own configuration, never hardcoded"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "spec_directory": "specs/005-speckit-tracker-orchestration",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 1,
+      "phases": {
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
+      }
+    },
+    {
+      "id": "team-mode-parallel-workstreams",
+      "name": "Team Mode parallel workstreams execution",
+      "description": "Execute Team Mode workstreams from .spec-master/workstreams.json in parallel using the worktree mechanism from parallel-worktree-execution.",
+      "source_requirements": [
+        "docs/market-benchmark-roadmap.md#tier-1-item-2"
+      ],
+      "acceptance_criteria": [
+        "Each workstream in .spec-master/workstreams.json executes in its own worktree via the mechanism built for parallel-worktree-execution",
+        "Peer review and Tech Lead integration authority are respected before a workstream is merged",
+        "Workstream results are aggregated into the same reporting path as sequential Team Mode execution"
+      ],
+      "dependencies": [
+        "parallel-worktree-execution"
+      ],
+      "branch": null,
+      "spec_directory": "specs/004-team-mode-parallel-workstreams",
+      "status": "COMPLETED",
+      "analyze_repair_cycles": 1,
+      "phases": {
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
+      }
+    }
+  ],
+  "quality_gates": [],
+  "fingerprint": {
+    "app-features.md": "471946a71907c32de968141dc60aa3f023c900869bb788efc04b53138027e34b",
+    "project-goals.md": "9e1e94eb19572c55a23c4b7363bff2041caf196f7d5384ef550eb65517fea310",
+    "tech-stack.md": "077bd62909e16e73bfa78d6e215f0b1a0dafa57c5fc089763f6092bc74024f8a"
+  },
+  "traceability": [],
+  "traceability_store": {
+    "version": 1,
+    "path": "traceability/features"
+  }
+}

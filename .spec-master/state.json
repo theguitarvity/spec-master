@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "context": "docs/market-benchmark-roadmap.md",
+  "context": "docs/performance-multiagent-speed-roadmap.md",
   "workflow": "trunk",
-  "status": "PAUSED",
+  "status": "FEATURES_IDENTIFIED",
   "constitution": {
     "status": "APPLIED",
     "additions": [
@@ -319,17 +319,419 @@
         "implement": "PASSED",
         "validate": "PASSED"
       }
+    },
+    {
+      "id": "brownfield-greenfield-tracks",
+      "name": "Brownfield and greenfield tracks (B1+G1)",
+      "description": "Explicit tracks for legacy code and new projects.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "Brownfield intake maps codebase (stack, architecture, conventions, risks) with monorepo sub-package discovery and pruned walk",
+        "Constitution proposed from repository evidence only",
+        "Optional characterization-test phase before implement in brownfield",
+        "Partial adoption scoped to a directory",
+        "Greenfield intake asks stack and proposes (never applies unconfirmed) skeleton + CI + minimal gates"
+      ],
+      "dependencies": [
+        "protocol-and-cli-performance"
+      ],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/019-brownfield-greenfield-tracks",
+      "cycle": 2,
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "risk": {
+        "tier": "M",
+        "computed_tier": "M",
+        "stage": "intake",
+        "scope_tier": "M",
+        "sensitivity": [],
+        "override": null,
+        "escalated": false,
+        "classified_at": "2026-10-19T11:11:57Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "M",
+            "computed_tier": "M",
+            "scope_tier": "M",
+            "sensitivity": [],
+            "at": "2026-10-19T11:11:57Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "harness-hygiene",
+      "name": "Harness hygiene (H1-H8)",
+      "description": "Fix audit findings H1-H8 before optimizing.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "unittest discover passes without pytest installed",
+        "Suite runs from repo root without manual pythonpath",
+        "discovery/gates detect Python stack and a test gate in this repo",
+        "Owner inference matches whole words, not substrings",
+        "Tasks without explicit depends_on are not chained serially by default",
+        "metrics record-round --append writes the row atomically"
+      ],
+      "dependencies": [],
+      "branch": null,
+      "status": "COMPLETED",
+      "spec_directory": "specs/013-harness-hygiene",
+      "cycle": 2,
+      "analyze_repair_cycles": 1,
+      "phases": {
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
+      },
+      "risk": {
+        "tier": "L",
+        "computed_tier": "L",
+        "stage": "pre_implement",
+        "scope_tier": "L",
+        "sensitivity": [
+          "external_provider",
+          "public_contract"
+        ],
+        "override": null,
+        "escalated": true,
+        "classified_at": "2026-10-19T11:18:45Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "M",
+            "computed_tier": "M",
+            "scope_tier": "M",
+            "sensitivity": [],
+            "at": "2026-10-19T11:11:56Z"
+          },
+          {
+            "stage": "pre_implement",
+            "tier": "L",
+            "computed_tier": "L",
+            "scope_tier": "L",
+            "sensitivity": [
+              "external_provider",
+              "public_contract"
+            ],
+            "at": "2026-10-19T11:18:45Z",
+            "escalated": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "live-react-dashboard",
+      "name": "Live React dashboard (D1)",
+      "description": "Real-time React dashboard for the operator.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "dashboard serve starts localhost-only stdlib server with /api/model and /api/events (SSE)",
+        "React+Vite UI isolated in its own dir with committed built bundle; no Node at runtime",
+        "Views: kanban, rounds timeline, live tokens, agent/worktree lanes, gates/hooks, dependency map",
+        "Static HTML dashboard still works as fallback"
+      ],
+      "dependencies": [
+        "token-ledger-and-statusline"
+      ],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/016-live-react-dashboard",
+      "cycle": 2,
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "risk": {
+        "tier": "S",
+        "computed_tier": "S",
+        "stage": "intake",
+        "scope_tier": "S",
+        "sensitivity": [],
+        "override": null,
+        "escalated": false,
+        "classified_at": "2026-10-19T11:11:57Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "S",
+            "computed_tier": "S",
+            "scope_tier": "S",
+            "sensitivity": [],
+            "at": "2026-10-19T11:11:57Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "multi-agent-dispatch",
+      "name": "Multi-agent dispatch (M1)",
+      "description": "Real multi-agent mode via host subagents driven by a manifest.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "Core emits per-wave dispatch manifest (package, role, playbook, model/effort, worktree, owner, reviewer)",
+        "Claude Code adapter launches parallel subagents per wave with worktree isolation; other adapters get equivalent instructions",
+        "Configurable max agents per wave (default 3-5); reviewer != owner",
+        "Each subagent result and tokens recorded via subagent-stop event",
+        "Tech Lead integration stays gated; nothing auto-merged"
+      ],
+      "dependencies": [
+        "protocol-and-cli-performance",
+        "speed-mode-tdd-first"
+      ],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/018-multi-agent-dispatch",
+      "cycle": 2,
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "risk": {
+        "tier": "M",
+        "computed_tier": "M",
+        "stage": "intake",
+        "scope_tier": "M",
+        "sensitivity": [],
+        "override": null,
+        "escalated": false,
+        "classified_at": "2026-10-19T11:11:57Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "M",
+            "computed_tier": "M",
+            "scope_tier": "M",
+            "sensitivity": [],
+            "at": "2026-10-19T11:11:57Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "protocol-and-cli-performance",
+      "name": "Protocol and CLI performance (P1-P6)",
+      "description": "Cut agent round-trips, protocol tokens and per-phase I/O.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "Composite step command does transition+record-round+traceability+delta in one call",
+        "PROTOCOL.md short core + on-demand sections via CLI; skill no longer requires full read",
+        "Ceremony profiles declare per-phase model/effort hint",
+        "Phase snapshot prunes ignored dirs during walk incl dist/build/target",
+        "Dashboard re-render debounced with cached graph",
+        "MCP server calls core in-process; CLI lazy-imports modules",
+        "Before/after gains measured with the token ledger"
+      ],
+      "dependencies": [
+        "token-ledger-and-statusline"
+      ],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/015-protocol-and-cli-performance",
+      "cycle": 2,
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "risk": {
+        "tier": "M",
+        "computed_tier": "M",
+        "stage": "intake",
+        "scope_tier": "M",
+        "sensitivity": [],
+        "override": null,
+        "escalated": false,
+        "classified_at": "2026-10-19T11:11:56Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "M",
+            "computed_tier": "M",
+            "scope_tier": "M",
+            "sensitivity": [],
+            "at": "2026-10-19T11:11:56Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "speed-mode-tdd-first",
+      "name": "Speed mode TDD-first (S1)",
+      "description": "Lean ceremony with mandatory TDD.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "speed profile: specify -> plan+tasks -> deterministic analyze -> test-first -> implement -> converge",
+        "Deterministic analyze checks traceability coverage + EARS without LLM",
+        "test-first passes only with new failing tests (RED); implement only with green suite + detected gates (GREEN)",
+        "TDD enforced by adapter hook, not only by prompt",
+        "Profile refused when sensitivity axis is high unless override recorded",
+        "Uses /speckit.converge; native mode unchanged"
+      ],
+      "dependencies": [
+        "protocol-and-cli-performance"
+      ],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/017-speed-mode-tdd-first",
+      "cycle": 2,
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "risk": {
+        "tier": "M",
+        "computed_tier": "M",
+        "stage": "intake",
+        "scope_tier": "M",
+        "sensitivity": [],
+        "override": null,
+        "escalated": false,
+        "classified_at": "2026-10-19T11:11:57Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "M",
+            "computed_tier": "M",
+            "scope_tier": "M",
+            "sensitivity": [],
+            "at": "2026-10-19T11:11:57Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "token-ledger-and-statusline",
+      "name": "Token ledger and statusline (T3)",
+      "description": "Real, always-visible token consumption for Spec Master sessions.",
+      "source_requirements": [
+        "docs/performance-multiagent-speed-roadmap.md"
+      ],
+      "acceptance_criteria": [
+        "Incremental stdlib transcript JSONL reader with persisted offset, no hardcoded paths",
+        "Tokens (input/output/cache_read/cache_creation), model and estimated cost attributed to feature/phase/agent",
+        "Attribution events written to .spec-master/events.jsonl by adapter hooks",
+        "Optional stdlib OTLP/HTTP JSON receiver feeds the same ledger",
+        "metrics round schema v2 with cache/model/cost, v1 still readable",
+        "Statusline shows feature, phase, tier, tokens, cost, cache hit, context %",
+        "calibration uses real tokens when available",
+        "Unknown transcript format degrades to 0 + note, never invents counts"
+      ],
+      "dependencies": [
+        "harness-hygiene"
+      ],
+      "branch": null,
+      "status": "PENDING",
+      "spec_directory": "specs/014-token-ledger-and-statusline",
+      "cycle": 2,
+      "analyze_repair_cycles": 0,
+      "phases": {
+        "specify": "PENDING",
+        "clarify": "PENDING",
+        "plan": "PENDING",
+        "tasks": "PENDING",
+        "analyze": "PENDING",
+        "implement": "PENDING",
+        "validate": "PENDING"
+      },
+      "risk": {
+        "tier": "M",
+        "computed_tier": "M",
+        "stage": "intake",
+        "scope_tier": "M",
+        "sensitivity": [
+          "schema"
+        ],
+        "override": null,
+        "escalated": false,
+        "classified_at": "2026-10-19T11:11:56Z",
+        "history": [
+          {
+            "stage": "intake",
+            "tier": "M",
+            "computed_tier": "M",
+            "scope_tier": "M",
+            "sensitivity": [
+              "schema"
+            ],
+            "at": "2026-10-19T11:11:56Z"
+          }
+        ]
+      }
     }
   ],
   "quality_gates": [],
   "fingerprint": {
-    "app-features.md": "471946a71907c32de968141dc60aa3f023c900869bb788efc04b53138027e34b",
-    "project-goals.md": "9e1e94eb19572c55a23c4b7363bff2041caf196f7d5384ef550eb65517fea310",
-    "tech-stack.md": "077bd62909e16e73bfa78d6e215f0b1a0dafa57c5fc089763f6092bc74024f8a"
+    "app-features.md": "29e4396a21af779f5c75ad6e8bc0ee9ea632717a2d85d9c598f2a812778bfbe3",
+    "project-goals.md": "1a5abd83d18bcb39fd20b35d6097591d9f85b7c42b513f061089b0f5a81d971e",
+    "tech-stack.md": "15f06a82bb0a68921d7c637c2dc573397fa7a1d936b0501969b579eed8497ecb",
+    "performance-multiagent-speed-roadmap.md": "cc50d15016c3be2655d4b1ccc7331b80d325b934fc2289e56ed2253942e069c6"
   },
   "traceability": [],
   "traceability_store": {
     "version": 1,
     "path": "traceability/features"
-  }
+  },
+  "cycles": [
+    {
+      "id": 1,
+      "context": "docs/market-benchmark-roadmap.md",
+      "status": "COMPLETED"
+    },
+    {
+      "id": 2,
+      "context": "docs/performance-multiagent-speed-roadmap.md",
+      "status": "RUNNING",
+      "started": "2026-10-19"
+    }
+  ]
 }

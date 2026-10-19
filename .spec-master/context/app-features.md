@@ -424,3 +424,119 @@ descrição.
 | role-decision-memory | docs/market-benchmark-roadmap.md, Tier 2 item 9 | EXPLICIT |
 | optional-pr-open-step | docs/market-benchmark-roadmap.md, Tier 2 item 10 | EXPLICIT |
 | Detalhes de implementação (nomes de função, formato exato de CLI) | Inferidos a partir de `spec-master/lib/` existente | INFERRED |
+
+---
+
+## Ciclo 2 (2026-10-19) — Performance, multi-agente, speed e tokens
+
+Fonte: `docs/performance-multiagent-speed-roadmap.md` (context-file deste ciclo).
+Decisões do usuário (EXPLICIT, §8 do doc): M1, S1, D1, execução via `/spec-master`.
+Defaults adotados (INFERRED, revisáveis em `clarify`): T3, P1–P6, B1+G1.
+As features do ciclo 1 acima permanecem `COMPLETED` e não são reabertas.
+
+### Feature 13 — harness-hygiene
+
+#### Objective
+Corrigir os achados H1–H8 da auditoria (doc §2.2) antes de qualquer otimização.
+
+#### Acceptance criteria
+- `python3 -m unittest discover -s spec-master/tests` passa sem `pytest` instalado (H1).
+- A suíte roda a partir da raiz do repo sem configuração manual de `pythonpath` (H2).
+- `discovery scan` / `gates detect` detectam a stack Python e um gate de testes no próprio repo (H3).
+- A inferência de owner casa palavras inteiras, não substrings ("build" não vira UI) (H4).
+- Tarefas sem `depends_on` explícito não são encadeadas em série por padrão (H5).
+- `metrics record-round --append <file>` grava a linha atomicamente (H8).
+- H6/H7 ficam registrados como dependências das features 14 e 17 (não corrigidos aqui).
+
+### Feature 14 — token-ledger-and-statusline
+
+#### Objective
+Tornar o consumo de tokens das sessões do Spec Master sempre visível e real (opção T3).
+
+#### Acceptance criteria
+- Módulo stdlib lê transcripts JSONL do runtime incrementalmente (offset persistido), sem caminho hardcoded (slug descoberto a partir do cwd / `transcript_path`).
+- Tokens (input, output, cache_read, cache_creation), modelo e custo estimado são atribuídos a feature/fase/agente por janela de round e por id de subagente.
+- Eventos de atribuição (início/fim de subagente, fase) são gravados em `.spec-master/events.jsonl` por hooks do adapter.
+- Receptor OTLP/HTTP JSON stdlib opcional alimenta o mesmo ledger quando a telemetria OTel estiver ligada.
+- `metrics record-round` aceita tokens vindos do ledger; schema de round vai para v2 com campos de cache/modelo/custo, mantendo leitura da v1.
+- Statusline do Spec Master mostra feature, fase, tier, tokens, custo estimado, cache hit e % de contexto.
+- `calibration` usa tokens reais quando disponíveis (fecha H7).
+- Formato desconhecido de transcript degrada para `0` + nota, nunca inventa contagem.
+
+### Feature 15 — protocol-and-cli-performance
+
+#### Objective
+Reduzir round-trips do agente, tokens de protocolo e I/O por fase (P1–P6).
+
+#### Acceptance criteria
+- Comando composto `step` executa transition + record-round + traceability + delta numa chamada a partir de JSON (P1).
+- `PROTOCOL.md` passa a ter um núcleo curto e seções sob demanda via CLI; o SKILL deixa de exigir leitura integral (P2).
+- Perfis de cerimônia declaram dica de modelo/effort por fase, emitida no prompt/manifest (P3).
+- Snapshot de fase poda diretórios ignorados durante o walk e ignora `dist/ build/ target/` (P4).
+- Re-render do dashboard é debounced e reusa grafo em cache (P5).
+- MCP server chama o core in-process; a CLI importa módulos sob demanda (P6).
+- Ganhos medidos e reportados com o ledger da feature 14 (antes/depois).
+
+### Feature 16 — live-react-dashboard
+
+#### Objective
+Dashboard React em tempo real para o operador acompanhar a execução (opção D1).
+
+#### Acceptance criteria
+- `cli.py dashboard serve` sobe servidor stdlib com `/api/model` e `/api/events` (SSE), apenas em localhost.
+- UI React+Vite isolada em diretório próprio (exceção do Princípio IX), bundle buildado versionado; operador não precisa de Node em runtime.
+- Telas: kanban feature/fase, timeline de rounds, tokens ao vivo (fase/agente/modelo, burn rate, cache hit, custo, orçamento do tier), lanes de agentes/worktrees, gates/hooks, mapa de dependências.
+- HTML estático atual continua funcionando como fallback (Princípio VI).
+
+### Feature 17 — speed-mode-tdd-first
+
+#### Objective
+Modo speed "XGH do bem": menos cerimônia, TDD obrigatório (opção S1).
+
+#### Acceptance criteria
+- Novo perfil `speed`: specify (clarify só para bloqueantes) → plan+tasks numa rodada → analyze determinístico → test-first → implement → converge.
+- Analyze determinístico checa cobertura de traceability + EARS sem LLM (fecha H6 para o perfil).
+- Fase `test-first` só passa com testes novos falhando (RED); `implement` só passa com suíte verde + gates detectados (GREEN).
+- TDD imposto por hook do adapter (bloqueia edição de código de produção sem teste falhando), não só por prompt.
+- Perfil é recusado automaticamente quando o eixo de sensibilidade do risk profile for alto, salvo override registrado.
+- Usa `/speckit.converge` (já instalado) em vez de reimplementá-lo; modo nativo inalterado.
+
+### Feature 18 — multi-agent-dispatch
+
+#### Objective
+Modo multi-agente real via subagentes do host guiados por manifest (opção M1).
+
+#### Acceptance criteria
+- Core gera dispatch manifest por onda (pacote, papel, playbook, modelo/effort, worktree, owner, reviewer) a partir de `worktree waves` + `workstreams.json`.
+- Adapter Claude Code lança subagentes em paralelo por onda com isolamento em worktree; demais adapters recebem instruções equivalentes.
+- Limite configurável de agentes por onda (default 3–5); reviewer ≠ owner.
+- Resultado e tokens de cada subagente são registrados via evento de fim de subagente (integra feature 14).
+- Integração pelo Tech Lead continua manual/gated; nada é mergeado automaticamente.
+
+### Feature 19 — brownfield-greenfield-tracks
+
+#### Objective
+Trilhas explícitas para código legado e projeto novo (B1 + G1).
+
+#### Acceptance criteria
+- Brownfield intake: mapeamento do codebase (stack, arquitetura, convenções, riscos) em docs de contexto, com discovery de sub-pacotes (monorepo) e poda de diretórios.
+- Constitution proposta a partir de evidência do repo, nunca inventada.
+- Fase opcional de testes de caracterização antes de `implement` em brownfield.
+- Adoção parcial por escopo de diretório.
+- Greenfield intake pergunta stack e propõe (nunca aplica sem confirmação) esqueleto + CI + gates mínimos.
+
+### Dependências do ciclo 2
+- 14 depende de 13. 15 depende de 14. 16 depende de 14.
+- 17 depende de 15. 18 depende de 15 e 17. 19 depende de 15.
+
+### Source traceability (ciclo 2)
+
+| Requirement | Source | Classification |
+|---|---|---|
+| harness-hygiene | doc §2.2 (H1–H8) | DISCOVERED_FROM_CODEBASE |
+| token-ledger-and-statusline | pedido do usuário + doc §5, §6 Onda 1 | EXPLICIT (fonte T3: INFERRED) |
+| protocol-and-cli-performance | pedido do usuário + doc §3, §6 Onda 2 | EXPLICIT (itens P1–P6: INFERRED) |
+| live-react-dashboard | pedido do usuário + decisão D1 | EXPLICIT |
+| speed-mode-tdd-first | pedido do usuário + decisão S1 | EXPLICIT |
+| multi-agent-dispatch | pedido do usuário + decisão M1 | EXPLICIT |
+| brownfield-greenfield-tracks | pedido do usuário + doc §2.1, §6 Onda 6 | EXPLICIT (B1+G1: INFERRED) |

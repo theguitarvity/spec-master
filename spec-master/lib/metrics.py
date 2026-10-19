@@ -1,7 +1,16 @@
 """Delivery metrics helpers for Spec Master rounds."""
 from __future__ import annotations
 
+import json
+import os
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
+
+try:  # advisory locking is POSIX-only; the atomic rename alone still holds elsewhere
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX platforms
+    fcntl = None
 
 # Ceremony tiers (mirrors risk_profile / hooks.TIER_ORDER; kept local so this
 # module stays dependency-free).
@@ -100,3 +109,70 @@ def summarize(rounds: list[dict]) -> dict:
         if total_seconds
         else 0.0,
     }
+
+
+@contextmanager
+def _locked_dir(directory: str):
+    """Serialise appenders on the same directory (``fcntl.flock`` when available)."""
+    if fcntl is None:
+        yield
+        return
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def _target_mode(target: str) -> int:
+    try:
+        return os.stat(target).st_mode & 0o777
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        return 0o666 & ~umask
+
+
+def append_round(path, row: dict) -> list[dict]:
+    """Append ``row`` to the JSON-array rounds file at ``path`` atomically.
+
+    A missing file (and parent directory) is created. An unreadable, invalid
+    or non-list file raises ``ValueError`` and is left untouched. The new
+    content is written to a temp file in the same directory and swapped in
+    with ``os.replace`` under an advisory directory lock, so concurrent
+    appenders never lose rows or leave a half-written file.
+    """
+    # Resolve symlinks so the link survives and the real file is updated.
+    target = os.path.realpath(os.fspath(path))
+    directory = os.path.dirname(target)
+    os.makedirs(directory, exist_ok=True)
+    with _locked_dir(directory):
+        rows: list = []
+        if os.path.exists(target):
+            try:
+                with open(target, "r", encoding="utf-8") as fh:
+                    rows = json.load(fh)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError(f"cannot append to {target}: invalid JSON ({exc})") from exc
+            if not isinstance(rows, list):
+                raise ValueError(f"cannot append to {target}: root is not a JSON array")
+        rows.append(row)
+        mode = _target_mode(target)
+        fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".rounds-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(rows, fh, indent=2)
+                fh.write("\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.chmod(tmp_path, mode)  # mkstemp creates 0600; keep the file's own mode
+            os.replace(tmp_path, target)
+        except BaseException:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
+    return rows

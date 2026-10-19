@@ -21,10 +21,13 @@ def detect(root: str = ".") -> list[dict]:
     gates: list[dict] = []
     for stack in info["stacks"]:
         commands = stack["commands"]
+        label = stack["language"]
+        if stack.get("scope"):
+            label = f"{label}: {stack['scope']}"
         for gate_name in _GATE_ORDER:
             if gate_name in commands:
                 gates.append({
-                    "name": f"{gate_name} ({stack['language']})",
+                    "name": f"{gate_name} ({label})",
                     "command": commands[gate_name],
                     "blocking": gate_name in ("build", "test"),
                 })

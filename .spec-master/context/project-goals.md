@@ -114,3 +114,20 @@ O workflow deve ser considerado concluído quando:
 | Backlog Tier 3 e exclusão do modelo Tessl | docs/market-benchmark-roadmap.md | EXPLICIT |
 | Núcleo determinístico zero-dependência | DISCOVERED_FROM_CODEBASE (spec-master/lib/, docs/spec-master/README.md) | DISCOVERED_FROM_CODEBASE |
 | Workflow trunk-based | DISCOVERED_FROM_CODEBASE (.spec-master/state.json anterior) | DISCOVERED_FROM_CODEBASE |
+
+---
+
+## Ciclo 2 (2026-10-19)
+
+**Purpose**: dar ao Spec Master performance, modo multi-agente, modo speed TDD-first,
+visibilidade contínua de tokens e um dashboard React em tempo real, e torná-lo
+compatível de verdade com projetos brownfield e greenfield
+(`docs/performance-multiagent-speed-roadmap.md`).
+
+**Success criteria**: tokens reais (≠ 0) em `rounds.json`; redução medida de
+chamadas de CLI e tokens de protocolo por feature; dashboard ao vivo acessível em
+localhost; perfil `speed` com gates RED/GREEN; subagentes paralelos por onda;
+suíte `unittest` passando sem pytest; `graph validate` e `evals run` passando.
+
+**Constraints**: constitution v1.0.0 (Princípios I–X) sem emendas; core stdlib;
+JS isolado sob o Princípio IX; telemetria só local (Princípio X).

@@ -9,7 +9,7 @@ ciclo *Specification-Driven Development*: `constitution → specify → clarify
 não tem contexto, `/spec-master new` guia a descoberta da ideia por chat e
 gera o contexto inicial.
 
-`631 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
+`658 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
 
 </div>
 
@@ -144,7 +144,7 @@ Clone (ou já estando neste repo) — nada para instalar, é tudo Python 3
 stdlib:
 
 ```bash
-python3 -m pytest spec-master/tests -q   # 631 testes, ~2s
+python3 -m unittest discover -s spec-master/tests   # 658 testes, ~2s, só stdlib
 ```
 
 Os entrypoints locais mantidos na raiz deste repositório são só os que
@@ -281,7 +281,7 @@ tanto pelo agente quanto por você, para depurar ou inspecionar o estado:
 | `delta snapshot\|report` | delta ADDED/MODIFIED/REMOVED de spec/plan/tasks (e constitution/contexto) entre execuções, com fases que ficaram stale |
 | `hooks init\|list\|validate\|emit\|firings` | hooks declarativos por evento (`.spec-master/hooks.json`): gate falhou → repair, contrato mudou → revalidar constitution, escalonamentos, sensibilidade de risco |
 | `team roles\|intake\|adopt\|workstreams\|escalate\|resolve\|decisions\|routes` | papeis multiagente, intake guiado, adoção incremental, work packages com peer review, rotas de escalonamento e memória de decisão (nós `Decision` + ADR) |
-| `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada |
+| `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada (`--append <rounds.json>` grava a linha de forma atômica) |
 | `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature = max(escopo, sensibilidade via hooks, override); decide se clarify é pulável, profundidade do analyze, revisores e work packages por papel em L/XL; reclassifica antes do implement |
 | `metrics calibrate` | compara custo real × orçamento de cada tier, detecta drift e propõe (ou, com `--apply`, grava) novos limites em `.spec-master/risk/thresholds.json` |
 | `metrics validate\|export` | valida `rounds.json` contra `schemas/metrics-round.schema.json` e exporta como OTLP/JSON (`/v1/metrics`) ou JSONL; nunca envia nada sozinho |
@@ -508,18 +508,20 @@ Para o detalhamento completo de cada arquivo do core, veja
 ## Testes
 
 ```bash
-python3 -m pytest spec-master/tests -q
+python3 -m unittest discover -s spec-master/tests
 ```
 
-O core é stdlib pura, mas a suíte usa `pytest` (e `PyYAML`, opcional, nos
-testes de grafo/knowledge). Sem pytest, `python3 -m unittest discover -s
-spec-master/tests` roda as suítes `unittest`, e os módulos que importam
-`pytest` aparecem como erro de import.
+O core e a suíte são stdlib pura: todos os módulos de teste são
+`unittest.TestCase`, então nada precisa ser instalado. Se você preferir
+`pytest`, ele também roda a mesma suíte a partir da raiz, sem opções extras
+(`python3 -m pytest -q`): o `spec-master/tests/conftest.py` só ajusta o
+`sys.path`.
 
-631 testes, sem depender de nenhum LLM: transições de estado (incluindo o
+658 testes, sem depender de nenhum LLM: transições de estado (incluindo o
 teto de 3 ciclos de repair e a regra de que uma fase não começa antes da
 anterior ter `PASSED`), propagação de staleness por fingerprint, discovery
-de repositório (nunca inventa comando para uma stack sem manifest),
+de repositório (nunca inventa comando para uma stack sem manifest; uma suíte
+Python sem manifest em `tests/` ou `<pacote>/tests/` vira gate de teste),
 ordenação de dependências (com detecção de ciclo), idempotência e
 preservação de identificador na estratégia de git, detecção de quality gate
 por stack, diff estrutural de constitution, renderização de rastreabilidade,
@@ -621,7 +623,7 @@ Este repositório é a fonte de um único artefato: a skill `/spec-master`.
 Depois de qualquer mudança:
 
 ```bash
-python3 -m pytest spec-master/tests -q
+python3 -m unittest discover -s spec-master/tests
 ```
 
 ## Créditos

@@ -469,8 +469,28 @@ def _slug(value: str) -> str:
     return "".join(chars).strip("-") or "work"
 
 
+def _tokens(text: str) -> set[str]:
+    """Lowercase alphanumeric runs (``_``, ``/``, ``.``, ``-`` and spaces split words)."""
+    tokens: set[str] = set()
+    current: list[str] = []
+    for ch in text.lower():
+        if ch.isascii() and ch.isalnum():
+            current.append(ch)
+        elif current:
+            tokens.add("".join(current))
+            current = []
+    if current:
+        tokens.add("".join(current))
+    return tokens
+
+
+def _has_term(tokens: set[str], terms: tuple[str, ...]) -> bool:
+    """Whole-word match; a trailing plural ``s`` is accepted ("screens", "endpoints")."""
+    return any(term in tokens or f"{term}s" in tokens for term in terms)
+
+
 def _infer_owner(text: str) -> str:
-    lowered = text.lower()
+    tokens = _tokens(text)
     backend_terms = (
         "api",
         "backend",
@@ -478,6 +498,10 @@ def _infer_owner(text: str) -> str:
         "database",
         "db",
         "auth",
+        "authn",
+        "authz",
+        "authentication",
+        "authorization",
         "endpoint",
         "queue",
         "job",
@@ -495,8 +519,8 @@ def _infer_owner(text: str) -> str:
         "brand",
         "visual",
     )
-    has_backend = any(term in lowered for term in backend_terms)
-    has_frontend = any(term in lowered for term in frontend_terms)
+    has_backend = _has_term(tokens, backend_terms)
+    has_frontend = _has_term(tokens, frontend_terms)
     if has_backend and has_frontend:
         return "fullstack-dev"
     if has_backend:
@@ -525,6 +549,8 @@ def build_workstreams(features: list[dict]) -> dict:
     Each feature may provide `tasks` as strings or dictionaries with `id`,
     `title`, `owner_agent`, and `depends_on`. Missing owner/reviewer data is
     inferred conservatively, with the tech lead retaining integration control.
+    Packages only depend on what the task declares in `depends_on`; a task
+    without it is independent (no implicit serial chaining).
     """
     packages: list[WorkPackage] = []
     lanes: dict[str, list[str]] = defaultdict(list)
@@ -532,20 +558,17 @@ def build_workstreams(features: list[dict]) -> dict:
     for feature in features:
         feature_id = feature["id"]
         raw_tasks = feature.get("tasks") or [feature.get("name") or feature_id]
-        previous_package_id: str | None = None
         for index, raw_task in enumerate(raw_tasks, start=1):
             if isinstance(raw_task, str):
                 task_id = f"{feature_id}-{index:02d}-{_slug(raw_task)[:32]}"
                 title = raw_task
                 owner = _infer_owner(raw_task)
-                depends_on = [previous_package_id] if previous_package_id else []
+                depends_on: list[str] = []
             else:
                 title = raw_task.get("title") or raw_task.get("name") or raw_task["id"]
                 task_id = raw_task.get("id") or f"{feature_id}-{index:02d}-{_slug(title)[:32]}"
                 owner = raw_task.get("owner_agent") or _infer_owner(title)
-                depends_on = list(raw_task.get("depends_on", []))
-                if not depends_on and previous_package_id:
-                    depends_on = [previous_package_id]
+                depends_on = list(raw_task.get("depends_on") or [])
 
             reviewer = assign_peer_review(owner)
             package = WorkPackage(
@@ -559,7 +582,6 @@ def build_workstreams(features: list[dict]) -> dict:
             )
             packages.append(package)
             lanes[owner].append(package.id)
-            previous_package_id = package.id
 
     return {
         "mode": "team",

@@ -95,6 +95,45 @@ class TeamModelTests(unittest.TestCase):
         self.assertEqual(packages[0]["reviewer_agent"], "fullstack-dev")
         self.assertEqual(packages[1]["owner_agent"], "frontend-dev")
 
+    # --- H4: whole-word owner inference (feature harness-hygiene) ---
+    def _owner(self, title):
+        plan = team_model.build_workstreams([{"id": "f", "tasks": [title]}])
+        return plan["packages"][0]["owner_agent"]
+
+    def test_owner_inference_ignores_terms_inside_other_words(self):
+        self.assertNotEqual(self._owner("Build CLI parser"), "frontend-dev")  # "ui" in "build"
+        self.assertNotEqual(self._owner("Compute capital gains report"), "backend-dev")  # "api" in "capital"
+        self.assertEqual(self._owner("Collect feedback"), "fullstack-dev")  # "db" in "feedback"
+        self.assertEqual(self._owner("Write user guide"), "fullstack-dev")  # "ui" in "guide"
+
+    def test_owner_inference_keeps_plurals_and_path_tokens(self):
+        self.assertEqual(self._owner("Render dashboard screens"), "frontend-dev")
+        self.assertEqual(self._owner("Expose REST endpoints"), "backend-dev")
+        self.assertEqual(self._owner("Refactor spec-master/lib/ui.py"), "frontend-dev")
+        self.assertEqual(self._owner("Wire auth_api handler"), "backend-dev")
+
+    def test_owner_inference_keeps_long_forms_of_short_terms(self):
+        self.assertEqual(self._owner("Add authentication flow"), "backend-dev")
+        self.assertEqual(self._owner("Check authorization rules"), "backend-dev")
+        self.assertEqual(self._owner("Migrate databases"), "backend-dev")
+
+    # --- H5: no implicit serial chaining (feature harness-hygiene) ---
+    def test_tasks_without_depends_on_are_independent(self):
+        plan = team_model.build_workstreams([
+            {"id": "s", "tasks": ["Create API endpoint", "Build settings page"]},
+            {"id": "d", "tasks": [{"id": "d-1", "title": "Add queue"}, {"id": "d-2", "title": "Add form"}]},
+        ])
+        self.assertEqual([p["depends_on"] for p in plan["packages"]], [[], [], [], []])
+
+    def test_explicit_depends_on_is_preserved(self):
+        plan = team_model.build_workstreams([
+            {"id": "d", "tasks": [
+                {"id": "d-1", "title": "Add queue"},
+                {"id": "d-2", "title": "Add form", "depends_on": ["d-1"]},
+            ]},
+        ])
+        self.assertEqual([p["depends_on"] for p in plan["packages"]], [[], ["d-1"]])
+
 
 if __name__ == "__main__":
     unittest.main()

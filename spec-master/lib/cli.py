@@ -454,21 +454,26 @@ def cmd_workstreams(args: argparse.Namespace) -> int:
 
 def cmd_metrics(args: argparse.Namespace) -> int:
     if args.metrics_action == "record-round":
-        _print_json(
-            metrics.record_round(
-                round_id=args.round_id,
-                phase=args.phase,
-                started_at=args.started_at,
-                ended_at=args.ended_at,
-                input_tokens=args.input_tokens,
-                output_tokens=args.output_tokens,
-                work_packages_completed=args.work_packages_completed,
-                features_completed=args.features_completed,
-                notes=args.notes,
-                feature_id=args.feature_id,
-                tier=args.tier,
-            )
+        row = metrics.record_round(
+            round_id=args.round_id,
+            phase=args.phase,
+            started_at=args.started_at,
+            ended_at=args.ended_at,
+            input_tokens=args.input_tokens,
+            output_tokens=args.output_tokens,
+            work_packages_completed=args.work_packages_completed,
+            features_completed=args.features_completed,
+            notes=args.notes,
+            feature_id=args.feature_id,
+            tier=args.tier,
         )
+        if args.append:
+            try:
+                metrics.append_round(args.append, row)
+            except (ValueError, OSError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+        _print_json(row)
         return 0
     if args.metrics_action == "summarize":
         rounds = _load_json_file(args.file)
@@ -1011,6 +1016,8 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_record.add_argument("--feature-id", default=None, help="attribute the round to a feature (calibration)")
     metrics_record.add_argument("--tier", default=None, type=str.upper, choices=list(metrics.TIERS),
                                 help="ceremony tier of the feature (calibration)")
+    metrics_record.add_argument("--append", default=None, metavar="FILE",
+                                help="also append the row to this JSON-array rounds file (atomic; created if missing)")
     metrics_summary = metrics_sub.add_parser("summarize")
     metrics_summary.add_argument("--file", required=True, help="JSON file: list of round metrics")
     metrics_calibrate = metrics_sub.add_parser("calibrate", help="per-tier estimated vs actual cost, drift, thresholds")

@@ -44,6 +44,27 @@ class QualityGatesTests(unittest.TestCase):
         self.assertTrue(gates["test"]["blocking"])
         self.assertFalse(gates["lint"]["blocking"])
 
+    def _suite(self, rel):
+        d = os.path.join(self.tmp, rel)
+        os.makedirs(d)
+        with open(os.path.join(d, "test_x.py"), "w", encoding="utf-8") as fh:
+            fh.write("import unittest\n")
+
+    def test_manifestless_suite_yields_scoped_blocking_test_gate(self):
+        self._suite("pkg/tests")
+        gates = quality_gates.detect(self.tmp)
+        self.assertEqual(gates, [{
+            "name": "test (python: pkg/tests)",
+            "command": "python3 -m unittest discover -s pkg/tests",
+            "blocking": True,
+        }])
+
+    def test_two_suites_yield_distinct_gate_names(self):
+        self._suite("a/tests")
+        self._suite("b/tests")
+        names = [g["name"] for g in quality_gates.detect(self.tmp)]
+        self.assertEqual(names, ["test (python: a/tests)", "test (python: b/tests)"])
+
 
 if __name__ == "__main__":
     unittest.main()

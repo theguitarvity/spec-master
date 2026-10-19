@@ -1,0 +1,94 @@
+{
+  "mode": "team",
+  "orchestrator": "spec-master",
+  "technical_owner": "tech-lead",
+  "packages": [
+    {
+      "id": "hh-us1",
+      "feature_id": "harness-hygiene",
+      "title": "Convert pytest test modules to unittest TestCase (H1)",
+      "owner_agent": "fullstack-dev",
+      "reviewer_agent": "backend-dev",
+      "depends_on": [],
+      "source_task": "Convert pytest test modules to unittest TestCase (H1)"
+    },
+    {
+      "id": "hh-us2",
+      "feature_id": "harness-hygiene",
+      "title": "Add path-only conftest for root pytest (H2)",
+      "owner_agent": "fullstack-dev",
+      "reviewer_agent": "backend-dev",
+      "depends_on": [
+        "hh-us1"
+      ],
+      "source_task": "Add path-only conftest for root pytest (H2)"
+    },
+    {
+      "id": "hh-us3",
+      "feature_id": "harness-hygiene",
+      "title": "Detect manifest-less Python test suites as gates (H3)",
+      "owner_agent": "fullstack-dev",
+      "reviewer_agent": "backend-dev",
+      "depends_on": [
+        "hh-us1"
+      ],
+      "source_task": "Detect manifest-less Python test suites as gates (H3)"
+    },
+    {
+      "id": "hh-us4",
+      "feature_id": "harness-hygiene",
+      "title": "Whole-word owner inference and explicit-only depends_on (H4/H5)",
+      "owner_agent": "fullstack-dev",
+      "reviewer_agent": "backend-dev",
+      "depends_on": [
+        "hh-us1"
+      ],
+      "source_task": "Whole-word owner inference and explicit-only depends_on (H4/H5)"
+    },
+    {
+      "id": "hh-us5",
+      "feature_id": "harness-hygiene",
+      "title": "Atomic metrics record-round append (H8)",
+      "owner_agent": "fullstack-dev",
+      "reviewer_agent": "backend-dev",
+      "depends_on": [
+        "hh-us1"
+      ],
+      "source_task": "Atomic metrics record-round append (H8)"
+    },
+    {
+      "id": "hh-docs",
+      "feature_id": "harness-hygiene",
+      "title": "Document changed behaviour in PROTOCOL and README",
+      "owner_agent": "fullstack-dev",
+      "reviewer_agent": "backend-dev",
+      "depends_on": [
+        "hh-us2",
+        "hh-us3",
+        "hh-us4",
+        "hh-us5"
+      ],
+      "source_task": "Document changed behaviour in PROTOCOL and README"
+    }
+  ],
+  "lanes": {
+    "fullstack-dev": [
+      "hh-us1",
+      "hh-us2",
+      "hh-us3",
+      "hh-us4",
+      "hh-us5",
+      "hh-docs"
+    ]
+  },
+  "conflict_policy": {
+    "owner": "tech-lead",
+    "rules": [
+      "one package owns each file family unless the tech lead explicitly splits it",
+      "shared contracts are changed before consumers",
+      "parallel dev agents cannot edit the same file without tech lead arbitration",
+      "no implementation package is complete until a different dev agent reviews it",
+      "the tech lead approves integration after peer review, QA, and blocking gates"
+    ]
+  }
+}

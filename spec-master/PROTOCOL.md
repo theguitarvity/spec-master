@@ -298,7 +298,12 @@ existing project adopted Team Mode:
    the orchestrator's own escalation-routing rules).
 3. During/after `tasks`, call `python3 spec-master/lib/cli.py team
    workstreams --file <features-with-tasks.json>` and write the result to
-   `.spec-master/workstreams.json`.
+   `.spec-master/workstreams.json`. A package depends only on what its task
+   declares in `depends_on`; a task without `depends_on` is independent and
+   may run in parallel (there is no implicit chaining to the previous task —
+   declare the order explicitly when it matters). Owners are inferred from
+   whole words in the task title (`ui` matches "ui.py" or "UI screens", never
+   "build"); set `owner_agent` on the task to override.
 4. The workstream plan may expose safe parallel work, but each package must
    still respect feature dependencies, Spec Kit phase gates, and analyze
    repair rules.
@@ -341,7 +346,11 @@ delivery metrics with `python3 spec-master/lib/cli.py metrics record-round`.
 Use observed timestamps and platform-provided token counts when available.
 If exact token usage is unavailable, record `0` and note that the adapter did
 not expose token accounting; never invent token counts. Append each row to
-`.spec-master/metrics/rounds.json`. Before the final report, call
+`.spec-master/metrics/rounds.json` with `metrics record-round ... --append
+.spec-master/metrics/rounds.json` (atomic temp-file + rename; on POSIX an
+advisory directory lock also makes it safe for parallel subagents — without
+`fcntl`, e.g. on Windows, serialise appends yourself; a missing file is
+created, a corrupt one is refused untouched with exit 1). Before the final report, call
 `python3 spec-master/lib/cli.py metrics summarize --file
 .spec-master/metrics/rounds.json` and include total tokens, tokens/minute,
 packages/hour, features/hour, and per-round speed in
@@ -595,6 +604,15 @@ requiring approval must be reported to the user instead of bypassed. Run each
 allowed `command` via `Bash`, record
 `{name, command, result, exit_code, blocking}`; a failing `blocking: true`
 gate prevents `SUCCESS` (see stopping conditions).
+
+A Python project without `pyproject.toml`/`setup.cfg`/`requirements.txt` still
+gets a test gate when a test suite exists on disk: discovery looks at
+`tests/`/`test/` at the root and in each immediate (non-hidden, non-vendored)
+subdirectory, and emits one blocking gate per suite named
+`test (python: <dir>)`. The runner comes from the suite itself:
+`python3 -m pytest <dir>` when a module or the suite's `conftest.py` imports
+pytest, or a module has plain top-level `def test_*` functions without
+importing unittest; otherwise `python3 -m unittest discover -s <dir>`.
 
 Security scanners follow the same evidence rule. `gates detect` also returns
 SAST/secret-scanning gates (`category: "sast"` or `"secrets"`) — but only for
