@@ -1788,6 +1788,9 @@ def build_parser() -> argparse.ArgumentParser:
     evals_sub = p_evals.add_subparsers(dest="evals_action", required=True)
     evals_sub.add_parser("run")
 
+    import dispatch_cli  # F18: lazy handler; only argparse objects are touched here
+    dispatch_cli.register(sub)
+
     return parser
 
 

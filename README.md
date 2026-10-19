@@ -458,6 +458,10 @@ python3 spec-master/lib/cli.py doctor run --path .
 A referência de cada subcomando está no `--help` do CLI e em
 [`spec-master/PROTOCOL.md`](spec-master/PROTOCOL.md).
 
+## Multi-agent dispatch
+
+Em ondas com 2+ pacotes independentes (lanes Standard e Critical), o host pode executar os pacotes em paralelo com os subagentes `sm-spec`, `sm-implement` e `sm-review`, gerados por `packaging.py` (`spec-master/agents/` e `agents/`). O núcleo nunca lança processos: `dispatch manifest` monta o manifesto da onda (teto de agentes 1..8, padrão 4, `dispatch.max_agents` na política), `dispatch prepare` cria um worktree por pacote com escopo no `hookd`, `dispatch result` guarda o `PhaseResult` (até 8000 caracteres), `dispatch status` junta eventos e tokens por agente e `dispatch aggregate` só reporta arquivos e conflitos. O revisor nunca é o dono; nada é integrado automaticamente (`workstreams review` e `integrate`). Hosts sem subagentes plugáveis seguem as `fallback_instructions` do manifesto, em sequência. O cartão é [`spec-master/cards/dispatch.md`](spec-master/cards/dispatch.md).
+
 ## Team Mode
 
 O Team Mode organiza o mesmo ciclo como uma equipe multiagente, sem trocar as

@@ -41,7 +41,7 @@ import os
 import sys
 from pathlib import Path
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 NAME = "spec-master"
 DISPLAY_NAME = "Spec Master"
 ENGINE = "spec-master"  # the engine directory, relative to the repository root
@@ -311,6 +311,8 @@ def render() -> dict[str, str]:
     for name in SKILLS:
         files[f"skills/{name}/SKILL.md"] = skill(name)
         files[f"{ENGINE}/skills/{name}/SKILL.md"] = skill(name)
+    import packaging_agents  # F18: sm-spec/sm-implement/sm-review for hosts that ship plugin agents
+    files.update(packaging_agents.render_agents())
     return files
 
 

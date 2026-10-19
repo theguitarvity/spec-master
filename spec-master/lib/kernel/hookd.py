@@ -123,6 +123,12 @@ def pre_tool_use(root: str, payload: dict, enforce: bool) -> dict:
         return {**verdict, "target": (tool_input.get("command") or "")[:200]}
     if tool in WRITE_TOOLS:
         targets = tool_input.get("file_paths") or [tool_input.get("file_path") or tool_input.get("notebook_path") or ""]
+        if os.path.isfile(os.path.join(root, ".spec-master", "worktree.json")):  # F18 dispatched worktree
+            import dispatch_scope
+            for target in targets:
+                scoped = dispatch_scope.guard(root, target)
+                if scoped:
+                    return {**scoped, "target": target}
         record = changes.active(root)
         running = bool(record and record.get("status") == "RUNNING")
         verdicts = [_write_verdict(root, target, record if running else None) for target in targets]

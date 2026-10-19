@@ -199,5 +199,37 @@ class SkillTests(unittest.TestCase):
         self.assertIn("patch fix the typo", reply["instructions"])
 
 
+class SubagentTests(unittest.TestCase):
+    ROLES = ("sm-spec", "sm-implement", "sm-review")
+
+    def test_every_confirmed_host_gets_the_three_agents(self):
+        for directory in ("spec-master/agents", "agents"):
+            for role in self.ROLES:
+                self.assertIn(f"{directory}/{role}.md", FILES)
+
+    def test_review_is_read_only_and_writers_can_write(self):
+        for directory in ("spec-master/agents", "agents"):
+            review = next(l for l in FILES[f"{directory}/sm-review.md"].splitlines() if l.startswith("tools:"))
+            self.assertNotRegex(review.lower(), r"write|edit|replace")
+            implement = next(l for l in FILES[f"{directory}/sm-implement.md"].splitlines() if l.startswith("tools:"))
+            self.assertRegex(implement.lower(), r"write")
+
+    def test_bodies_point_to_the_card_and_stay_small(self):
+        for path, content in FILES.items():
+            if "agents/sm-" in path:
+                self.assertIn("cards/dispatch.md", content)
+                self.assertLess(len(content.encode()), 1536)
+        self.assertLessEqual((ENGINE / "cards" / "dispatch.md").stat().st_size, 3072)
+
+    def test_render_is_deterministic_and_check_detects_tampering(self):
+        self.assertEqual(packaging.render(), packaging.render())
+        with tempfile.TemporaryDirectory() as tmp:
+            packaging.generate(tmp)
+            self.assertEqual(packaging.check(tmp), [])
+            target = Path(tmp, "spec-master/agents/sm-review.md")
+            target.write_text(target.read_text() + "x", encoding="utf-8")
+            self.assertEqual(packaging.check(tmp), ["spec-master/agents/sm-review.md"])
+
+
 if __name__ == "__main__":
     unittest.main()
