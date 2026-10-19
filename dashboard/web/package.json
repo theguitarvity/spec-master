@@ -1,0 +1,20 @@
+{
+  "name": "spec-master-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Live operator dashboard for Spec Master (React + Vite). Build-time only: the built bundle in dist/ is committed and served by the stdlib server.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && python3 ../../spec-master/lib/dashboard_server.py manifest --dist dist",
+    "check": "python3 ../../spec-master/lib/dashboard_server.py manifest --dist dist --check"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.11"
+  }
+}

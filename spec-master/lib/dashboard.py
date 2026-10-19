@@ -73,6 +73,8 @@ WORKSTREAMS_RELPATH = os.path.join(".spec-master", "workstreams.json")
 ROUNDS_RELPATH = os.path.join(".spec-master", "metrics", "rounds.json")
 FIRINGS_RELPATH = os.path.join(".spec-master", "hooks", "firings.jsonl")
 GRAPH_RELPATH = os.path.join(".spec-master", "knowledge", "graph")
+DECISIONS_LOG_RELPATH = os.path.join(".spec-master", "hooks", "decisions.jsonl")
+CHANGES_RELDIR = os.path.join(".spec-master", "changes")
 
 DEFAULT_REFRESH = 5
 DEFAULT_PHASE_TIMEOUT = 600  # mirrors controller.DEFAULT_PHASE_TIMEOUT
@@ -83,6 +85,9 @@ LIFECYCLE_EVENTS = ("phase.started", "phase.transition", "workflow.status")
 TIERS = ("XS", "S", "M", "L", "XL")
 MAX_DECISIONS = 10
 MAX_FIRINGS = 20
+MAX_HOOK_DECISIONS = 20
+MAX_RECENT_CHANGES = 10
+TAIL_BYTES = 262144
 MAX_MAP_CHARS = 60000
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -218,6 +223,13 @@ def _feature_model(feature: dict, index: int) -> dict:
         "done": done,
         "total": len(phases),
         "percent": _pct(done, len(phases)),
+        # additive (live dashboard): the cycle the feature belongs to and an honest percentage for
+        # features delivered outside the phase flow (COMPLETED with phases still PENDING)
+        "cycle": feature.get("cycle") if isinstance(feature.get("cycle"), int)
+        and not isinstance(feature.get("cycle"), bool) else 1,
+        "delivery": feature.get("delivery") if isinstance(feature.get("delivery"), dict) else None,
+        "effective_percent": 100.0 if (_text(feature.get("status")) or "").upper() == "COMPLETED"
+        else _pct(done, len(phases)),
     }
 
 
@@ -329,6 +341,90 @@ def _decisions(root: str, errors: list) -> tuple[list, int]:
     keep = ("id", "title", "kind", "decided_by", "raised_by", "feature", "recorded_at", "adr")
     latest = [{k: _text(d.get(k)) for k in keep} for d in decisions[:MAX_DECISIONS] if isinstance(d, dict)]
     return latest, len(decisions)
+
+
+def _cycles(state: dict | None, features: list) -> list:
+    """Per-cycle progress so cycle-1 features (delivered outside the flow) never dilute cycle 2."""
+    declared = {}
+    for entry in (state.get("cycles") if state and isinstance(state.get("cycles"), list) else []):
+        if isinstance(entry, dict) and isinstance(entry.get("id"), int):
+            declared[entry["id"]] = entry
+    ids = sorted(set(declared) | {f["cycle"] for f in features})
+    out = []
+    for cycle_id in ids:
+        members = [f for f in features if f["cycle"] == cycle_id]
+        done = sum(f["done"] for f in members)
+        total = sum(f["total"] for f in members)
+        eff = [f["effective_percent"] for f in members]
+        out.append({
+            "id": cycle_id,
+            "status": _text(declared.get(cycle_id, {}).get("status")),
+            "context": _text(declared.get(cycle_id, {}).get("context")),
+            "features": len(members),
+            "features_completed": sum(1 for f in members if (f["status"] or "").upper() == "COMPLETED"),
+            "done": done,
+            "total": total,
+            "percent": _pct(done, total),
+            "effective_percent": round(sum(eff) / len(eff), 1) if eff else 0.0,
+        })
+    return out
+
+
+def _gates(state: dict | None) -> list:
+    raw = state.get("quality_gates") if state and isinstance(state.get("quality_gates"), list) else []
+    keep = ("name", "command", "blocking", "status", "stack", "scope")
+    return [{k: g[k] for k in keep if k in g and isinstance(g[k], (str, int, float, bool))}
+            for g in raw if isinstance(g, dict)]
+
+
+def _tail_jsonl(path: str, limit: int) -> list:
+    """Last `limit` JSON objects of a JSONL file (newest last); unreadable or garbled lines are skipped."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - TAIL_BYTES))
+            data = fh.read()
+    except OSError:
+        return []
+    lines = data.decode("utf-8", "replace").splitlines()
+    if size > TAIL_BYTES and lines:
+        lines = lines[1:]  # the first line of a mid-file read may be cut
+    out = []
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            out.append(record)
+    return out[-limit:]
+
+
+def _lanes(root: str) -> dict:
+    changes_dir = os.path.join(root, CHANGES_RELDIR)
+    active = None
+    try:
+        pointer = _read_json(os.path.join(changes_dir, "active.json"))
+        record = _read_json(os.path.join(changes_dir, f"{pointer['id']}.json"))
+        if isinstance(record, dict):
+            keep = ("id", "lane", "intent", "status", "updated_at")
+            active = {k: _text(record.get(k)) for k in keep}
+    except Exception:  # noqa: BLE001 -- no active change (or a torn pointer) is a normal state
+        active = None
+    recent = _tail_jsonl(os.path.join(changes_dir, "log.jsonl"), MAX_RECENT_CHANGES)
+    return {"active": active, "recent": recent[::-1]}
+
+
+def _hook_decisions(root: str) -> list:
+    keep = ("at", "host", "event", "tool", "decision", "reason", "mode", "enforced")
+    out = []
+    for record in reversed(_tail_jsonl(os.path.join(root, DECISIONS_LOG_RELPATH), MAX_HOOK_DECISIONS)):
+        row = {k: record.get(k) for k in keep if isinstance(record.get(k), (str, int, float, bool))}
+        target = _text(record.get("target"))
+        row["target"] = target[:120] if target else None
+        out.append(row)
+    return out
 
 
 def _firings(root: str, errors: list) -> list:
@@ -518,6 +614,10 @@ def _build(root: str) -> dict:
         "hooks": firings,
         "metrics": _metrics(root_abs, errors),
         "graph": _graph(root_abs, errors),
+        "cycles": _cycles(state, features),
+        "gates": _gates(state),
+        "lanes": _lanes(root_abs),
+        "hook_decisions": _hook_decisions(root_abs),
         "errors": errors,
     }
     model["run"] = _run_state(root_abs, state, features, firings, now)
@@ -542,6 +642,7 @@ def build_model(root: str) -> dict:
             "traceability": {"rows": 0, "by_status": {}, "by_feature": {}},
             "decisions": [], "decisions_total": 0, "hooks": [], "metrics": None,
             "graph": {"present": False, "nodes": 0, "edges": 0, "system_map": None, "truncated": False},
+            "cycles": [], "gates": [], "lanes": {"active": None, "recent": []}, "hook_decisions": [],
             "errors": [{"source": "dashboard", "error": f"{type(exc).__name__}: {exc}"}],
             "run": {"state": "idle", "active": False, "reason": "model build failed", "lock": None,
                     "running_phases": [], "phase_timeout_seconds": DEFAULT_PHASE_TIMEOUT,
