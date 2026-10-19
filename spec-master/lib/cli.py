@@ -32,35 +32,71 @@ from knowledge.validation import validate_manifest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+
+class _LazyModule:
+    """Stands in for an engine module until its first attribute access, so a
+    command pays only for the modules it uses (roadmap P6)."""
+
+    __slots__ = ("_name", "_module")
+
+    def __init__(self, name: str):
+        object.__setattr__(self, "_name", name)
+        object.__setattr__(self, "_module", None)
+
+    def _load(self):
+        module = object.__getattribute__(self, "_module")
+        if module is None:
+            import importlib
+            module = importlib.import_module(object.__getattribute__(self, "_name"))
+            object.__setattr__(self, "_module", module)
+        return module
+
+    def __getattr__(self, attr):
+        return getattr(self._load(), attr)
+
+    def __setattr__(self, attr, value):
+        setattr(self._load(), attr, value)
+
+    def __delattr__(self, attr):
+        delattr(self._load(), attr)
+
+    def __dir__(self):
+        return dir(self._load())
+
+
+def _lazy(name: str) -> _LazyModule:
+    return _LazyModule(name)
+
+
 import calibration  # noqa: E402
-import constitution_diff  # noqa: E402
-import context_budget  # noqa: E402
-import context_delta  # noqa: E402
-import dashboard  # noqa: E402
-import decision_memory  # noqa: E402
-import discovery  # noqa: E402
-import ears  # noqa: E402
-import evals  # noqa: E402
-import evidence  # noqa: E402
-import feature_model  # noqa: E402
-import fingerprint  # noqa: E402
-import git_strategy  # noqa: E402
-import hooks  # noqa: E402
+constitution_diff = _lazy("constitution_diff")
+context_budget = _lazy("context_budget")
+context_delta = _lazy("context_delta")
+dashboard = _lazy("dashboard")
+decision_memory = _lazy("decision_memory")
+discovery = _lazy("discovery")
+ears = _lazy("ears")
+evals = _lazy("evals")
+evidence = _lazy("evidence")
+feature_model = _lazy("feature_model")
+fingerprint = _lazy("fingerprint")
+git_strategy = _lazy("git_strategy")
+hooks = _lazy("hooks")
 import metrics  # noqa: E402
-import metrics_export  # noqa: E402
-import pr_step  # noqa: E402
-import quality_gates  # noqa: E402
+metrics_export = _lazy("metrics_export")
+pr_step = _lazy("pr_step")
+quality_gates = _lazy("quality_gates")
 import risk_profile  # noqa: E402
 import state as state_mod  # noqa: E402
-import team_model  # noqa: E402
-import team_workstreams  # noqa: E402
-import telemetry  # noqa: E402
-import tool_policy  # noqa: E402
-import traceability  # noqa: E402
-import tracker_orchestration  # noqa: E402
-import web_bundle  # noqa: E402
-import runtime_contract  # noqa: E402
-import worktree  # noqa: E402
+team_model = _lazy("team_model")
+team_workstreams = _lazy("team_workstreams")
+telemetry = _lazy("telemetry")
+tool_policy = _lazy("tool_policy")
+traceability = _lazy("traceability")
+tracker_orchestration = _lazy("tracker_orchestration")
+web_bundle = _lazy("web_bundle")
+runtime_contract = _lazy("runtime_contract")
+worktree = _lazy("worktree")
 
 
 # Output is compact JSON by default: every byte printed here lands in the
@@ -110,6 +146,71 @@ def _transition_ack(feature: dict, args: argparse.Namespace, previous: str, evid
     return ack
 
 
+def _transition(args: argparse.Namespace, extra_rows: list | None = None, after=None) -> dict:
+    """`state transition` as a function: the payload it prints. `extra_rows` count as
+    traceability evidence for `validate`; `after(state, feature)` runs inside the same
+    state transaction once the transition (and its evidence) succeeded."""
+    if args.import_unverified and not (args.reason or "").strip():
+        raise state_mod.StateError("--import-unverified requires --reason")
+    root = hooks.project_root_for_state(args.path)
+    with state_mod.transaction(args.path) as s:
+        feature = state_mod.find_feature(s, args.feature)
+        previous = feature["phases"].get(args.phase, "PENDING")
+        state_status = feature.get("status")
+        f = state_mod.transition_phase(s, args.feature, args.phase, args.status)
+        evidence_entry = None
+        if args.status == "PASSED":
+            if args.import_unverified:
+                evidence_entry = evidence.record_unverified(f, args.phase, args.reason)
+            else:
+                rows = (traceability.load_rows(s, args.path, feature=args.feature) + list(extra_rows or [])
+                        if args.phase == "validate" else None)
+                result = evidence.check(root, f, args.phase, traceability_rows=rows)
+                if not result["ok"]:
+                    raise EvidenceMissing(result)
+                evidence_entry = evidence.record(f, result)
+            if args.phase == state_mod.FEATURE_PHASES[-1]:
+                f["status"] = "COMPLETED"
+        if after is not None:
+            after(s, f)
+    fired = None if args.no_hooks else hooks.safe_emit(
+        root, "phase.transition",
+        {"feature": args.feature, "phase": args.phase, "status": args.status, "previous": previous},
+    )
+    payload = dict(f) if args.full else _transition_ack(
+        f, args, previous, evidence_entry, f.get("status") != state_status)
+    if fired and fired["directives"]:
+        payload["hook_directives"] = fired["directives"]
+    return payload
+
+
+def _advance(args: argparse.Namespace) -> int:
+    """`state advance`: transition + optional round + optional traceability rows + next step, one call."""
+    import advance
+    round_data = advance.parse_round(args.round_json) if args.round_json else None
+    rows = advance.parse_rows(args.trace_json) if args.trace_json else []
+    s0 = state_mod.load(args.path)
+    feature0 = state_mod.find_feature(s0, args.feature)
+    row = (advance.build_round(round_data, phase=args.phase, feature_id=args.feature,
+                               tier=advance.feature_tier(feature0)) if round_data else None)
+    written = []
+
+    def record_rows(s, f):
+        written.extend(traceability.record(s, args.path, dict(r, feature=r.get("feature") or args.feature))
+                       for r in rows)
+
+    payload = _transition(args, extra_rows=rows, after=record_rows if rows else None)
+    if rows:
+        payload["traceability"] = len(written)
+    if row is not None:
+        payload["round"] = _append_round(args.rounds or metrics_export.default_rounds_path(
+            hooks.project_root_for_state(args.path)), row)
+    feature = state_mod.find_feature(state_mod.load(args.path), args.feature)
+    payload["next"] = advance.next_block(feature)
+    _print_json(payload)
+    return 0
+
+
 def cmd_state(args: argparse.Namespace) -> int:
     if args.state_action == "init":
         with state_mod.locked(args.path):
@@ -147,37 +248,10 @@ def cmd_state(args: argparse.Namespace) -> int:
         _print_json(payload)
         return 0
     if args.state_action == "transition":
-        if args.import_unverified and not (args.reason or "").strip():
-            raise state_mod.StateError("--import-unverified requires --reason")
-        root = hooks.project_root_for_state(args.path)
-        with state_mod.transaction(args.path) as s:
-            feature = state_mod.find_feature(s, args.feature)
-            previous = feature["phases"].get(args.phase, "PENDING")
-            state_status = feature.get("status")
-            f = state_mod.transition_phase(s, args.feature, args.phase, args.status)
-            evidence_entry = None
-            if args.status == "PASSED":
-                if args.import_unverified:
-                    evidence_entry = evidence.record_unverified(f, args.phase, args.reason)
-                else:
-                    rows = (traceability.load_rows(s, args.path, feature=args.feature)
-                            if args.phase == "validate" else None)
-                    result = evidence.check(root, f, args.phase, traceability_rows=rows)
-                    if not result["ok"]:
-                        raise EvidenceMissing(result)
-                    evidence_entry = evidence.record(f, result)
-                if args.phase == state_mod.FEATURE_PHASES[-1]:
-                    f["status"] = "COMPLETED"
-        fired = None if args.no_hooks else hooks.safe_emit(
-            root, "phase.transition",
-            {"feature": args.feature, "phase": args.phase, "status": args.status, "previous": previous},
-        )
-        payload = dict(f) if args.full else _transition_ack(
-            f, args, previous, evidence_entry, f.get("status") != state_status)
-        if fired and fired["directives"]:
-            payload["hook_directives"] = fired["directives"]
-        _print_json(payload)
+        _print_json(_transition(args))
         return 0
+    if args.state_action == "advance":
+        return _advance(args)
     if args.state_action == "analyze-cycle":
         with state_mod.transaction(args.path) as s:
             result = state_mod.analyze_cycle(s, args.feature, args.action)
@@ -961,6 +1035,22 @@ def cmd_harness(args: argparse.Namespace) -> int:
     raise SystemExit(f"unknown harness action: {args.harness_action}")
 
 
+def cmd_protocol(args: argparse.Namespace) -> int:
+    import protocol_sections
+    path = Path(args.file) if args.file else protocol_sections.PROTOCOL_PATH
+    text = path.read_text(encoding="utf-8")
+    sections = protocol_sections.parse(text)
+    if args.protocol_action == "sections":
+        _print_json({"file": path.as_posix(), "bytes": len(text.encode("utf-8")),
+                     "sections": protocol_sections.listing(sections)})
+        return 0
+    if args.protocol_action == "show":
+        section = protocol_sections.find(sections, args.section)
+        print(protocol_sections.render(text, section, tree=args.tree), end="")
+        return 0
+    raise SystemExit(f"unknown protocol action: {args.protocol_action}")
+
+
 def _round_output_args(action_parser: argparse.ArgumentParser) -> None:
     if not any("--path" in a.option_strings for a in action_parser._actions):
         action_parser.add_argument("--path", default=".", help="project root")
@@ -1015,6 +1105,22 @@ def build_parser() -> argparse.ArgumentParser:
     s_trans.add_argument("--import-unverified", dest="import_unverified", action="store_true",
                          help="promote without evidence, recorded as unverified (requires --reason)")
     s_trans.add_argument("--reason", default=None)
+
+    s_adv = state_sub.add_parser(
+        "advance", help="transition + optional round + traceability rows + next step, in one call")
+    s_adv.add_argument("--path", default=".spec-master/state.json")
+    s_adv.add_argument("--feature", required=True)
+    s_adv.add_argument("--phase", required=True)
+    s_adv.add_argument("--status", required=True)
+    s_adv.add_argument("--round-json", dest="round_json", default=None,
+                       help='round to append: {"round_id","started_at","ended_at"[,"input_tokens",...]}')
+    s_adv.add_argument("--trace-json", dest="trace_json", default=None,
+                       help="JSON list of traceability rows to add (they count as validate evidence)")
+    s_adv.add_argument("--rounds", default=None, help="rounds file (default: <root>/.spec-master/metrics/rounds.json)")
+    s_adv.add_argument("--no-hooks", dest="no_hooks", action="store_true")
+    s_adv.add_argument("--full", action="store_true")
+    s_adv.add_argument("--import-unverified", dest="import_unverified", action="store_true")
+    s_adv.add_argument("--reason", default=None)
 
     s_evidence = state_sub.add_parser("evidence", help="check or show the evidence behind a feature's phases")
     s_evidence.add_argument("--path", default=".spec-master/state.json")
@@ -1571,6 +1677,16 @@ def build_parser() -> argparse.ArgumentParser:
     harness_entry.add_argument("--flow", choices=sorted(ENTRYPOINT_TEMPLATES), required=True)
     harness_entry.add_argument("--argument", default="",
                                help="full-cycle: the context file (empty: guided discovery); lane: the request")
+
+    p_protocol = sub.add_parser("protocol", help="PROTOCOL.md sections on demand")
+    p_protocol.set_defaults(func=cmd_protocol)
+    protocol_sub = p_protocol.add_subparsers(dest="protocol_action", required=True)
+    protocol_list = protocol_sub.add_parser("sections", help="every heading of the protocol with its size in bytes")
+    protocol_list.add_argument("--file", default=None, help="markdown file (default: the engine's PROTOCOL.md)")
+    protocol_show = protocol_sub.add_parser("show", help="print one section of the protocol")
+    protocol_show.add_argument("--section", required=True, help='heading text or unique prefix, e.g. "Step 6"')
+    protocol_show.add_argument("--tree", action="store_true", help="include the subsections")
+    protocol_show.add_argument("--file", default=None, help="markdown file (default: the engine's PROTOCOL.md)")
 
     p_evals = sub.add_parser("evals")
     p_evals.set_defaults(func=cmd_evals)

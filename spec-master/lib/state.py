@@ -370,6 +370,17 @@ def transition_phase(state: dict, feature_id: str, phase: str, status: str) -> d
     return feature
 
 
+def next_phase(feature: dict) -> str | None:
+    """The first phase of the feature that is not PASSED or SKIPPED (None when
+    every phase is done). The single "what comes next" rule, shared by
+    `state advance` and the controller."""
+    phases = feature.get("phases") or {}
+    for phase in FEATURE_PHASES:
+        if phases.get(phase, "PENDING") not in DONE_PHASE_STATUSES:
+            return phase
+    return None
+
+
 def analyze_cycle(state: dict, feature_id: str, action: str) -> dict:
     feature = find_feature(state, feature_id)
     count = feature.get("analyze_repair_cycles", 0)

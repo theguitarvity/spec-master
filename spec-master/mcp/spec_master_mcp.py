@@ -40,11 +40,13 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import io
 import json
 import os
 import re
 import subprocess
 import sys
+import threading
 import traceback
 import urllib.parse
 from dataclasses import dataclass, field
@@ -101,6 +103,15 @@ READ_ONLY_TOOLS = frozenset({
 })
 
 _MISSING = object()
+
+# CLI groups that run long, spawn commands or serve: they keep the subprocess
+# path (own process, hard timeout). Everything else is dispatched in-process.
+SUBPROCESS_GROUPS = frozenset({"controller", "gates", "evals", "doctor", "dashboard"})
+_INPROCESS_LOCK = threading.Lock()
+
+
+def _inprocess_from_env() -> bool:
+    return os.environ.get("SPEC_MASTER_MCP_INPROCESS", "1").strip().lower() not in _FALSE_STRINGS
 _TRUE_STRINGS = {"true", "1", "yes", "on"}
 _FALSE_STRINGS = {"false", "0", "no", "off"}
 
@@ -629,8 +640,11 @@ TOOLSETS = {"all": None, "entrypoint": frozenset({"harness_entrypoint"})}
 class Server:
     def __init__(self, project_root: str | os.PathLike | None = None, timeout: float | None = None,
                  parser_factory: Callable[[], argparse.ArgumentParser] = load_cli_parser,
-                 toolset: str = "all"):
+                 toolset: str = "all", inprocess: bool | None = None):
         self.toolset = toolset
+        # An explicit timeout (argument or SPEC_MASTER_MCP_TIMEOUT) is only enforceable on a subprocess.
+        self.inprocess = (_inprocess_from_env() and timeout is None
+                          and "SPEC_MASTER_MCP_TIMEOUT" not in os.environ) if inprocess is None else bool(inprocess)
         self.project_root, self.project_source = _initial_project_root(project_root)
         self.client_supports_roots = False
         self.outbox: list[dict] = []
@@ -752,6 +766,47 @@ class Server:
         return result
 
     def run_cli(self, argv: list[str]) -> dict:
+        """Run one CLI command. In-process by default (no interpreter start
+        and no re-import of the CLI per call); the long-running or
+        command-spawning groups, and any in-process failure to load the CLI,
+        use the subprocess path, which stays the reference behaviour."""
+        if self.inprocess and (argv[:1] or [""])[0] not in SUBPROCESS_GROUPS:
+            try:
+                return self._run_cli_inprocess(argv)
+            except ImportError as exc:
+                log(f"in-process dispatch unavailable ({exc}); using a subprocess")
+        return self._run_cli_subprocess(argv)
+
+    def _run_cli_inprocess(self, argv: list[str]) -> dict:
+        if str(LIB_DIR) not in sys.path:
+            sys.path.insert(0, str(LIB_DIR))
+        import cli  # noqa: PLC0415 - deferred on purpose, see _entrypoint_text
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with _INPROCESS_LOCK:
+            saved_cwd, saved_fd1 = os.getcwd(), os.dup(1)
+            try:
+                os.chdir(self.project_root)
+                os.dup2(2, 1)  # a stray child write to fd 1 must not reach the JSON-RPC channel
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    try:
+                        code = cli.main(list(argv))
+                    except SystemExit as exc:
+                        code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+                        if isinstance(exc.code, str):
+                            err.write(exc.code + "\n")
+                    except Exception:  # noqa: BLE001 - same as an uncaught error in the subprocess
+                        code = 1
+                        err.write(traceback.format_exc())
+            except OSError as exc:
+                return _error_result(f"could not run the Spec Master CLI in-process: {exc}")
+            finally:
+                os.dup2(saved_fd1, 1)
+                os.close(saved_fd1)
+                os.chdir(saved_cwd)
+        return self._cli_result(out.getvalue(), err.getvalue(), code or 0)
+
+    def _run_cli_subprocess(self, argv: list[str]) -> dict:
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(LIB_DIR), env.get("PYTHONPATH")]))
         env["PYTHONIOENCODING"] = "utf-8"
@@ -763,15 +818,20 @@ class Server:
             return _error_result(f"`{' '.join(argv)}` timed out after {self.timeout:g}s")
         except OSError as exc:
             return _error_result(f"could not start the Spec Master CLI: {exc}")
-        stdout = proc.stdout.decode("utf-8", errors="replace").rstrip()
-        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
-        is_error = proc.returncode != 0
+        return self._cli_result(proc.stdout.decode("utf-8", errors="replace"),
+                                proc.stderr.decode("utf-8", errors="replace"), proc.returncode)
+
+    @staticmethod
+    def _cli_result(raw_stdout: str, raw_stderr: str, returncode: int) -> dict:
+        stdout = raw_stdout.rstrip()
+        stderr = raw_stderr.strip()
+        is_error = returncode != 0
         content = [{"type": "text", "text": stdout}] if stdout else []
         if is_error and stderr:
             content.append({"type": "text",
-                            "text": f"stderr (exit code {proc.returncode}):\n{stderr[-STDERR_TAIL_CHARS:]}"})
+                            "text": f"stderr (exit code {returncode}):\n{stderr[-STDERR_TAIL_CHARS:]}"})
         if not content:
-            content.append({"type": "text", "text": f"(no output; exit code {proc.returncode})"})
+            content.append({"type": "text", "text": f"(no output; exit code {returncode})"})
         result: dict[str, Any] = {"content": content, "isError": is_error}
         try:
             parsed = json.loads(stdout) if stdout else None

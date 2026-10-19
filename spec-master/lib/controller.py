@@ -148,14 +148,28 @@ def _feature_dir_hint(phase: str, feature_dir: str | None) -> str:
             f"--number {int(number)} --short-name {short_name}).")
 
 
+def _phase_hint(state: dict, feature_id: str | None, phase: str) -> str:
+    """One-line model/effort hint from the feature's saved risk tier (roadmap P3);
+    empty when the feature or its tier is unknown, so such prompts are unchanged."""
+    if not feature_id or phase not in state_mod.FEATURE_PHASES:
+        return ""
+    try:
+        risk = state_mod.find_feature(state, feature_id).get("risk")
+        return risk_profile.hint_text(risk.get("tier"), phase) if isinstance(risk, dict) else ""
+    except (state_mod.StateError, ValueError):
+        return ""
+
+
 def _render_prompt(phase: str, attempt_number: int, last_attempt: dict | None,
-                    allowed_writes: tuple, expected_artifacts: tuple, feature_dir: str | None = None) -> str:
+                    allowed_writes: tuple, expected_artifacts: tuple, feature_dir: str | None = None,
+                    hint: str = "") -> str:
     if attempt_number == 1 or last_attempt is None:
         return (
             f"Execute /speckit.{phase} for this project. Follow the installed Spec Kit "
             f"command for this phase exactly; never print a tool call as plain text; "
             f"you may only write to: {', '.join(allowed_writes)}."
             + _feature_dir_hint(phase, feature_dir)
+            + (f" {hint}" if hint else "")
         )
     # FR-013: a retry gets only the objective failure cause, the allowlist,
     # and the expected artifacts — never the previous attempt's transcript.
@@ -384,7 +398,7 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
         _emit(project, "phase.started", {"feature": feature_id, "phase": phase, "attempt": attempt_number})
         last_attempt = attempts[-1] if attempts else None
         prompt = _render_prompt(phase, attempt_number, last_attempt, allowed_writes, expected_artifacts,
-                                feature_dir)
+                                feature_dir, hint=_phase_hint(state, feature_id, phase))
         try:
             result = phase_runner.run_phase(
                 project, phase, execution["integration"], execution["model"],

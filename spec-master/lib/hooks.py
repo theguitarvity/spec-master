@@ -27,6 +27,7 @@ import datetime as dt
 import json
 import os
 import re
+import time
 import uuid
 
 import team_model
@@ -411,11 +412,53 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+DASHBOARD_DEBOUNCE_DEFAULT = 2.0
+_DASHBOARD_STAMP = os.path.join(".spec-master", "cache", "dashboard-render.json")
+
+
+def dashboard_debounce_seconds() -> float:
+    """Minimum seconds between two automatic dashboard renders
+    (`SPEC_MASTER_DASHBOARD_DEBOUNCE`, 0 disables the debounce)."""
+    raw = os.environ.get("SPEC_MASTER_DASHBOARD_DEBOUNCE")
+    if raw is None:
+        return DASHBOARD_DEBOUNCE_DEFAULT
+    try:
+        value = float(raw)
+    except ValueError:
+        return DASHBOARD_DEBOUNCE_DEFAULT
+    return value if value >= 0 else DASHBOARD_DEBOUNCE_DEFAULT
+
+
+def _dashboard_recent(root: str, window: float) -> bool:
+    if window <= 0:
+        return False
+    try:
+        with open(os.path.join(root, _DASHBOARD_STAMP), "r", encoding="utf-8") as fh:
+            at = float(json.load(fh)["at"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return 0 <= time.time() - at < window
+
+
+def _stamp_dashboard(root: str) -> None:
+    path = os.path.join(root, _DASHBOARD_STAMP)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"at": time.time()}, fh)
+    except OSError:
+        pass
+
+
 def _run_internal(root: str, action: dict, payload: dict) -> dict:
     try:
         if action["type"] == "render_dashboard":
+            if _dashboard_recent(root, dashboard_debounce_seconds()):
+                return {"executed": True, "debounced": True}
             import dashboard  # lazy: optional at import time, never breaks the caller
-            return {"executed": True, "output": dashboard.write(root)}
+            output = dashboard.write(root)
+            _stamp_dashboard(root)
+            return {"executed": True, "output": output}
         if action["type"] == "record_decision":
             import decision_memory
             return {"executed": True, **decision_memory.record_from_event(root, payload)}
