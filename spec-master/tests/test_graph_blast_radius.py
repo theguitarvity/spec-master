@@ -1,11 +1,11 @@
 import unittest
-import _pathfix
 
+import _pathfix  # noqa: F401
 from graph.model import Graph, GraphNode, GraphEdge
 from graph.traversal import blast_radius
 
 
-def _fixture_service_graph():
+def _service_graph():
     """A small service dependency graph:
 
     web -> api -> auth-lib
@@ -24,45 +24,41 @@ def _fixture_service_graph():
     return g
 
 
-class GraphBlastRadiusTests(unittest.TestCase):
+class BlastRadiusTests(unittest.TestCase):
+    def setUp(self):
+        self.service_graph = _service_graph()
 
     def test_blast_radius_of_leaf_dependency_reaches_all_transitive_consumers(self):
-        service_graph = _fixture_service_graph()
         # If auth-lib changes, both api and everything that depends on api
         # (web, worker) are affected.
-        affected = blast_radius(service_graph, "auth-lib", max_depth=5)
-        assert set(affected) == {"api", "web", "worker"}
+        affected = blast_radius(self.service_graph, "auth-lib", max_depth=5)
+        self.assertEqual(set(affected), {"api", "web", "worker"})
 
     def test_blast_radius_of_shared_dependency_covers_all_consumers(self):
-        service_graph = _fixture_service_graph()
         # If db changes, api (and its dependents) AND reporting are affected —
         # two independent branches converging on the same node.
-        affected = blast_radius(service_graph, "db", max_depth=5)
-        assert set(affected) == {"api", "web", "worker", "reporting"}
+        affected = blast_radius(self.service_graph, "db", max_depth=5)
+        self.assertEqual(set(affected), {"api", "web", "worker", "reporting"})
 
     def test_blast_radius_of_leaf_consumer_is_empty(self):
-        service_graph = _fixture_service_graph()
         # Nothing depends on web — changing it affects no one else.
-        assert blast_radius(service_graph, "web", max_depth=5) == []
+        self.assertEqual(blast_radius(self.service_graph, "web", max_depth=5), [])
 
     def test_blast_radius_depth_limits_impact_analysis_scope(self):
-        service_graph = _fixture_service_graph()
         # Only direct consumers of api within 1 hop: web and worker, not
         # anything further upstream (there is none here, but depth=1 should
         # still exclude nothing transitively deeper than 1 hop by construction).
-        affected = blast_radius(service_graph, "api", max_depth=1)
-        assert set(affected) == {"web", "worker"}
+        affected = blast_radius(self.service_graph, "api", max_depth=1)
+        self.assertEqual(set(affected), {"web", "worker"})
 
     def test_blast_radius_ordered_by_distance_then_id(self):
-        service_graph = _fixture_service_graph()
-        affected = blast_radius(service_graph, "auth-lib", max_depth=5)
+        affected = blast_radius(self.service_graph, "auth-lib", max_depth=5)
         # api is 1 hop from auth-lib; web and worker are 2 hops.
-        assert affected[0] == "api"
-        assert affected[1:] == ["web", "worker"]
+        self.assertEqual(affected[0], "api")
+        self.assertEqual(affected[1:], ["web", "worker"])
 
     def test_blast_radius_unknown_node_returns_empty(self):
-        service_graph = _fixture_service_graph()
-        assert blast_radius(service_graph, "does-not-exist") == []
+        self.assertEqual(blast_radius(self.service_graph, "does-not-exist"), [])
 
 
 if __name__ == "__main__":

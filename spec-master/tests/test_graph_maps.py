@@ -1,11 +1,11 @@
 import unittest
-import _pathfix
 
+import _pathfix  # noqa: F401
 from graph.model import Graph, GraphNode, GraphEdge
 from graph import maps
 
 
-def _fixture_sample_graph():
+def _sample_graph():
     g = Graph()
     g.add_node(GraphNode(id="service.api", type="Service", name="API Service"))
     g.add_node(GraphNode(id="db.orders", type="Database", name="Orders DB", status="stale"))
@@ -14,40 +14,39 @@ def _fixture_sample_graph():
 
 
 class GraphMapsTests(unittest.TestCase):
+    def setUp(self):
+        self.sample_graph = _sample_graph()
 
     def test_render_system_map_empty_graph(self):
         text = maps.render_system_map(Graph())
-        assert "System Map" in text
-        assert "no nodes" in text
+        self.assertIn("System Map", text)
+        self.assertIn("no nodes", text)
 
     def test_render_system_map_groups_by_type(self):
-        sample_graph = _fixture_sample_graph()
-        text = maps.render_system_map(sample_graph)
-        assert "## Database" in text
-        assert "## Service" in text
-        assert "API Service" in text
-        assert "DEPENDS_ON" in text
-        assert "(stale)" in text
+        text = maps.render_system_map(self.sample_graph)
+        self.assertIn("## Database", text)
+        self.assertIn("## Service", text)
+        self.assertIn("API Service", text)
+        self.assertIn("DEPENDS_ON", text)
+        self.assertIn("(stale)", text)
 
     def test_render_node_map_unknown_node(self):
         text = maps.render_node_map(Graph(), "nonexistent")
-        assert "not found" in text
+        self.assertIn("not found", text)
 
     def test_render_node_map_shows_neighborhood(self):
-        sample_graph = _fixture_sample_graph()
-        text = maps.render_node_map(sample_graph, "service.api", depth=1)
-        assert "Orders DB" in text
-        assert "1 hop away" in text
+        text = maps.render_node_map(self.sample_graph, "service.api", depth=1)
+        self.assertIn("Orders DB", text)
+        self.assertIn("1 hop away", text)
 
     def test_render_dependency_map_no_edges(self):
         text = maps.render_dependency_map(Graph())
-        assert "no active DEPENDS_ON edges" in text
+        self.assertIn("no active DEPENDS_ON edges", text)
 
     def test_render_dependency_map_lists_adjacency(self):
-        sample_graph = _fixture_sample_graph()
-        text = maps.render_dependency_map(sample_graph)
-        assert "API Service" in text
-        assert "Orders DB" in text
+        text = maps.render_dependency_map(self.sample_graph)
+        self.assertIn("API Service", text)
+        self.assertIn("Orders DB", text)
 
 
 if __name__ == "__main__":

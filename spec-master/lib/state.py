@@ -1,13 +1,29 @@
-"""Persistent state machine for /spec-master (CLAUDE.md sections 30, 43, 25).
+"""Persistent state machine for /spec-master.
 
 Pure stdlib, no LLM involved. Reads/writes .spec-master/state.json.
+
+Writes are atomic (a uniquely named temp file in the same directory, then
+`os.replace`), and every load -> modify -> save cycle made through
+`transaction()` holds an exclusive lock on `<state>.lock`, so concurrent
+processes (the CLI, the MCP server, parallel workers) never lose each
+other's updates.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
-from dataclasses import dataclass, field
-from typing import Any
+import tempfile
+import time
+
+try:  # POSIX
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+try:  # Windows
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 STATE_VERSION = 1
 
@@ -47,6 +63,13 @@ DONE_PHASE_STATUSES = ("PASSED", "SKIPPED")
 
 MAX_ANALYZE_REPAIR_CYCLES = 3
 
+LOCK_TIMEOUT_SECONDS = 30
+
+# Feature fields only the workflow's own tooling may write: phases move through
+# `transition_phase` (with evidence at the CLI boundary), risk through
+# `risk classify/override`, evidence and attempts through the core itself.
+TOOL_OWNED_FEATURE_FIELDS = ("phases", "evidence", "attempts", "analyze_repair_cycles", "risk")
+
 
 class StateError(Exception):
     pass
@@ -81,12 +104,106 @@ def load(path: str) -> dict:
 
 
 def save(path: str, state: dict) -> None:
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(state, fh, indent=2, ensure_ascii=False, sort_keys=False)
-        fh.write("\n")
-    os.replace(tmp, path)
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(state, fh, indent=2, ensure_ascii=False, sort_keys=False)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def _try_lock(fd: int) -> bool:
+    try:
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        elif msvcrt is not None:  # pragma: no cover - Windows
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        return True
+    except (BlockingIOError, PermissionError):
+        return False
+    except OSError as exc:  # EAGAIN/EACCES on some platforms mean "held"
+        if getattr(exc, "errno", None) in (11, 13, 35):
+            return False
+        raise
+
+
+def _unlock(fd: int) -> None:
+    with contextlib.suppress(OSError):
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        elif msvcrt is not None:  # pragma: no cover - Windows
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
+@contextlib.contextmanager
+def locked(path: str, timeout: float = LOCK_TIMEOUT_SECONDS):
+    """Hold an exclusive advisory lock on `<path>.lock` for the block."""
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    owner = spec_master_dir(lock_path)
+    if owner:
+        ensure_gitignore(owner)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        deadline = time.monotonic() + timeout
+        while not _try_lock(fd):
+            if time.monotonic() >= deadline:
+                raise StateError(f"timed out after {timeout:.0f}s waiting for the state lock {lock_path}")
+            time.sleep(0.02)
+        try:
+            yield
+        finally:
+            _unlock(fd)
+    finally:
+        os.close(fd)
+
+
+SPEC_MASTER_DIR = ".spec-master"
+# Per-process files that never belong in the project's history.
+GITIGNORE_PATTERNS = ("*.lock", "hooks/decisions.jsonl")
+
+
+def spec_master_dir(path: str) -> str | None:
+    """The nearest `.spec-master` directory containing `path`, if any."""
+    directory = os.path.dirname(os.path.abspath(path))
+    while True:
+        if os.path.basename(directory) == SPEC_MASTER_DIR:
+            return directory
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            return None
+        directory = parent
+
+
+def ensure_gitignore(directory: str) -> None:
+    """Write `<.spec-master>/.gitignore` for the lock files and the hooks'
+    audit log, once: an existing file is never touched."""
+    path = os.path.join(directory, ".gitignore")
+    if os.path.exists(path):
+        return
+    try:
+        with open(path, "x", encoding="utf-8") as fh:
+            fh.write("# Spec Master per-process files\n" + "".join(p + "\n" for p in GITIGNORE_PATTERNS))
+    except OSError:
+        pass  # another process wrote it first, or the directory is read-only
+
+
+@contextlib.contextmanager
+def transaction(path: str, timeout: float = LOCK_TIMEOUT_SECONDS):
+    """Locked load -> modify -> save. The state is saved only when the block
+    finishes without an exception; a failure leaves the file untouched."""
+    with locked(path, timeout):
+        state = load(path)
+        yield state
+        save(path, state)
 
 
 def init(path: str, context: str, workflow: str | None = None) -> dict:
@@ -138,7 +255,83 @@ def find_feature(state: dict, feature_id: str) -> dict:
     raise StateError(f"unknown feature id: {feature_id}")
 
 
+def upsert_feature_metadata(state: dict, incoming: dict, *, allow_unverified: bool = False) -> tuple[dict, dict]:
+    """Agent-facing upsert (`state upsert-feature`): metadata only.
+
+    An existing feature is merged key by key; a new one starts PENDING.
+    Upsert used to be a way to promote phases without evidence (Principle
+    IV), so it no longer changes the fields the workflow's tooling owns
+    (`TOOL_OWNED_FEATURE_FIELDS`) and no longer sets `status: COMPLETED`
+    while a phase is still open.
+
+    `allow_unverified` is for importing history that never ran through
+    Spec Master: it accepts `phases`, `analyze_repair_cycles` and a
+    COMPLETED status, and reports the phases it promoted to PASSED in
+    `imported_phases` so the caller records them as unverified evidence.
+    `evidence`, `attempts` and `risk` are never accepted here.
+
+    Returns (feature, {"imported_phases": [...], "rejected": [...]}).
+    """
+    if not isinstance(incoming, dict) or not incoming.get("id"):
+        raise StateError("feature JSON must be an object with an `id`")
+    feature_id = incoming["id"]
+    existing = next((f for f in state["features"] if f["id"] == feature_id), None)
+    base = dict(existing) if existing else {
+        "id": feature_id, "status": "PENDING", "analyze_repair_cycles": 0, "phases": _now_phase_status_map(),
+    }
+    current_phases = {phase: (base.get("phases") or {}).get(phase, "PENDING") for phase in FEATURE_PHASES}
+    incoming_phases = incoming.get("phases") or {}
+    if not isinstance(incoming_phases, dict):
+        raise StateError("`phases` must be an object of phase -> status")
+    for phase, status in incoming_phases.items():
+        if phase not in FEATURE_PHASES:
+            raise InvalidTransitionError(f"unknown phase: {phase}")
+        if status not in PHASE_STATUSES:
+            raise InvalidTransitionError(f"unknown phase status for {phase}: {status}")
+    wanted_phases = {phase: incoming_phases.get(phase, current_phases[phase]) for phase in FEATURE_PHASES}
+
+    never = [key for key in ("evidence", "attempts", "risk")
+             if key in incoming and incoming[key] != base.get(key)]
+    guarded = []
+    if wanted_phases != current_phases:
+        guarded.append("phases")
+    if "analyze_repair_cycles" in incoming and incoming["analyze_repair_cycles"] != base.get("analyze_repair_cycles", 0):
+        guarded.append("analyze_repair_cycles")
+    phases_after = wanted_phases if allow_unverified else current_phases
+    if incoming.get("status") == "COMPLETED" and base.get("status") != "COMPLETED":
+        if any(phases_after[phase] not in DONE_PHASE_STATUSES for phase in FEATURE_PHASES):
+            guarded.append("status")
+    if never or (guarded and not allow_unverified):
+        rejected = sorted(set(never + guarded))
+        hint = ("`evidence`, `attempts` and `risk` are written only by the core "
+                "(`state transition`, `risk classify|override`)" if never else
+                "to import history that never ran through Spec Master, pass --import-unverified with a --reason")
+        raise InvalidTransitionError(
+            f"state upsert-feature only records metadata; refused: {', '.join(rejected)} — {hint}"
+        )
+
+    merged = dict(base)
+    for key, value in incoming.items():
+        if key in TOOL_OWNED_FEATURE_FIELDS:
+            continue
+        merged[key] = value
+    if allow_unverified and "analyze_repair_cycles" in incoming:
+        merged["analyze_repair_cycles"] = incoming["analyze_repair_cycles"]
+    merged["phases"] = dict(phases_after)
+    merged.setdefault("status", "PENDING")
+    merged.setdefault("analyze_repair_cycles", 0)
+    imported = [phase for phase in FEATURE_PHASES
+                if phases_after[phase] == "PASSED" and current_phases[phase] != "PASSED"]
+    if existing is not None:
+        state["features"][state["features"].index(existing)] = merged
+    else:
+        state["features"].append(merged)
+    return merged, {"imported_phases": imported, "rejected": sorted(set(guarded)) if allow_unverified else []}
+
+
 def upsert_feature(state: dict, feature: dict) -> dict:
+    """Low-level upsert used by the core itself and by tests: replaces the
+    record as given. Agents go through `upsert_feature_metadata` (the CLI)."""
     feature = dict(feature)
     feature.setdefault("status", "PENDING")
     feature.setdefault("analyze_repair_cycles", 0)

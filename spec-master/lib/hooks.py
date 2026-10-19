@@ -97,6 +97,22 @@ SENSITIVITY_RULES = {
                  r"protobuf|contracts?|contratos?|webhooks?|breaking[\s-]changes?|sdk)\b"),
         "paths": r"(?:^|/)(?:openapi|swagger|contracts?)(?:/|[._-])|\.(?:proto|graphql|gql)$",
     },
+    # Actions that leave the local repository and cannot be taken back by a
+    # later commit (constitution Principle X): pushing, opening a PR/MR,
+    # publishing a package, deploying to a shared environment.
+    "irreversible": {
+        "floor": "M",
+        "text": (r"\b(?:git\s+push|force[\s-]push|push(?:es|ed|ing)?\s+to\s+(?:the\s+)?(?:remote|origin|upstream)|"
+                 r"pull[\s-]requests?|merge[\s-]requests?|"
+                 r"(?:open|opens|opening|create|creates|creating)\s+(?:a\s+|the\s+)?(?:pr|mr)s?|"
+                 r"gh\s+pr\s+create|glab\s+mr\s+create|"
+                 r"(?:npm|yarn|pnpm|cargo|gem|poetry)\s+publish|twine\s+upload|"
+                 r"publish(?:es|ed|ing)?\s+(?:to\s+)?(?:npm|pypi|the\s+registry|a\s+registry|the\s+marketplace)|"
+                 r"deploy(?:s|ed|ing)?\s+to\s+(?:prod(?:uction)?|staging)|production\s+deploy(?:ment)?s?|"
+                 r"abr(?:ir|e)\s+(?:um\s+)?(?:pr|pull\s+request)|"
+                 r"implanta(?:r|ção|cao)\s+em\s+produ[çc][ãa]o)\b"),
+        "paths": r"(?:^|/)\.github/workflows/|(?:^|/)(?:deploy|deployment|release)s?/",
+    },
     "external_provider": {
         "floor": "M",
         "text": (r"\b(?:third[\s-]party|terceiros?|external\s+(?:providers?|services?|apis?|systems?)|"

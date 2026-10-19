@@ -1,0 +1,55 @@
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "^(run_shell_command|write_file|replace)$",
+        "hooks": [
+          {
+            "name": "spec-master-pre-tool-use",
+            "type": "command",
+            "command": "python3 \"${extensionPath}/spec-master/lib/kernel/hookd.py\" pre-tool-use --host gemini",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "^(write_file|replace)$",
+        "hooks": [
+          {
+            "name": "spec-master-post-tool-use",
+            "type": "command",
+            "command": "python3 \"${extensionPath}/spec-master/lib/kernel/hookd.py\" post-tool-use --host gemini",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "name": "spec-master-stop",
+            "type": "command",
+            "command": "python3 \"${extensionPath}/spec-master/lib/kernel/hookd.py\" stop --host gemini",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "spec-master-session-start",
+            "type": "command",
+            "command": "python3 \"${extensionPath}/spec-master/lib/kernel/hookd.py\" session-start --host gemini",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}

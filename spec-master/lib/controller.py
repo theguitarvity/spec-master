@@ -125,21 +125,37 @@ def _release_lock(project: Path) -> None:
     _lock_path(project).unlink(missing_ok=True)
 
 
-def _preserve_failed_attempt(project: Path, phase: str, last_attempt: dict) -> None:
-    dest_dir = project / ".spec-master" / "failed-attempts" / phase
+def _preserve_failed_attempt(project: Path, phase: str, last_attempt: dict,
+                             feature_id: str | None = None) -> None:
+    dest_dir = project / ".spec-master" / "failed-attempts"
+    dest_dir = (dest_dir / feature_id / phase) if feature_id and phase in state_mod.FEATURE_PHASES else dest_dir / phase
     dest_dir.mkdir(parents=True, exist_ok=True)
     transcript = Path(last_attempt["transcript"])
     if transcript.exists():
         shutil.copy2(transcript, dest_dir / transcript.name)
 
 
+def _feature_dir_hint(phase: str, feature_dir: str | None) -> str:
+    """For `specify`, tell Spec Kit which directory the harness allocated
+    (create-new-feature.sh takes `--number` and `--short-name`)."""
+    if phase != "specify" or not feature_dir:
+        return ""
+    name = Path(feature_dir).name
+    number, _, short_name = name.partition("-")
+    if not number.isdigit() or not short_name:
+        return f" Create the feature in {feature_dir}."
+    return (f" Create the feature in {feature_dir} (create-new-feature: "
+            f"--number {int(number)} --short-name {short_name}).")
+
+
 def _render_prompt(phase: str, attempt_number: int, last_attempt: dict | None,
-                    allowed_writes: tuple, expected_artifacts: tuple) -> str:
+                    allowed_writes: tuple, expected_artifacts: tuple, feature_dir: str | None = None) -> str:
     if attempt_number == 1 or last_attempt is None:
         return (
             f"Execute /speckit.{phase} for this project. Follow the installed Spec Kit "
             f"command for this phase exactly; never print a tool call as plain text; "
             f"you may only write to: {', '.join(allowed_writes)}."
+            + _feature_dir_hint(phase, feature_dir)
         )
     # FR-013: a retry gets only the objective failure cause, the allowlist,
     # and the expected artifacts — never the previous attempt's transcript.
@@ -166,8 +182,58 @@ def _consumed_attempts(attempts: list[dict]) -> int:
     return len([a for a in attempts if a.get("reason") != "user_decision_required"])
 
 
-def _phase_status(state: dict, phase: str) -> str:
-    attempts = state.get("attempts", {}).get(phase, [])
+def _attempt_key(feature_id: str | None, phase: str) -> str:
+    """Attempts are recorded per feature and phase, so a second feature never
+    inherits the first one's attempts (or its PASSED). The constitution and
+    standalone runs (no feature) keep the historical per-phase key."""
+    if feature_id and phase in state_mod.FEATURE_PHASES:
+        return f"{feature_id}/{phase}"
+    return phase
+
+
+def _attempts_for(state: dict, feature_id: str | None, phase: str) -> list[dict]:
+    attempts = state.setdefault("attempts", {})
+    key = _attempt_key(feature_id, phase)
+    if key not in attempts and key != phase and phase in attempts:
+        # A state written before attempts were keyed per feature: adopt the
+        # per-phase history only when this is the state's single feature, so
+        # it can only have come from this feature's own runs.
+        feature_ids = [f.get("id") for f in state.get("features", [])]
+        if feature_ids == [feature_id]:
+            attempts[key] = list(attempts[phase])
+    return attempts.setdefault(key, [])
+
+
+def _feature_dir(state: dict, feature_id: str | None) -> str | None:
+    """The feature's recorded spec directory, which scopes the phase contract
+    (only when the orchestrator recorded one; otherwise the historical
+    project-wide contract applies)."""
+    if not feature_id:
+        return None
+    try:
+        feature = state_mod.find_feature(state, feature_id)
+    except state_mod.StateError:
+        return None
+    spec_dir = feature.get("spec_directory")
+    return spec_dir if isinstance(spec_dir, str) and spec_dir.strip() else None
+
+
+def _record_discovered_feature_dir(state: dict, project: Path, feature_id: str | None) -> None:
+    """After `specify`, remember the directory Spec Kit created when the
+    feature had none recorded, so later phases are scoped to it."""
+    if not feature_id or _feature_dir(state, feature_id):
+        return
+    try:
+        resolved = phase_contracts.resolve_active_feature_dir(project)
+        feature = state_mod.find_feature(state, feature_id)
+    except (phase_contracts.ActiveFeatureUnresolved, state_mod.StateError):
+        return
+    if resolved.is_dir():
+        feature["spec_directory"] = resolved.relative_to(project.resolve()).as_posix()
+
+
+def _phase_status(state: dict, phase: str, feature_id: str | None = None) -> str:
+    attempts = state.get("attempts", {}).get(_attempt_key(feature_id, phase), [])
     if not attempts:
         return "PENDING"
     if attempts[-1]["status"] == "PASSED":
@@ -218,7 +284,7 @@ def _skip_by_risk_profile(state: dict, feature_id: str | None, phase: str) -> bo
 
 
 def _try_contract_revalidation(project: Path, phase: str, attempts: list[dict],
-                                context_hash: str | None) -> dict | None:
+                                context_hash: str | None, feature_dir: str | None = None) -> dict | None:
     """NPV-010 / spec.md §11: a cheap, no-subprocess re-check of a
     previously-blocked attempt under the *current* phase contract. Returns
     a ready-to-append `PhaseAttempt` dict on success, or `None` when any of
@@ -230,7 +296,7 @@ def _try_contract_revalidation(project: Path, phase: str, attempts: list[dict],
         return None
     if last_attempt.get("reason") not in ("missing_artifact", "unchanged_artifact"):
         return None
-    if phase_contracts.validate_artifacts(project, phase):
+    if phase_contracts.validate_artifacts(project, phase, feature_dir):
         return None
     if last_attempt.get("context_hash") != context_hash:
         return None
@@ -243,7 +309,8 @@ def _try_contract_revalidation(project: Path, phase: str, attempts: list[dict],
     # History for a produce-or-update trust check excludes the attempt being
     # revalidated itself (research.md item 2 — every *prior* attempt).
     prior_history = attempts[:-1]
-    revalidated = phase_runner.revalidate_from_transcript(project, phase, transcript_text, prior_history)
+    revalidated = phase_runner.revalidate_from_transcript(project, phase, transcript_text, prior_history,
+                                                          feature_dir=feature_dir)
     if revalidated is None:
         return None
 
@@ -272,9 +339,11 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
     execution = state["execution"]
     max_attempts = execution.get("max_attempts_per_phase", DEFAULT_MAX_ATTEMPTS)
     phase_timeout = execution.get("phase_timeout_seconds", DEFAULT_PHASE_TIMEOUT)
-    attempts = state["attempts"].setdefault(phase, [])
-    allowed_writes = phase_contracts.PHASE_ALLOWED_WRITES[phase]
-    expected_artifacts = phase_contracts.PHASE_ARTIFACTS[phase]
+    attempts = _attempts_for(state, feature_id, phase)
+    feature_dir = _feature_dir(state, feature_id)
+    allowed_writes = phase_contracts.scoped_patterns(
+        phase_contracts.PHASE_ALLOWED_WRITES[phase], feature_dir, keep_feature_json=True)
+    expected_artifacts = phase_contracts.phase_artifacts(phase, feature_dir)
     context = state["context"]
     context_hash = _context_hash(project, context)
 
@@ -284,7 +353,7 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
             return "PASSED"
 
     if attempts and attempts[-1]["status"] != "PASSED":
-        revalidated = _try_contract_revalidation(project, phase, attempts, context_hash)
+        revalidated = _try_contract_revalidation(project, phase, attempts, context_hash, feature_dir)
         if revalidated is not None:
             revalidated["number"] = len(attempts) + 1
             attempts.append(revalidated)
@@ -314,11 +383,13 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
         print(f"[Spec Master] {phase} attempt {used + 1}/{max_attempts} started ({execution['active_mode']}).")
         _emit(project, "phase.started", {"feature": feature_id, "phase": phase, "attempt": attempt_number})
         last_attempt = attempts[-1] if attempts else None
-        prompt = _render_prompt(phase, attempt_number, last_attempt, allowed_writes, expected_artifacts)
+        prompt = _render_prompt(phase, attempt_number, last_attempt, allowed_writes, expected_artifacts,
+                                feature_dir)
         try:
             result = phase_runner.run_phase(
                 project, phase, execution["integration"], execution["model"],
                 prompt, phase_timeout, agent="spec-phase", history=list(attempts),
+                feature_dir=feature_dir,
             )
         finally:
             _release_lock(project)
@@ -369,6 +440,8 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
                   f"({result['reason'] or 'artifact_updated'}).")
             if phase == "constitution":
                 state["constitution"] = {"status": "VALIDATED", "path": expected_artifacts[0]}
+            if phase == "specify":
+                _record_discovered_feature_dir(state, project, feature_id)
             _promote_feature_phase(state, feature_id, phase)
             state_mod.save(str(_state_path(project)), state)
             _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "PASSED"})
@@ -376,7 +449,7 @@ def _run_phase_with_attempts(state: dict, project: Path, phase: str, feature_id:
 
         print(f"[Spec Master] {phase} failed: {result['reason']}.")
 
-    _preserve_failed_attempt(project, phase, attempts[-1])
+    _preserve_failed_attempt(project, phase, attempts[-1], feature_id)
     print(f"[Spec Master] {phase} attempts exhausted ({max_attempts}/{max_attempts}) — BLOCKED.")
     _emit(project, "phase.transition", {"feature": feature_id, "phase": phase, "status": "BLOCKED",
                                         "reason": attempts[-1].get("reason")})
@@ -429,14 +502,16 @@ def _drive_workflow(state: dict, project: Path, feature_id: str | None) -> int:
     _emit(project, "workflow.status", {"status": workflow_status, "feature": feature_id,
                                        "blocked_phase": blocked_phase, "paused_phase": paused_phase})
 
-    phases_summary = {phase: "SKIPPED" if phase in skipped_phases else _phase_status(state, phase)
+    phases_summary = {phase: "SKIPPED" if phase in skipped_phases else _phase_status(state, phase, feature_id)
                       for phase in PHASES}
-    attempts_summary = {phase: len(attempts) for phase, attempts in state["attempts"].items()}
+    recorded = {phase: state["attempts"][_attempt_key(feature_id, phase)]
+                for phase in PHASES if _attempt_key(feature_id, phase) in state["attempts"]}
+    attempts_summary = {phase: len(attempts) for phase, attempts in recorded.items()}
     outcomes = {
         phase: (attempts[-1].get("outcome") if attempts else None)
-        for phase, attempts in state["attempts"].items()
+        for phase, attempts in recorded.items()
     }
-    validate_attempts = state["attempts"].get("validate", [])
+    validate_attempts = recorded.get("validate", [])
     quality_gates = (validate_attempts[-1].get("quality_gates") if validate_attempts else None) or []
 
     report = {
@@ -512,13 +587,19 @@ def cmd_status(args: argparse.Namespace) -> int:
         _print_json({"execution": None, "phases": {}, "attempts_summary": {}, "blocked_phase": None})
         return 0
     state = state_mod.load(str(path))
+    feature_id = getattr(args, "feature", None)
     attempts = state.get("attempts", {})
-    phases_summary = {phase: _phase_status(state, phase) for phase in PHASES}
+    phases_summary = {phase: _phase_status(state, phase, feature_id) for phase in PHASES}
     blocked_phase = next((phase for phase, status in phases_summary.items() if status == "BLOCKED"), None)
+    if feature_id:
+        attempts_summary = {phase: len(attempts[_attempt_key(feature_id, phase)])
+                            for phase in PHASES if _attempt_key(feature_id, phase) in attempts}
+    else:
+        attempts_summary = {phase: len(records) for phase, records in attempts.items()}
     _print_json({
         "execution": state.get("execution"),
         "phases": phases_summary,
-        "attempts_summary": {phase: len(records) for phase, records in attempts.items()},
+        "attempts_summary": attempts_summary,
         "blocked_phase": blocked_phase,
     })
     return 0
@@ -546,6 +627,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status")
     p_status.add_argument("--project", required=True)
+    p_status.add_argument("--feature", default=None,
+                          help="report this feature's attempts (attempts are recorded per feature and phase)")
     p_status.set_defaults(func=cmd_status)
 
     return parser

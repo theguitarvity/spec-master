@@ -1,11 +1,11 @@
 import unittest
-import _pathfix
 
+import _pathfix  # noqa: F401
 from graph.model import Graph, GraphNode, GraphEdge
 from graph import traversal
 
 
-def _fixture_chain_graph():
+def _chain_graph():
     # a -> b -> c -> d, plus an unrelated island node e
     g = Graph()
     for nid in ("a", "b", "c", "d", "e"):
@@ -17,60 +17,50 @@ def _fixture_chain_graph():
 
 
 class GraphTraversalTests(unittest.TestCase):
+    def setUp(self):
+        self.chain_graph = _chain_graph()
 
     def test_bfs_outgoing_respects_max_depth(self):
-        chain_graph = _fixture_chain_graph()
-        reached = traversal.bfs(chain_graph, "a", max_depth=2, direction="out")
-        assert reached == {"b": 1, "c": 2}
+        reached = traversal.bfs(self.chain_graph, "a", max_depth=2, direction="out")
+        self.assertEqual(reached, {"b": 1, "c": 2})
 
     def test_bfs_unknown_start_returns_empty(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.bfs(chain_graph, "nonexistent") == {}
+        self.assertEqual(traversal.bfs(self.chain_graph, "nonexistent"), {})
 
     def test_bfs_island_node_returns_empty(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.bfs(chain_graph, "e", max_depth=3) == {}
+        self.assertEqual(traversal.bfs(self.chain_graph, "e", max_depth=3), {})
 
     def test_descendants_full_closure(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.descendants(chain_graph, "a") == {"b", "c", "d"}
+        self.assertEqual(traversal.descendants(self.chain_graph, "a"), {"b", "c", "d"})
 
     def test_ancestors_full_closure(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.ancestors(chain_graph, "d") == {"a", "b", "c"}
+        self.assertEqual(traversal.ancestors(self.chain_graph, "d"), {"a", "b", "c"})
 
     def test_blast_radius_is_incoming_closure(self):
-        chain_graph = _fixture_chain_graph()
         # If "c" changes, everything that (transitively) depends on it — a, b —
         # is affected. "d" is not, since d is downstream of c, not upstream.
-        affected = traversal.blast_radius(chain_graph, "c", max_depth=5)
-        assert set(affected) == {"a", "b"}
+        affected = traversal.blast_radius(self.chain_graph, "c", max_depth=5)
+        self.assertEqual(set(affected), {"a", "b"})
 
     def test_blast_radius_bounded_by_depth(self):
-        chain_graph = _fixture_chain_graph()
-        affected = traversal.blast_radius(chain_graph, "d", max_depth=1)
-        assert affected == ["c"]
+        affected = traversal.blast_radius(self.chain_graph, "d", max_depth=1)
+        self.assertEqual(affected, ["c"])
 
     def test_shortest_path_found(self):
-        chain_graph = _fixture_chain_graph()
-        path = traversal.shortest_path(chain_graph, "a", "d")
-        assert path == ["a", "b", "c", "d"]
+        path = traversal.shortest_path(self.chain_graph, "a", "d")
+        self.assertEqual(path, ["a", "b", "c", "d"])
 
     def test_shortest_path_same_node(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.shortest_path(chain_graph, "b", "b") == ["b"]
+        self.assertEqual(traversal.shortest_path(self.chain_graph, "b", "b"), ["b"])
 
     def test_shortest_path_unreachable_within_depth(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.shortest_path(chain_graph, "a", "d", max_depth=1) is None
+        self.assertIsNone(traversal.shortest_path(self.chain_graph, "a", "d", max_depth=1))
 
     def test_shortest_path_disconnected_island(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.shortest_path(chain_graph, "a", "e") is None
+        self.assertIsNone(traversal.shortest_path(self.chain_graph, "a", "e"))
 
     def test_shortest_path_unknown_node(self):
-        chain_graph = _fixture_chain_graph()
-        assert traversal.shortest_path(chain_graph, "a", "nonexistent") is None
+        self.assertIsNone(traversal.shortest_path(self.chain_graph, "a", "nonexistent"))
 
     def test_bfs_handles_cycles_without_infinite_loop(self):
         g = Graph()
@@ -80,7 +70,7 @@ class GraphTraversalTests(unittest.TestCase):
         g.add_edge(GraphEdge(source="y", relation="RELATED_TO", target="z"))
         g.add_edge(GraphEdge(source="z", relation="RELATED_TO", target="x"))  # cycle
         reached = traversal.bfs(g, "x", max_depth=10, direction="both")
-        assert set(reached) == {"y", "z"}
+        self.assertEqual(set(reached), {"y", "z"})
 
 
 if __name__ == "__main__":

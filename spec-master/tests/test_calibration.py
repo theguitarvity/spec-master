@@ -149,6 +149,71 @@ class CalibrateTests(unittest.TestCase):
         self.assertEqual(thresholds, risk_profile.DEFAULT_THRESHOLDS)
 
 
+def _drifting_xs_rows():
+    """Three XS features that each took 8 zero-token rounds: drifts on the round-count fallback."""
+    return _rounds("a", "XS", 8, 1) + _rounds("b", "XS", 8, 2) + _rounds("c", "XS", 8, 3)
+
+
+def _sourced(rows, source):
+    return [dict(row, source=source) for row in rows]
+
+
+class ProvenanceTests(unittest.TestCase):
+    def test_manual_unverified_rounds_never_feed_calibration(self):
+        rows = _sourced(_drifting_xs_rows(), "manual-unverified")
+        for require_measured in (None, True, False):
+            result = calibration.calibrate(rows, require_measured=require_measured)
+            self.assertEqual((result["drift"], result["features"], result["rounds_used"]), ([], [], 0))
+            self.assertEqual(result["ignored_rounds"], 24)
+            self.assertEqual(result["ignored_by_reason"], {"unattributed": 0, "unverified": 24})
+            self.assertIn("24 round(s) sem usage medido", " ".join(result["notes"]))
+
+    def test_sourced_rounds_without_tokens_are_unverified_in_every_mode(self):
+        rows = _sourced(_drifting_xs_rows(), "host-transcript")  # hand-edited: a host row must carry tokens
+        result = calibration.calibrate(rows, require_measured=False)
+        self.assertEqual((result["drift"], result["ignored_by_reason"]["unverified"]), ([], 24))
+
+    def test_legacy_input_keeps_v1_fallback_but_flags_it(self):
+        result = calibration.calibrate(_drifting_xs_rows())
+        self.assertEqual(result["drift"][0]["tier"], "XS")
+        self.assertIs(result["require_measured"], False)
+        self.assertEqual(result["unverified_rounds_used"], 24)
+        self.assertIn("24 round(s) v1 sem source e com 0 tokens", " ".join(result["notes"]))
+
+    def test_require_measured_ignores_unsourced_zero_token_rounds(self):
+        result = calibration.calibrate(_drifting_xs_rows(), require_measured=True)
+        self.assertEqual((result["drift"], result["rounds_used"]), ([], 0))
+        self.assertEqual(result["ignored_by_reason"], {"unattributed": 0, "unverified": 24})
+
+    def test_any_sourced_row_switches_to_measured_only(self):
+        measured = _sourced(_rounds("d", "S", 2, 4, tokens=1000), "host-transcript")
+        result = calibration.calibrate(_drifting_xs_rows() + measured)
+        self.assertIs(result["require_measured"], True)
+        self.assertEqual([f["feature"] for f in result["features"]], ["d"])
+        self.assertEqual((result["features"][0]["basis"], result["rounds_used"]), ("total_tokens", 2))
+        self.assertEqual((result["ignored_by_reason"]["unverified"], result["unverified_rounds_used"]), (24, 0))
+        self.assertEqual(result["drift"], [])
+
+    def test_measured_rounds_still_detect_drift(self):
+        rows = []
+        for day, fid in enumerate("abc", start=1):
+            rows += _sourced(_rounds(fid, "XS", 2, day, tokens=100_000), "host-headless")  # 200k > 150k budget
+        result = calibration.calibrate(rows)
+        self.assertEqual((result["drift"][0]["tier"], result["drift"][0]["direction"]), ("XS", "under"))
+        self.assertEqual(result["basis_counts"]["total_tokens"], 3)
+        self.assertEqual(result["ignored_rounds"], 0)
+
+    def test_ignored_reasons_are_split_and_the_attribution_note_stays_first(self):
+        unattributed = metrics.record_round(round_id="u", phase="plan", started_at="2026-03-01T00:00:00Z",
+                                            ended_at="2026-03-01T00:10:00Z", input_tokens=10, source="host-transcript")
+        unverified = dict(_rounds("f", "S", 1, 2)[0], source="manual-unverified")
+        result = calibration.calibrate([unattributed, unverified])
+        self.assertEqual(result["ignored_rounds"], 2)
+        self.assertEqual(result["ignored_by_reason"], {"unattributed": 1, "unverified": 1})
+        self.assertIn("sem feature_id/tier", result["notes"][0])
+        self.assertIn("sem usage medido", result["notes"][1])
+
+
 class ScaleTests(unittest.TestCase):
     def test_scaling_stays_monotonic_and_at_least_one(self):
         thresholds = risk_profile.merge_thresholds({"XS": {"tasks": 5, "layers": 1}, "S": {"tasks": 6, "layers": 1}})

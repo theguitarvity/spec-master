@@ -1,9 +1,8 @@
-import unittest
-import shutil
 import tempfile
+import unittest
 from pathlib import Path
-import _pathfix
 
+import _pathfix  # noqa: F401
 from knowledge.manifest import KnowledgeManifest
 from knowledge.router import KnowledgeRouter
 from knowledge import profiles
@@ -30,7 +29,7 @@ def _write(tmp_path, filename, id_, roles, category="foundations", tags=None,
     (tmp_path / filename).write_text("\n".join(lines))
 
 
-def _fixture_router(tmp_path):
+def _router(tmp_path):
     _write(tmp_path, "a.md", "principle.a", ["architect", "backend-dev"],
            category="architecture", tags=["scaling"], depth={"architect": "L4"},
            content="all about scaling systems")
@@ -45,92 +44,73 @@ def _fixture_router(tmp_path):
 
 
 class KnowledgeRouterTests(unittest.TestCase):
-    def _tmp_path(self):
-        path = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
-        return path
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp_path = Path(tmp.name)
+        self.router = _router(self.tmp_path)
 
     def test_for_role_filters_by_applicability(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_role("architect")
+        modules = self.router.for_role("architect")
         ids = {m.id for m in modules}
-        assert ids == {"principle.a", "principle.c"}
+        self.assertEqual(ids, {"principle.a", "principle.c"})
 
     def test_for_role_resolves_team_model_alias(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
         # "infra" isn't a role used in the fixture, but the alias resolution
         # itself must not raise, and should route through "infrastructure".
-        modules = router.for_role("infra")
-        assert modules == []
+        modules = self.router.for_role("infra")
+        self.assertEqual(modules, [])
 
     def test_for_role_respects_limit(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_role("architect", limit=1)
-        assert len(modules) == 1
+        modules = self.router.for_role("architect", limit=1)
+        self.assertEqual(len(modules), 1)
 
     def test_for_role_ranks_higher_depth_first(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
         # principle.a is L4 for architect, principle.c is L2 for architect.
-        modules = router.for_role("architect")
-        assert modules[0].id == "principle.a"
+        modules = self.router.for_role("architect")
+        self.assertEqual(modules[0].id, "principle.a")
 
     def test_for_query_filters_by_role_and_keyword(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_query("backend-dev", "testing")
+        modules = self.router.for_query("backend-dev", "testing")
         ids = {m.id for m in modules}
-        assert ids == {"principle.b"}
+        self.assertEqual(ids, {"principle.b"})
 
     def test_for_query_excludes_role_inapplicable_matches(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
         # "authentication" only appears in principle.c, which isn't applicable
         # to backend-dev.
-        modules = router.for_query("backend-dev", "authentication")
-        assert modules == []
+        modules = self.router.for_query("backend-dev", "authentication")
+        self.assertEqual(modules, [])
 
     def test_for_context_falls_back_to_role_modules_without_keywords(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_context("architect")
+        modules = self.router.for_context("architect")
         ids = {m.id for m in modules}
-        assert ids == {"principle.a", "principle.c"}
+        self.assertEqual(ids, {"principle.a", "principle.c"})
 
     def test_for_context_with_keywords_narrows_selection(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_context("architect", keywords=["scaling"])
+        modules = self.router.for_context("architect", keywords=["scaling"])
         ids = {m.id for m in modules}
-        assert "principle.a" in ids
+        self.assertIn("principle.a", ids)
 
     def test_for_context_respects_module_budget(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_context("architect", limit=1)
-        assert len(modules) == 1
+        modules = self.router.for_context("architect", limit=1)
+        self.assertEqual(len(modules), 1)
 
     def test_budget_summary_reports_selection(self):
-        tmp_path = self._tmp_path()
-        router = _fixture_router(tmp_path)
-        modules = router.for_role("architect")
-        summary = router.budget_summary(modules)
-        assert summary["count"] == 2
-        assert set(summary["ids"]) == {"principle.a", "principle.c"}
-        assert set(summary["categories"]) == {"architecture", "security"}
-        assert summary["total_content_chars"] > 0
+        modules = self.router.for_role("architect")
+        summary = self.router.budget_summary(modules)
+        self.assertEqual(summary["count"], 2)
+        self.assertEqual(set(summary["ids"]), {"principle.a", "principle.c"})
+        self.assertEqual(set(summary["categories"]), {"architecture", "security"})
+        self.assertGreater(summary["total_content_chars"], 0)
 
     def test_router_default_manifest_uses_real_knowledge_base(self):
         # No knowledge_root passed anywhere in the chain — this exercises the
         # auto-discovery path (manifest._find_knowledge_root) end to end.
         router = KnowledgeRouter()
         modules = router.for_role("architect", limit=3)
-        assert len(modules) <= 3
+        self.assertLessEqual(len(modules), 3)
         for m in modules:
-            assert m.is_applicable_to("architect")
+            self.assertTrue(m.is_applicable_to("architect"))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Spec Master MCP server (stdio transport, stdlib only).
 
-Exposes every `spec-master/lib/cli.py` command as an MCP tool. The tool list
+Exposes every `spec-master/lib/cli.py` command as an MCP tool, and the two
+entrypoints as MCP prompts (`spec-master` for the full cycle, `spec-master-lane`
+for the lane flow), which most hosts offer as slash commands. The prompt text
+comes from `templates/entrypoints/` with this engine's absolute path filled
+in, so the same package works wherever a host installs it. The tool list
 is built at startup by introspecting `cli.build_parser()`, so CLI groups added
 later appear automatically:
 
@@ -19,10 +23,18 @@ Transport: newline-delimited JSON-RPC 2.0 on stdin/stdout, logs on stderr.
 Batches (JSON arrays) are processed per JSON-RPC 2.0 (one array reply with
 the non-notification responses; an empty array is -32600).
 
-    python3 spec-master/mcp/spec_master_mcp.py [--project PATH] [--list-tools]
+    python3 spec-master/mcp/spec_master_mcp.py [--project PATH] [--tools all|entrypoint] [--list-tools]
 
-Env: SPEC_MASTER_PROJECT (project root; default: cwd at startup, --project
-wins), SPEC_MASTER_MCP_TIMEOUT (seconds per tool call, default 120).
+Project root: --project, then SPEC_MASTER_PROJECT, then the host's own
+variable (CLAUDE_PROJECT_DIR, CURSOR_PROJECT_DIR, GEMINI_PROJECT_DIR), then
+the cwd at startup. Plugin hosts often start servers inside the plugin
+directory, so when the client supports MCP roots the server asks for them
+after `initialized` and adopts the first workspace folder. A server left
+pointing at its own install directory refuses every tool that touches the
+project instead of writing Spec Master state into the plugin. The plugins
+start it with `--tools entrypoint`: only `harness_entrypoint` is listed.
+
+Env: SPEC_MASTER_MCP_TIMEOUT (seconds per tool call, default 120).
 """
 from __future__ import annotations
 
@@ -34,13 +46,14 @@ import re
 import subprocess
 import sys
 import traceback
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 SERVER_NAME = "spec-master"
 SERVER_TITLE = "Spec Master"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.3.0"
 LATEST_PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 DEFAULT_TIMEOUT = 120.0
@@ -48,6 +61,17 @@ STDERR_TAIL_CHARS = 4000
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent  # spec-master/
 LIB_DIR = PACKAGE_DIR / "lib"
+ENTRYPOINTS_DIR = PACKAGE_DIR / "templates" / "entrypoints"
+
+# name -> (flow, title, description, argument name, argument description, argument required)
+PROMPTS = {
+    "spec-master": ("full-cycle", "Spec Master: full cycle",
+                    "Run the whole spec-driven cycle (constitution to validate) from a context file.",
+                    "context", "Context file (e.g. CLAUDE.md); leave empty for the guided discovery", False),
+    "spec-master-lane": ("lane", "Spec Master: lane flow",
+                         "Triage a change into patch, standard or critical; a patch closes only on evidence.",
+                         "request", "The change, in the user's words (optionally starting with a lane)", True),
+}
 CLI_PATH = LIB_DIR / "cli.py"
 
 PARSE_ERROR = -32700
@@ -69,15 +93,25 @@ READ_ONLY_ACTIONS = frozenset({
 # Verified pure tools whose action name is too generic for the allowlist
 # (e.g. `worktree plan` creates a git worktree, `git-strategy plan` does not).
 READ_ONLY_TOOLS = frozenset({
-    "git_strategy_plan", "metrics_record_round", "team_workstreams",
+    "git_strategy_plan", "team_workstreams",
     "worktree_aggregate", "workstreams_aggregate", "tracker_orchestrate",
     "evals_run", "budget_file", "dashboard_model",
     "risk_profiles", "risk_work_packages",
+    "telemetry_locate", "baseline_plan", "lane_triage", "step_next",
 })
 
 _MISSING = object()
 _TRUE_STRINGS = {"true", "1", "yes", "on"}
 _FALSE_STRINGS = {"false", "0", "no", "off"}
+
+
+def _entrypoint_text(flow: str, argument: str) -> str:
+    """Same renderer as `cli.py harness entrypoint` (imported lazily: the
+    server must start even when the CLI cannot be loaded)."""
+    if str(LIB_DIR) not in sys.path:
+        sys.path.insert(0, str(LIB_DIR))
+    import cli  # noqa: PLC0415
+    return cli.entrypoint_text(flow, argument)
 
 
 def log(message: str) -> None:
@@ -551,11 +585,56 @@ def _timeout_from_env() -> float:
     return DEFAULT_TIMEOUT
 
 
+PROJECT_ENV_VARS = ("SPEC_MASTER_PROJECT", "CLAUDE_PROJECT_DIR", "CURSOR_PROJECT_DIR", "GEMINI_PROJECT_DIR")
+# Tools that never touch the project, so they work before the project is known.
+PROJECT_FREE_TOOLS = frozenset({"harness_entrypoint"})
+ROOTS_REQUEST_PREFIX = "spec-master-roots-"
+
+
+def _initial_project_root(explicit) -> tuple[str, str]:
+    if explicit:
+        return str(Path(explicit).expanduser().resolve()), "--project"
+    for name in PROJECT_ENV_VARS:
+        value = os.environ.get(name)
+        if value and Path(value).expanduser().is_dir():
+            return str(Path(value).expanduser().resolve()), name
+    return str(Path(os.getcwd()).resolve()), "cwd"
+
+
+def looks_like_install_dir(path: str | os.PathLike) -> bool:
+    """True when `path` is where a host installed this engine rather than a
+    user's project: the engine directory itself, or its parent inside a
+    hidden configuration directory (~/.kiro/..., ~/.codex/..., ...)."""
+    resolved = Path(path).resolve()
+    if resolved == PACKAGE_DIR:
+        return True
+    return resolved == PACKAGE_DIR.parent and any(part.startswith(".") for part in resolved.parts[1:])
+
+
+def _path_from_uri(uri: str) -> str | None:
+    parsed = urllib.parse.urlparse(uri or "")
+    if parsed.scheme != "file":
+        return None
+    path = urllib.parse.unquote(parsed.path)
+    if os.name == "nt" and re.match(r"^/[A-Za-z]:", path):
+        path = path[1:]
+    return path if Path(path).is_dir() else None
+
+
+# `entrypoint` is what the plugins start: every tool schema a host loads costs
+# context in each session (all of them: ~49 KB), and the skills need only this one.
+TOOLSETS = {"all": None, "entrypoint": frozenset({"harness_entrypoint"})}
+
+
 class Server:
     def __init__(self, project_root: str | os.PathLike | None = None, timeout: float | None = None,
-                 parser_factory: Callable[[], argparse.ArgumentParser] = load_cli_parser):
-        root = project_root or os.environ.get("SPEC_MASTER_PROJECT") or os.getcwd()
-        self.project_root = str(Path(root).expanduser().resolve())
+                 parser_factory: Callable[[], argparse.ArgumentParser] = load_cli_parser,
+                 toolset: str = "all"):
+        self.toolset = toolset
+        self.project_root, self.project_source = _initial_project_root(project_root)
+        self.client_supports_roots = False
+        self.outbox: list[dict] = []
+        self._roots_requests = 0
         self.timeout = timeout if timeout is not None else _timeout_from_env()
         self.load_error: str | None = None
         try:
@@ -565,28 +644,37 @@ class Server:
             self.load_error = f"{type(exc).__name__}: {exc}"
             log(f"could not load the Spec Master CLI parser: {self.load_error}")
             log(traceback.format_exc())
+        if TOOLSETS[toolset] is not None:
+            self.tools = [t for t in self.tools if t.name in TOOLSETS[toolset]]
         self.tools_by_name = {t.name: t for t in self.tools}
 
     # -- MCP methods ------------------------------------------------------
     def instructions(self) -> str:
+        if self.toolset == "entrypoint":
+            return ("Spec Master harness for spec-driven development. Call `harness_entrypoint` (flow "
+                    "`full-cycle` or `lane`, argument: the user's input) and follow the instructions it "
+                    "returns: they carry this engine's paths, and the core runs through its CLI.")
         text = (
             "Spec Master deterministic orchestration core. Each tool runs one "
             "`spec-master/lib/cli.py <group> <action>` command (tool `<group>_<action>`, dashes as "
             f"underscores) in a subprocess rooted at {self.project_root}; relative paths resolve there. "
             "Results carry the CLI's JSON (also as structuredContent) or Markdown text; isError mirrors "
             "a non-zero exit. Tools annotated readOnlyHint=true never write; the others may update "
-            ".spec-master/ exactly as the CLI does. Follow spec-master/PROTOCOL.md for when to call what."
+            ".spec-master/ exactly as the CLI does. Start with `harness_entrypoint` (flow `full-cycle` or "
+            "`lane`): it returns the instructions to follow, with this engine's paths."
         )
         if self.load_error:
             text += f" WARNING: the CLI could not be loaded ({self.load_error}); no tools are available."
         return text
 
     def initialize(self, params: dict) -> dict:
+        capabilities = params.get("capabilities")
+        self.client_supports_roots = isinstance(capabilities, dict) and "roots" in capabilities
         requested = params.get("protocolVersion")
         version = requested if requested in SUPPORTED_PROTOCOL_VERSIONS else LATEST_PROTOCOL_VERSION
         return {
             "protocolVersion": version,
-            "capabilities": {"tools": {"listChanged": False}},
+            "capabilities": {"tools": {"listChanged": False}, "prompts": {"listChanged": False}},
             "serverInfo": {"name": SERVER_NAME, "title": SERVER_TITLE, "version": SERVER_VERSION},
             "instructions": self.instructions(),
         }
@@ -594,17 +682,74 @@ class Server:
     def list_tools(self) -> dict:
         return {"tools": [t.to_mcp() for t in self.tools]}
 
+    def list_prompts(self) -> dict:
+        return {"prompts": [
+            {"name": name, "title": title, "description": description,
+             "arguments": [{"name": arg, "description": arg_help, "required": required}]}
+            for name, (_template, title, description, arg, arg_help, required) in PROMPTS.items()]}
+
+    def blind_note(self) -> str:
+        """When the host started this server in its install directory and
+        shared no roots (Codex does this), the agent must use the CLI. With
+        the entrypoint toolset the instructions already say so."""
+        if self.toolset != "all" or not looks_like_install_dir(self.project_root):
+            return ""
+        return (f"This MCP server cannot see your project (the host started it in {self.project_root} and "
+                f"shared no workspace roots): run every Spec Master command through the CLI, "
+                f"`python3 {CLI_PATH.as_posix()} <group> <action>`, from your project root.")
+
+    def get_prompt(self, name: str, arguments) -> dict:
+        """The entrypoint text with this engine's path filled in."""
+        if name not in PROMPTS:
+            raise ArgumentError(f"unknown prompt: {name!r}")
+        flow, _title, description, arg, _arg_help, required = PROMPTS[name]
+        value = str((arguments or {}).get(arg) or "").strip()
+        if required and not value:
+            raise ArgumentError(f"prompt {name!r} needs the {arg!r} argument")
+        text = _entrypoint_text(flow, value)
+        if self.blind_note():
+            text = f"{text.rstrip()}\n\n{self.blind_note()}\n"
+        return {"description": description,
+                "messages": [{"role": "user", "content": {"type": "text", "text": text}}]}
+
+    def request_roots(self) -> None:
+        if self.client_supports_roots and self.project_source in ("cwd", "roots"):
+            self._roots_requests += 1
+            self.outbox.append({"jsonrpc": "2.0", "id": f"{ROOTS_REQUEST_PREFIX}{self._roots_requests}",
+                                "method": "roots/list"})
+
+    def receive_roots(self, result) -> None:
+        roots = result.get("roots") if isinstance(result, dict) else None
+        for root in roots if isinstance(roots, list) else []:
+            path = _path_from_uri(root.get("uri") if isinstance(root, dict) else "")
+            if path:
+                self.project_root, self.project_source = str(Path(path).resolve()), "roots"
+                log(f"project root from the client's roots: {self.project_root}")
+                return
+
     def call_tool(self, name: str, arguments) -> dict:
         if self.load_error:
             return _error_result(f"Spec Master CLI could not be loaded: {self.load_error}")
         tool = self.tools_by_name.get(name)
         if tool is None:
             return _error_result(f"unknown tool: {name!r}")
+        if name not in PROJECT_FREE_TOOLS and looks_like_install_dir(self.project_root):
+            return _error_result(
+                f"Spec Master does not know your project directory: the host started this server in "
+                f"its install directory ({self.project_root}) and did not share its workspace roots. "
+                f"Run the core from your project instead: `python3 {CLI_PATH.as_posix()} <group> <action>` "
+                "(call the `harness_entrypoint` tool for the full instructions), or set SPEC_MASTER_PROJECT.")
         try:
             argv = build_argv(tool, arguments)
         except ArgumentError as exc:
             return _error_result(str(exc))
-        return self.run_cli(argv)
+        result = self.run_cli(argv)
+        note = self.blind_note()
+        if note and not result["isError"]:
+            result["content"].append({"type": "text", "text": note})
+            if isinstance(result.get("structuredContent"), dict):
+                result["structuredContent"]["note"] = note
+        return result
 
     def run_cli(self, argv: list[str]) -> dict:
         env = dict(os.environ)
@@ -658,7 +803,9 @@ class Server:
             return _error(None, INVALID_REQUEST, "Invalid Request: expected a JSON object")
         method = message.get("method")
         if method is None and ("result" in message or "error" in message):
-            return None  # a response; this server never sends requests
+            if str(message.get("id", "")).startswith(ROOTS_REQUEST_PREFIX) and "result" in message:
+                self.receive_roots(message["result"])
+            return None  # a response to one of our requests
         is_request = "id" in message
         msg_id = message.get("id")
         if message.get("jsonrpc") != "2.0" or not isinstance(method, str):
@@ -670,7 +817,9 @@ class Server:
         if params is None:
             params = {}
         if not is_request:
-            return None  # notifications (initialized, cancelled, ...) never get a reply
+            if method in ("notifications/initialized", "notifications/roots/list_changed"):
+                self.request_roots()
+            return None  # notifications never get a reply
         if not isinstance(params, dict):
             return _error(msg_id, INVALID_PARAMS, "Invalid params: params must be an object")
         try:
@@ -694,6 +843,19 @@ class Server:
             if arguments is not None and not isinstance(arguments, dict):
                 return _error(msg_id, INVALID_PARAMS, "Invalid params: 'arguments' must be an object")
             return _result(msg_id, self.call_tool(name, arguments))
+        if method == "prompts/list":
+            return _result(msg_id, self.list_prompts())
+        if method == "prompts/get":
+            name = params.get("name")
+            arguments = params.get("arguments")
+            if not isinstance(name, str) or not name:
+                return _error(msg_id, INVALID_PARAMS, "Invalid params: prompts/get requires a string 'name'")
+            if arguments is not None and not isinstance(arguments, dict):
+                return _error(msg_id, INVALID_PARAMS, "Invalid params: 'arguments' must be an object")
+            try:
+                return _result(msg_id, self.get_prompt(name, arguments))
+            except ArgumentError as exc:
+                return _error(msg_id, INVALID_PARAMS, f"Invalid params: {exc}")
         return _error(msg_id, METHOD_NOT_FOUND, f"Method not found: {method}")
 
 
@@ -718,10 +880,12 @@ def serve(server: Server, stdin, stdout) -> None:
         if not line:
             continue
         response = server.handle_line(line)
-        if response is None:
-            continue
-        stdout.write(json.dumps(response, ensure_ascii=True, separators=(",", ":")).encode("ascii") + b"\n")
-        stdout.flush()
+        outgoing = ([response] if response is not None else []) + server.outbox
+        server.outbox = []
+        for message in outgoing:
+            stdout.write(json.dumps(message, ensure_ascii=True, separators=(",", ":")).encode("ascii") + b"\n")
+        if outgoing:
+            stdout.flush()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -730,15 +894,20 @@ def main(argv: list[str] | None = None) -> int:
                         help="project root the CLI runs in (default: $SPEC_MASTER_PROJECT or the cwd)")
     parser.add_argument("--timeout", type=float, default=None,
                         help="seconds per tool call (default: $SPEC_MASTER_MCP_TIMEOUT or 120)")
+    parser.add_argument("--tools", choices=sorted(TOOLSETS), default=os.environ.get("SPEC_MASTER_MCP_TOOLS", "all"),
+                        help="all: one tool per CLI command; entrypoint: only harness_entrypoint, as the plugins "
+                             "start it (default: $SPEC_MASTER_MCP_TOOLS or all)")
     parser.add_argument("--list-tools", action="store_true", help="print the tool list as JSON and exit")
     args = parser.parse_args(argv)
+    if args.tools not in TOOLSETS:
+        parser.error(f"--tools must be one of {', '.join(sorted(TOOLSETS))}")
 
     project = args.project or os.environ.get("SPEC_MASTER_PROJECT")
     if project and not Path(project).expanduser().is_dir():
         print(json.dumps({"error": f"project root is not a directory: {project}"}), file=sys.stderr)
         return 2
 
-    server = Server(project_root=project, timeout=args.timeout)
+    server = Server(project_root=project, timeout=args.timeout, toolset=args.tools)
     if args.list_tools:
         if server.load_error:
             print(json.dumps({"error": server.load_error}, indent=2))

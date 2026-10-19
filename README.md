@@ -1,319 +1,392 @@
 <div align="center">
 
-# Spec Master
+<img src="docs/assets/spec-master-logo.svg" alt="Spec Master: harness para desenvolvimento orientado a especificação" width="100%">
 
-**Orquestrador agentic para o [GitHub Spec Kit](https://github.com/github/spec-kit).**
-Um único comando — `/spec-master <arquivo-de-contexto>` — conduz todo o
-ciclo *Specification-Driven Development*: `constitution → specify → clarify
-→ plan → tasks → analyze (+repair) → implement → validate`. Se você ainda
-não tem contexto, `/spec-master new` guia a descoberta da ideia por chat e
-gera o contexto inicial.
+**Processo na medida de cada mudança, regras aplicadas pelo host e nada pronto sem evidência.**
 
-`658 testes automatizados` · `Python 3 stdlib, zero dependências` · `Team Mode multiagente` · `Compatível com os 30+ agentes suportados pelo GitHub Spec Kit`
+[![CI](https://github.com/theguitarvity/spec-master/actions/workflows/ci.yml/badge.svg)](https://github.com/theguitarvity/spec-master/actions/workflows/ci.yml)
+![Python 3.10 a 3.13](https://img.shields.io/badge/python-3.10%E2%80%933.13-19e6ff?style=flat-square&labelColor=0b1020)
+![Zero dependências](https://img.shields.io/badge/depend%C3%AAncias-zero%20%28stdlib%29-19e6ff?style=flat-square&labelColor=0b1020)
+![Spec Kit 0.16.4 a 1.0.x](https://img.shields.io/badge/Spec%20Kit-0.16.4%E2%80%931.0.x-ff8a1f?style=flat-square&labelColor=0b1020)
+![30+ agentes](https://img.shields.io/badge/agentes-30%2B-ff8a1f?style=flat-square&labelColor=0b1020)
+[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-19e6ff?style=flat-square&labelColor=0b1020)](LICENSE)
+
+[Começo rápido](#começo-rápido) · [Como funciona](#como-funciona) · [Instalação](#instalação) · [Comandos](#referência-de-comandos) · [Roadmap](#roadmap)
 
 </div>
 
 ---
 
-## Índice
+## O que é
 
-- [Por quê](#por-quê)
-- [Como funciona](#como-funciona)
-- [Instalação](#instalação)
-  - [Uso local (só este repo)](#uso-local-só-este-repo)
-  - [Instalação global (todos os projetos)](#instalação-global-todos-os-projetos)
-- [Uso rápido](#uso-rápido)
-- [Referência de comandos](#referência-de-comandos)
-  - [Servidor MCP](#servidor-mcp)
-- [Estratégias de Git](#estratégias-de-git)
-- [Retomada e idempotência](#retomada-e-idempotência)
-- [Team Mode](#team-mode)
-- [Métricas de entrega](#métricas-de-entrega)
-- [Modo guarded (opt-in, experimental)](#modo-guarded-opt-in-experimental)
-- [Arquitetura](#arquitetura)
-- [Estrutura do repositório](#estrutura-do-repositório)
-- [Testes](#testes)
-- [Condições de parada](#condições-de-parada)
-- [FAQ / Troubleshooting](#faq--troubleshooting)
-- [Roadmap](#roadmap)
-- [Contribuindo](#contribuindo)
-- [Créditos](#créditos)
+O Spec Master é um **harness** para desenvolvimento orientado a
+especificação: a camada entre você, o agente de código e o
+[GitHub Spec Kit](https://github.com/github/spec-kit) que decide três coisas
+que o agente sozinho não garante.
 
----
+- **Quanto processo a mudança merece.** Antes de qualquer artefato, uma
+  triagem determinística põe o pedido num lane: *patch* (uma mudança pequena
+  e testada, resolvida na própria sessão), *standard* ou *critical* (o ciclo
+  completo do Spec Kit).
+- **Que regras o agente não pode furar.** Hooks do host (Claude Code, Codex,
+  Copilot, Cursor, Gemini CLI, Antigravity, Qwen Code, Kiro) negam comandos
+  destrutivos, escrita nos arquivos do core e escrita fora do escopo da
+  mudança, e não deixam a sessão parar no meio de uma verificação.
+- **Quando algo está pronto.** Uma fase só passa com os artefatos dela no
+  lugar, e um patch só fecha com o teste, os gates reais e o escopo
+  conferidos.
+
+Para features de verdade, um único comando, `/spec-master <arquivo-de-contexto>`,
+conduz o ciclo inteiro: `constitution → specify → clarify → plan → tasks →
+analyze (+repair) → implement → validate`. A lógica estrutural fica num core
+Python determinístico, só stdlib e testado sem LLM. A semântica (ler o
+contexto, escrever specs, resolver ambiguidade) fica com o agente, seja ele
+qual for: Claude Code, Copilot, Codex, Qwen ou qualquer um dos 30+ agentes
+que o Spec Kit suporta.
 
 ## Por quê
 
-O [Spec Kit](https://github.com/github/spec-kit) trouxe disciplina para
-desenvolvimento orientado a especificação, mas o operador humano ainda
-precisa costurar sete comandos manualmente, decidir quando avançar, quando
-corrigir, quando parar e perguntar — e repetir tudo isso por feature.
+O Spec Kit trouxe disciplina ao desenvolvimento orientado a especificação,
+mas deixou três problemas para quem opera o agente:
 
-```text
-/speckit.constitution
-/speckit.specify
-/speckit.clarify
-/speckit.plan
-/speckit.tasks
-/speckit.analyze
-/speckit.implement
+1. **Tudo vira ciclo completo.** Corrigir um arredondamento custa sete
+   comandos, uma constitution e um `analyze`. A cerimônia não acompanha o
+   tamanho da mudança.
+2. **O protocolo é só uma sugestão.** Um agente pode implementar antes do
+   `analyze`, editar o próprio estado, rodar `git push --force` ou declarar
+   sucesso sem artefato, e nada o impede.
+3. **Os números são inventados.** Tokens e tempos digitados de memória pelo
+   modelo não servem para decidir nada.
+
+Uma avaliação multiagente deste repositório
+([`docs/harness-reformulation/`](docs/harness-reformulation/)) mediu esses
+problemas, e a reformulação atacou cada um deles:
+
+| Medido | Antes | Agora |
+|---|---|---|
+| Saída do CLI por feature (as 58 chamadas do protocolo) | 100,8 KB | 14,1 KB |
+| Tier de risco inflado sem motivo (features 003–005) | 3/3 | 0/3 |
+| Escritas perdidas com 16 processos concorrentes | 6–50% | 0 |
+| Fase aceita como `PASSED` sem artefato | aceita | recusada |
+| Invocações quebradas nos documentos lidos pelo agente | 2 | 0 |
+| Rodadas de métricas com uso medido pelo host | 0 de 9 | lidas do host (`telemetry ingest`) |
+| Instruções para fazer um patch | 55,1 KB (ciclo completo) | ≈ 7,3 KB |
+
+## Começo rápido
+
+Tudo é Python 3 stdlib, então não há dependência para instalar. O caminho
+mais curto é o plugin do seu agente (a tabela com os oito hosts está em
+[Como plugin](#como-plugin-recomendado)), por exemplo no Claude Code:
+
+```bash
+claude plugin marketplace add theguitarvity/spec-master
+claude plugin install spec-master@spec-master
 ```
 
-**Spec Master** é a camada de orquestração acima disso. Você aponta para um
-único documento de contexto — `CLAUDE.md`, `AGENTS.md`, uma ADR, um
-discovery, uma spec preliminar, o que já existir — e ele:
+Ou, sem plugin, com o instalador:
 
-1. entende o projeto (discovery read-only do repositório);
-2. normaliza o contexto em três documentos rastreáveis (`app-features.md`,
-   `project-goals.md`, `tech-stack.md`);
-3. constrói ou evolui a constitution;
-4. identifica uma ou mais features e resolve a ordem de dependência entre
-   elas;
-5. executa o workflow completo do Spec Kit para cada uma, com um repair loop
-   automático no `analyze` (máx. 3 ciclos);
-6. roda os quality gates reais do projeto (nunca um comando inventado);
-7. entrega uma matriz de rastreabilidade e um relatório final.
+```bash
+git clone https://github.com/theguitarvity/spec-master
+cd spec-master
+./init.sh    # instala o engine em ~/.spec-master-engine e o /spec-master global
+```
 
-No **Team Mode**, esse mesmo fluxo ganha uma camada de organização de equipe:
-PO, Scrum Master, Architect, Tech Lead, UI/UX + Brand, Backend Dev, Frontend
-Dev, Fullstack Dev, QA, DevOps, Infra e Security. O Spec Master continua
-orquestrando o Spec Kit; o Tech Lead quebra o trabalho, resolve conflitos
-técnicos e aprova integração; os dev agents implementam pacotes específicos;
-e todo pacote passa por code review de outro dev agent antes da validação.
+Depois, em qualquer projeto:
 
-Sem inventar requisito, critério de aceite, dependência ou tecnologia que
-não esteja sustentado pelo contexto fornecido ou pelo código existente — toda
-inferência é marcada como `EXPLICIT`, `INFERRED`, `DISCOVERED_FROM_CODEBASE`
-ou `UNRESOLVED`.
+```text
+/spec-master CLAUDE.md                                 # ciclo completo a partir de um contexto
+/spec-master new                                       # descoberta guiada: gera o contexto por perguntas
+/spec-master --lane o total deve arredondar para cima  # a triagem decide o lane (opt-in)
+```
+
+O contexto pode ser qualquer documento que já exista (`CLAUDE.md`,
+`AGENTS.md`, uma ADR, um discovery, uma spec preliminar): o Spec Master
+interpreta o conteúdo e não exige headings. Na primeira execução ele faz
+**uma única pergunta**, em lote: se deve inicializar o Spec Kit, caso o
+projeto ainda não o tenha, e qual estratégia de git usar (Git Flow ou
+trunk-based). Depois roda de ponta a ponta e só para numa
+[condição de parada](#git-retomada-e-condições-de-parada) real.
 
 ## Como funciona
 
-```text
-Context (.md)
-  │
-  ▼
-Guided intake, se nao houver contexto
-  PO · UI/UX + Brand · Architect · Scrum Master
-  │
-  ▼
-Discovery (read-only)
-  │
-  ▼
-Spec Kit check + Git strategy         ◄── única pergunta obrigatória,
-  (uma única pergunta, batched)           batched, nunca uma de cada vez
-  │
-  ▼
-Normalized context layer
-  project-goals.md · app-features.md · tech-stack.md
-  │
-  ▼
-Constitution (gerada ou evoluída, nunca sobrescrita às cegas)
-  │
-  ▼
-Feature discovery + dependency ordering
-  │
-  ▼
-Team Mode workstreams
-  Tech Lead quebra packages · dev agents implementam · peer review obrigatório
-  │
-  ▼
-┌─────────────────────────────────────────────────────────┐
-│  por feature, em ordem de dependência:                   │
-│  Specify → Clarify → Plan → Tasks →                       │
-│  Analyze ⟲ repair (máx. 3) → Implement → Validate          │
-└─────────────────────────────────────────────────────────┘
-  │
-  ▼
-Quality gates reais do projeto (build/test/lint/coverage)
-  │
-  ▼
-Traceability matrix + Final report
-  SUCCESS · PARTIAL · BLOCKED · FAILED
+```mermaid
+flowchart TD
+    req(["pedido ou contexto"]) --> triage{"lane triage"}
+    triage -->|"pequeno e testado"| patch
+    triage -->|"maior ou sensível"| full
+    subgraph host["hooks do host"]
+        patch["patch<br/>step begin → implementar → step end"]
+        full["standard · critical<br/>ciclo completo do Spec Kit"]
+        patch -->|"o diff cresceu"| full
+    end
+    patch --> proof{"evidência?"}
+    full --> proof
+    proof -->|sim| done(["PASSED"])
+    proof -->|não| fix["corrigir"]
+    fix --> proof
 ```
 
-A lógica **estrutural** (máquina de estados, fingerprint de contexto,
-ordenação de dependências, estratégia de git, detecção de quality gates,
-diff de constitution, rastreabilidade) fica num **core Python determinístico
-e testado sem LLM**. A lógica **semântica** (ler o contexto, escrever specs,
-resolver ambiguidade) fica no prompt do agente. Veja [Arquitetura](#arquitetura).
+1. **Triagem.** `lane triage` olha os arquivos que a mudança vai tocar e os
+   sinais do repositório (tamanho, módulos, testes, caminhos sensíveis, gate
+   executável) e devolve o lane. O lane só sobe: nem o pedido do usuário nem
+   a política do projeto o baixam. Sinais que só aparecem no texto do pedido
+   ("abrir um PR") viram uma pergunta de confirmação, não uma mudança de lane
+   silenciosa.
+2. **Execução sob hooks.** Um patch roda na própria sessão; standard e
+   critical passam pelo ciclo completo do Spec Kit. Os hooks do host
+   acompanham os dois.
+3. **Evidência.** Nada é promovido porque um processo saiu com código zero.
+   Se o diff de um patch cresce além do lane, a mudança escala para o ciclo
+   completo.
+
+### Os lanes
+
+| Lane | Quando | O que roda |
+|---|---|---|
+| `patch` | até 3 arquivos de produção, 1 módulo, ~50 linhas, com teste declarado e gate executável, sem caminho sensível | `step begin` → implementar → `step end` |
+| `standard` | maior que um patch (até 12 arquivos, 3 camadas, 800 linhas) | ciclo completo do Spec Kit |
+| `critical` | auth, pagamentos, segredos, schema ou migração, ações irreversíveis (push, publish, deploy, CI) ou repositório sem gate de teste | ciclo completo do Spec Kit |
+
+Por enquanto o fluxo por lane é opt-in (`/spec-master --lane ...`), e
+`/spec-master <contexto>` continua rodando o ciclo completo. A
+[emenda 2.0.0 da constitution](docs/harness-reformulation/constitution-amendment.md)
+já permite que o lane standard vire o padrão para features pequenas e médias,
+mas só quando o baseline medido mostrar que ele não perde qualidade.
+
+### O ciclo completo
+
+```text
+contexto ─► discovery (read-only) ─► Spec Kit + estratégia de git (uma pergunta)
+         ─► contexto normalizado: project-goals · app-features · tech-stack
+         ─► constitution (gerada ou evoluída, nunca sobrescrita às cegas)
+         ─► features em ordem de dependência, cada uma:
+              specify → clarify → plan → tasks → analyze ⟲ repair (máx. 3) → implement → validate
+         ─► quality gates reais do projeto ─► matriz de rastreabilidade + relatório final
+```
+
+Toda inferência é marcada como `EXPLICIT`, `INFERRED`,
+`DISCOVERED_FROM_CODEBASE` ou `UNRESOLVED`: nenhum requisito, critério de
+aceite, dependência ou tecnologia entra sem apoio no contexto ou no código. O
+Spec Master chama os comandos `speckit.*` pela integração instalada no agente
+e nunca os reimplementa.
+
+## Evidência, não promessa
+
+- **Fases do ciclo completo.** `state transition ... --status PASSED` só
+  aceita a fase com os artefatos dela no lugar e sem placeholder, com
+  `tasks.md` todo marcado no `implement` e ao menos uma linha de
+  rastreabilidade no `validate`. Histórico que nunca passou pelo Spec Master
+  entra com `--import-unverified --reason "..."` e fica marcado como não
+  verificado.
+- **Patch.** `step end` só grava `PASSED` com quatro coisas: uma nota curta
+  com a intenção citada (`[EXPLICIT]`) e cada critério apontando o teste que
+  o cobre; os gates reais passando; nenhuma escrita fora dos arquivos
+  declarados; e toda citação `[DISCOVERED_FROM_CODEBASE]` apontando um
+  `arquivo:linha` que existe. Num bugfix, o teste de regressão também precisa
+  falhar no commit base (num worktree temporário) e passar na árvore.
+- **Estado.** `state.json` é escrito de forma atômica e sob lock. Fases,
+  evidência e tentativas pertencem ao core; o agente só grava metadados.
+
+```bash
+python3 spec-master/lib/cli.py lane triage --path . --intent "..." --paths src/calc.py,tests/test_calc.py
+python3 spec-master/lib/cli.py step begin  --path . --intent "..." --paths src/calc.py,tests/test_calc.py
+python3 spec-master/lib/cli.py step end    --path .
+python3 spec-master/lib/cli.py state evidence --feature <id>
+```
+
+## Hooks e auditoria
+
+[`hookd`](spec-master/lib/kernel/hookd.py) responde aos eventos de cada host
+no dialeto dele ([`kernel/hosts.py`](spec-master/lib/kernel/hosts.py)); a
+tabela usa os nomes do Claude Code:
+
+| Evento | O que faz |
+|---|---|
+| `PreToolUse` | passa comandos Bash por uma política por argv: nega `git reset --hard`, `git clean -f`, force push, `curl ... \| sh` e `sudo`, e pede confirmação para `git push`, publish, `gh pr create` e `terraform apply`. Nega escrita nos arquivos do core, fora dos arquivos de um patch em andamento e, no ciclo completo, em código antes do `analyze` |
+| `PostToolUse` | avisa quando o diff saiu do lane patch |
+| `Stop` | não deixa a sessão parar com um patch sem `step end` (até duas reentradas; depois o patch fica `PAUSED`) |
+| `SessionStart` | reinjeta o passo atual depois de um restart ou de uma compactação |
+
+O modo padrão é **audit**: o hook decide, registra e não interfere. Antes de
+ligar o bloqueio, uma auditoria de 14 dias mede quantas decisões teriam
+barrado o agente, e o bloqueio só entra se os falsos bloqueios ficarem em até
+2%. `harness audit` mostra os números. Numa sessão na nuvem o log local some
+com o container, então `--save` junta o resumo de cada sessão, com
+credenciais mascaradas, em `.spec-master/hooks/audit.jsonl`. Este
+repositório está em auditoria desde 2026-09-28.
+
+Se o engine ou o `python3` sumirem, os hooks não bloqueiam nada (o comando
+termina em `|| true`), e projetos sem `.spec-master/` nunca recebem escrita.
+
+```bash
+# por projeto: mescla os hooks em .claude/settings.json (idempotente e portátil);
+# --host qwen grava em .qwen/settings.json e --host kiro em .kiro/hooks/
+python3 spec-master/lib/cli.py harness install-hooks --project . --mode audit
+python3 spec-master/lib/cli.py harness audit --path .
+
+# os plugins já trazem os hooks (fora Qwen Code e Kiro): veja "Como plugin"
+
+# quando a auditoria aprovar
+python3 spec-master/lib/cli.py harness mode --project . --mode block
+```
+
+## Métricas medidas pelo host
+
+Cada rodada significativa (uma fase, um pacote, uma revisão, uma rodada de
+gates) vira uma linha em `.spec-master/metrics/rounds.json`, e cada linha
+diz de onde vieram os números (`source`):
+
+```bash
+# Claude Code: lê só usage e timestamps do transcript da sessão (nunca o conteúdo)
+python3 spec-master/lib/cli.py telemetry ingest --path . --latest --since <início da rodada> \
+  --round-id r12 --phase plan --feature-id <id> --append
+# execução headless: o JSON de `claude -p --output-format json` traz o custo medido
+python3 spec-master/lib/cli.py telemetry ingest --headless-json result.json --ended-at <fim> \
+  --round-id r13 --phase implement --append
+# host sem contabilidade: a linha fica marcada como manual-unverified
+python3 spec-master/lib/cli.py metrics record-round --round-id r14 --phase tasks \
+  --started-at <início> --ended-at <fim> --source manual --append
+```
+
+`--append` valida a linha e grava de forma atômica, sob lock. `metrics
+validate` acusa como erro uma linha medida pelo host com 0 tokens ou que
+termina no futuro, e a calibração dos tiers ignora linhas não medidas. As
+saídas de subagentes gravadas no transcript são um retrato do começo do
+stream, então `output_tokens` vira um limite inferior e a linha avisa isso; o
+custo exato vem do modo headless.
+
+**Baseline.** `baseline plan|run|summarize` compara o fluxo do Spec Master
+com um agente trabalhando direto nos mesmos casos: worktree limpo por
+execução, checagens reais e custo medido pelo próprio host. `plan` não
+executa nada e mostra o gasto no pior caso; `run` gasta dinheiro de verdade e
+só roda com `--yes`.
 
 ## Instalação
 
-### Uso local (só este repo)
+### Como plugin (recomendado)
 
-Clone (ou já estando neste repo) — nada para instalar, é tudo Python 3
-stdlib:
+O repositório é ao mesmo tempo um marketplace de plugins, um pacote
+[Agent Plugins](https://agent-plugins.org/) e uma extensão do Gemini CLI.
+Cada host instala com o próprio comando e recebe as duas skills
+(`spec-master`, o ciclo completo, e `spec-master-lane`, o fluxo por lane), o
+servidor MCP e os hooks no dialeto dele:
+
+| Host | Instalação | Hooks |
+|---|---|---|
+| Claude Code | `claude plugin marketplace add theguitarvity/spec-master`<br>`claude plugin install spec-master@spec-master` | no plugin |
+| OpenAI Codex | `codex plugin marketplace add theguitarvity/spec-master`<br>`codex plugin add spec-master@spec-master` | no plugin; o Codex pede a sua revisão em `/hooks` |
+| GitHub Copilot CLI | `copilot plugin marketplace add theguitarvity/spec-master`<br>`copilot plugin install spec-master@spec-master` | no plugin |
+| VS Code (Copilot) | `"chat.plugins.marketplaces": ["theguitarvity/spec-master"]` no `settings.json`; depois `@agentPlugins` na aba Extensions | no plugin |
+| Cursor | *Customize → Plugins → From GitHub Repository* com `https://github.com/theguitarvity/spec-master`, ou `agent plugin marketplace add https://github.com/theguitarvity/spec-master` | no plugin |
+| Gemini CLI | `gemini extensions install https://github.com/theguitarvity/spec-master` | na extensão |
+| Antigravity | `agy plugin install https://github.com/theguitarvity/spec-master` | no plugin: `PreToolUse` e `Stop` (o Antigravity não tem `SessionStart`) |
+| Qwen Code | `qwen extensions install theguitarvity/spec-master` | por projeto, com `--host qwen` |
+| Kiro | *Powers → Add Custom Power → Import power from GitHub* com `https://github.com/theguitarvity/spec-master` | por projeto, com `--host kiro` |
+
+Um power do Kiro não carrega hooks, e o Qwen Code carrega um pacote Agent
+Plugins só com skills e MCP. Nesses dois, rode uma vez por projeto (o caminho
+do engine vem na resposta da tool `harness_entrypoint`):
 
 ```bash
-python3 -m unittest discover -s spec-master/tests   # 658 testes, ~2s, só stdlib
+python3 <engine>/lib/cli.py harness install-hooks --project . --host qwen   # ou --host kiro
 ```
 
-Os entrypoints locais mantidos na raiz deste repositório são só os que
-precisam funcionar imediatamente aqui: adapters dedicados, com mecânicas
-próprias documentadas em [`spec-master/adapters/`](spec-master/adapters/):
+Em todos os hosts os hooks começam em modo audit. O que muda de um host para
+outro:
+
+- **Codex** não aceita *ask* num `PreToolUse`: o que pediria confirmação fica
+  com a política de aprovação do próprio Codex.
+- **Kiro** não tem *ask* nos hooks: o bloqueio sai pelo código de saída 2.
+- **Antigravity**: sem objeção, o hook responde `{}` e não `allow`, porque
+  `allow` pularia a aprovação do usuário.
+
+O servidor MCP que os plugins sobem expõe uma tool só, `harness_entrypoint`
+(menos de 1 KB de schema): ela devolve as instruções com os caminhos reais do
+engine, e o core roda pelo CLI. Com todas as tools, a lista passaria de
+49 KB, e o host que carrega os schemas de uma vez pagaria isso em toda
+sessão. Quem registra o servidor à mão continua com todas (veja
+[Servidor MCP](#servidor-mcp)).
+
+Os manifestos, hooks e skills de todos os hosts saem de um único gerador,
+[`spec-master/lib/packaging.py`](spec-master/lib/packaging.py) (`generate` e
+`check`); o `doctor` e os testes falham se um arquivo divergir dele. A
+instalação acima é direto do GitHub; listar o Spec Master nos catálogos
+oficiais de cada host é uma submissão à parte.
+
+### Uso local (só este repositório)
+
+Clonar basta. Para conferir:
+
+```bash
+python3 -m unittest discover -s spec-master/tests
+```
+
+Os entrypoints mantidos na raiz são os dos agentes com adapter dedicado, com
+as mecânicas de cada um documentadas em
+[`spec-master/adapters/`](spec-master/adapters/):
 
 | Agente | Entrypoint | Invocação |
 |---|---|---|
-| Claude Code | [`.claude/commands/spec-master.md`](.claude/commands/spec-master.md) | `/spec-master <context-file>` |
-| GitHub Copilot | [`.github/skills/spec-master/SKILL.md`](.github/skills/spec-master/SKILL.md) | `/spec-master <context-file>` |
-| OpenAI Codex CLI | [`.agents/skills/spec-master/SKILL.md`](.agents/skills/spec-master/SKILL.md) | `$spec-master <context-file>` |
-| Qwen-compatible shells | [`.qwen/commands/spec-master.md`](.qwen/commands/spec-master.md) | `/spec-master <context-file>` |
-| Antigravity (`agy`) | [`.agents/agents/spec-master/agent.md`](.agents/agents/spec-master/agent.md) | selecione via `/agents` |
+| Claude Code | [`.claude/commands/spec-master.md`](.claude/commands/spec-master.md) | `/spec-master <contexto>` · `/spec-master --lane <pedido>` |
+| GitHub Copilot | [`.github/skills/spec-master/SKILL.md`](.github/skills/spec-master/SKILL.md) | `/spec-master <contexto>` |
+| OpenAI Codex CLI | [`.agents/skills/spec-master/SKILL.md`](.agents/skills/spec-master/SKILL.md) | `$spec-master <contexto>` |
+| Qwen-compatible shells | [`.qwen/commands/spec-master.md`](.qwen/commands/spec-master.md) | `/spec-master <contexto>` |
+| Antigravity (`agy`) | [`.agents/agents/spec-master/agent.md`](.agents/agents/spec-master/agent.md) | selecione em `/agents` |
 
-Todos os **demais agentes que o [GitHub Spec Kit](https://github.com/github/spec-kit)
-suporta** (30+ — Gemini CLI, Cursor, IBM Bob, Trae, Kilo Code, Goose, Cline,
-Auggie, Devin, Factory Droid, Grok Build, RovoDev, ZCode, Zed, Antigravity
-`agy`, Kiro CLI, Tabnine, Forge, Kimi Code, e mais) continuam cobertos, mas
-não ficam mais materializados na raiz do repo-fonte. Eles são gerados sob
-demanda pela tabela em
-[`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py) para o
-projeto alvo, no diretório e formato que cada agente realmente lê
-(`SKILL.md`, custom agent, comando Markdown, TOML ou recipe YAML):
+Os demais 30+ agentes que o Spec Kit suporta (Gemini CLI, Cursor, IBM Bob,
+Trae, Kilo Code, Goose, Cline, Auggie, Devin, Factory Droid, Grok Build,
+RovoDev, ZCode, Zed, Kiro CLI, Tabnine, Forge, Kimi Code e outros) são
+gerados sob demanda para o projeto alvo, no diretório e formato que cada um
+lê (`SKILL.md`, custom agent, comando Markdown, TOML ou recipe YAML), a partir
+da tabela em [`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py):
 
 ```bash
 python3 spec-master/lib/adapters_gen.py list
 python3 spec-master/lib/adapters_gen.py generate --root ~/code/projeto --engine-ref ~/.spec-master-engine
 ```
 
-Ver [`spec-master/adapters/generic.md`](spec-master/adapters/generic.md) para
-o racional completo, incluindo ressalvas específicas (Kiro CLI não substitui
-`$ARGUMENTS` em prompts de arquivo; Goose roda via `goose run`; Hermes só
-instala globalmente).
+As ressalvas de cada agente (Kiro CLI não substitui `$ARGUMENTS` em prompts
+de arquivo, Goose roda via `goose run`, Hermes só instala globalmente) estão
+em [`spec-master/adapters/generic.md`](spec-master/adapters/generic.md).
 
 ### Instalação global (todos os projetos)
 
-Um script, uma vez por máquina — depois disso, `/spec-master` existe em
-**qualquer** projeto para os agentes com convenção pessoal/de-usuário
-confirmada, sem copiar nada:
+`./init.sh`, uma vez por máquina, espelha o engine para
+`~/.spec-master-engine` e registra um entrypoint global em cada agente com
+convenção pessoal documentada. Nada existente nesses diretórios é
+sobrescrito; o Spec Master só adiciona a própria entrada:
 
-```bash
-./init.sh
-```
+| Agente | Entrypoint global |
+|---|---|
+| Claude Code | `~/.claude/commands/spec-master.md`, `~/.claude/skills/spec-master/` |
+| GitHub Copilot CLI | `~/.copilot/skills/spec-master/`, `~/.copilot/agents/spec-master.agent.md` |
+| OpenAI Codex CLI | `~/.codex/skills/spec-master/` |
+| Hermes | `~/.hermes/skills/spec-master/` (o Spec Kit só instala Hermes globalmente) |
+| fallback compartilhado (Copilot CLI e Codex CLI também leem) | `~/.agents/skills/spec-master/` |
 
-Isso:
-
-- espelha o engine (`spec-master/`) para `~/.spec-master-engine`;
-- registra um entrypoint **global** para cada agente, no diretório
-  pessoal/de usuário que cada um já documenta para skills próprias:
-
-  | Agente | Entrypoint global |
-  |---|---|
-  | Claude Code | `~/.claude/commands/spec-master.md`, `~/.claude/skills/spec-master/` |
-  | GitHub Copilot CLI | `~/.copilot/skills/spec-master/`, `~/.copilot/agents/spec-master.agent.md` |
-  | OpenAI Codex CLI | `~/.codex/skills/spec-master/` |
-  | Hermes | `~/.hermes/skills/spec-master/` (Spec Kit só instala Hermes globalmente) |
-  | fallback compartilhado (Copilot CLI e Codex CLI também leem) | `~/.agents/skills/spec-master/` |
-
-- roda os passos de projeto (abaixo) contra o diretório atual.
-
-Confirmado inspecionando uma máquina real com os CLIs instalados —
-`~/.copilot/agents/` e `~/.codex/skills/` já tinham outras skills nesse
-exato formato antes do Spec Master chegar; nada nesses diretórios foi
-sobrescrito, o Spec Master só adiciona sua própria entrada ao lado. Os
-**demais 30+ agentes** do Spec Kit não têm convenção pessoal/global
-documentada pelo próprio Spec Kit — instalar um diretório `~/.<agente>` para
-eles seria um chute não verificado, então ficam de fora do passo global e
-entram apenas via `link` (por-projeto, abaixo), que espelha exatamente o
-diretório que cada integração do Spec Kit já usa no projeto.
-
-Para gerar também um pointer **por-projeto** — útil para colega de time sem
-`init.sh` rodado, ou repositório que quer o pointer versionado — cobrindo
-Copilot, Codex **e todos os 30+ agentes gerados**, ou pular a reinstalação
-do engine:
+Os outros 30+ agentes não têm convenção global documentada pelo Spec Kit, e
+criar um `~/.<agente>` para eles seria um chute. Eles entram por projeto:
 
 ```bash
 ./init.sh link ~/code/outro-projeto   # pointers Copilot/Codex + os 30+ gerados ali
-./init.sh --engine-only               # só atualiza o engine + os globais confirmados
+./init.sh --engine-only               # só atualiza o engine e os globais confirmados
 ./init.sh --project ~/code/projeto    # instala tudo mirando outro diretório
 ```
 
-`init.sh` também verifica se o **Spec Kit** já está inicializado no projeto
-alvo (`.specify/`); se não estiver e o CLI `specify` (ou `uvx`) estiver
-disponível, oferece rodar `specify init --here` na hora. Sem terminal
-interativo, ele degrada de forma segura (pula e imprime o comando manual, em
-vez de travar).
-
-## Uso rápido
-
-```bash
-/spec-master CLAUDE.md
-```
-
-```bash
-/spec-master docs/architecture-context.md
-```
-
-```bash
-/spec-master new
-```
-
-Quando chamado sem um contexto pronto, Spec Master entra no modo guiado:
-pergunta tipo de projeto, usuario, MVP, direcao de experiencia/marca, stack
-e estrategia de entrega por multiplas escolhas, gera
-`.spec-master/context.generated.md` e entao continua o fluxo normal.
-
-O arquivo de contexto pode ter qualquer organização — Spec Master interpreta
-semanticamente, não exige headings específicos. Numa primeira execução, ele
-pergunta **uma única vez**, numa única mensagem:
-
-> 1. Spec Kit ainda não inicializado neste projeto — inicializar agora?
-> 2. Qual estratégia de desenvolvimento este projeto utiliza?
->    **Git Flow / Feature Branches** ou **Trunk-Based Development**?
-
-Depois disso, roda de ponta a ponta sem interromper — a menos que encontre
-uma ambiguidade de negócio, um conflito de constitution, ou outra condição
-genuinamente bloqueante (veja [Condições de parada](#condições-de-parada)).
-
-## Referência de comandos
-
-O core determinístico é exposto via CLI e pode ser chamado diretamente —
-tanto pelo agente quanto por você, para depurar ou inspecionar o estado:
-
-| Comando | O que faz |
-|---|---|
-| `state init\|show\|set-workflow\|transition\|analyze-cycle` | máquina de estados e checkpoint (`.spec-master/state.json`) |
-| `fingerprint compute\|compare` | hash dos documentos normalizados e propagação de staleness |
-| `discovery scan` | varre o repositório (linguagem, build/test/lint, CI, Spec Kit, constitution) sem alterar nada |
-| `features order` | ordenação topológica de features por dependência, com detecção de ciclo |
-| `git-strategy plan` | decide branch/idempotência para Git Flow vs Trunk-Based |
-| `gates detect` | detecta os comandos reais de build/test/lint/coverage do projeto, e scanners SAST/secrets já configurados (Semgrep, Bandit, Gitleaks, CodeQL) como gates bloqueantes |
-| `constitution diff` | diff estrutural (heading a heading) entre constitution existente e proposta |
-| `traceability add\|render\|migrate` | matriz de rastreabilidade gravada por feature (`.spec-master/traceability/features/<id>.json`); o relatório é só render |
-| `delta snapshot\|report` | delta ADDED/MODIFIED/REMOVED de spec/plan/tasks (e constitution/contexto) entre execuções, com fases que ficaram stale |
-| `hooks init\|list\|validate\|emit\|firings` | hooks declarativos por evento (`.spec-master/hooks.json`): gate falhou → repair, contrato mudou → revalidar constitution, escalonamentos, sensibilidade de risco |
-| `team roles\|intake\|adopt\|workstreams\|escalate\|resolve\|decisions\|routes` | papeis multiagente, intake guiado, adoção incremental, work packages com peer review, rotas de escalonamento e memória de decisão (nós `Decision` + ADR) |
-| `metrics record-round\|summarize` | registra tokens, duração e velocidade de entrega por rodada (`--append <rounds.json>` grava a linha de forma atômica) |
-| `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature = max(escopo, sensibilidade via hooks, override); decide se clarify é pulável, profundidade do analyze, revisores e work packages por papel em L/XL; reclassifica antes do implement |
-| `metrics calibrate` | compara custo real × orçamento de cada tier, detecta drift e propõe (ou, com `--apply`, grava) novos limites em `.spec-master/risk/thresholds.json` |
-| `metrics validate\|export` | valida `rounds.json` contra `schemas/metrics-round.schema.json` e exporta como OTLP/JSON (`/v1/metrics`) ou JSONL; nunca envia nada sozinho |
-| `bundle build` | gera um único Markdown colável (prompt da fase + artefatos + contexto, dentro do orçamento de tokens) para chats sem acesso a arquivos |
-| `worktree waves\|plan\|conflicts\|aggregate` | execução paralela de features independentes em git worktrees |
-| `workstreams review\|integrate\|aggregate` | vereditos de peer review/integração dos work packages do Team Mode executados em paralelo |
-| `tracker orchestrate` | detecta extensões de tracker do Spec Kit já instaladas (Jira, Azure DevOps, Linear, GitHub Issues) e diz qual invocar |
-| `dashboard render\|model` | dashboard HTML autocontido (`.spec-master/reports/dashboard.html`), re-renderizado por hook a cada fase; recarrega sozinho enquanto o ciclo roda |
-| `pr plan` | passo opcional de PR no fim de uma feature Git Flow: gera o corpo em `.spec-master/reports/pr-<id>.md` e só devolve o comando `gh`/`glab`/`az` depois de confirmação explícita; nunca executa nada |
-| `ears check` | lint opcional de critérios de aceite no formato EARS (EN/PT), consultivo por padrão; `--strict` quando a constitution exigir |
-
-```bash
-python3 spec-master/lib/cli.py discovery scan --path .
-python3 spec-master/lib/cli.py gates detect --path .
-python3 spec-master/lib/cli.py git-strategy plan --strategy trunk --feature-name "Demo feature"
-python3 spec-master/lib/cli.py team intake
-python3 spec-master/lib/cli.py team adopt
-```
-
-Referência completa de cada subcomando: [`spec-master/lib/cli.py`](spec-master/lib/cli.py) (docstring de topo) e [`spec-master/PROTOCOL.md`](spec-master/PROTOCOL.md) §0.
+O `init.sh` também confere se o Spec Kit está inicializado no projeto
+(`.specify/`) e, se o CLI `specify` (ou `uvx`) existir, oferece rodar
+`specify init --here`. O bootstrap usa uma versão fixa do Spec Kit
+(`SPEC_KIT_REF`, hoje `v0.16.4`). Sem terminal interativo, ele pula o passo e
+imprime o comando manual em vez de travar.
 
 ### Servidor MCP
 
-Agentes que falam MCP podem chamar o core como tools, sem shell:
-[`spec-master/mcp/spec_master_mcp.py`](spec-master/mcp/spec_master_mcp.py) é um
-servidor MCP stdio (só stdlib) que expõe **todos** os comandos do `cli.py`. A lista
-de tools é introspectada do parser — `state show` vira `state_show`,
-`traceability render` vira `traceability_render` — então um grupo novo da CLI
-aparece no MCP sem mudar o servidor. Cada chamada roda o próprio `cli.py` em
-subprocesso: mesmo JSON, mesmos códigos de saída, mesmas regras do protocolo.
-
-O repositório não cria `.mcp.json` sozinho; para registrar no projeto:
+[`spec-master/mcp/spec_master_mcp.py`](spec-master/mcp/spec_master_mcp.py) é
+um servidor MCP stdio (só stdlib) que expõe todos os comandos do `cli.py`
+como tools: `state show` vira `state_show`, `lane triage` vira `lane_triage`.
+A lista é introspectada do parser, então um grupo novo da CLI aparece no MCP
+sem mudar o servidor, e cada chamada roda o próprio `cli.py`, com o mesmo
+JSON e os mesmos códigos de saída. Para registrar no projeto:
 
 ```json
 {"mcpServers": {"spec-master": {"type": "stdio", "command": "python3",
@@ -322,312 +395,287 @@ O repositório não cria `.mcp.json` sozinho; para registrar no projeto:
 ```
 
 Com o engine global, aponte para `~/.spec-master-engine/mcp/spec_master_mcp.py`
-e passe `--project <repo>` (ou `SPEC_MASTER_PROJECT`). `--list-tools` imprime o
-catálogo. Detalhes em [`spec-master/mcp/README.md`](spec-master/mcp/README.md).
+e passe `--project <repo>` (ou `SPEC_MASTER_PROJECT`). Sem `--project`, o
+servidor usa as *roots* que o cliente informa e, se o host o iniciou na
+própria pasta de instalação sem informar nenhuma, recusa as tools que mexem
+no projeto. `--tools entrypoint` limita a lista a `harness_entrypoint`, como
+nos plugins. Detalhes em [`spec-master/mcp/README.md`](spec-master/mcp/README.md).
 
-## Estratégias de Git
+## Referência de comandos
 
-Perguntado uma única vez por workflow, nunca de novo:
+O core é um CLI (`python3 spec-master/lib/cli.py <grupo> <ação>`). A saída é
+JSON compacto; `--pretty` (ou `SPEC_MASTER_PRETTY=1`) formata.
 
-| Estratégia | Comportamento |
-|---|---|
-| **Git Flow / Feature Branches** | cada feature ganha uma branch (`feature/<slug>`, ou um identificador explícito como `APP-1234` preservado verbatim). Reaproveita a extensão git do Spec Kit se já existir — nunca reinstala. |
-| **Trunk-Based Development** | nenhuma branch é criada automaticamente. O trabalho continua na branch atual; features são separadas logicamente via `specs/<feature>/`. |
-
-## Retomada e idempotência
+| Área | Comando | O que faz |
+|---|---|---|
+| Estado | `state init\|show\|set-workflow\|transition\|analyze-cycle\|evidence` | máquina de estados e checkpoint em `.spec-master/state.json`; `PASSED` só com evidência |
+| Harness | `lane triage` | decide patch, standard ou critical a partir dos caminhos e sinais do repositório |
+| Harness | `step next\|begin\|end\|widen\|pause\|resume` | uma mudança patch, fechada só com evidência |
+| Harness | `harness install-hooks\|mode\|audit` | liga os hooks do host ao kernel, escolhe audit ou block, mede a auditoria |
+| Harness | `doctor run` | autoverificação para CI: invocações documentadas × parser, orçamentos de LOC e latência, registros |
+| Ciclo | `discovery scan` | varre o repositório (linguagem, build/test/lint, CI, Spec Kit, constitution) sem alterar nada |
+| Ciclo | `fingerprint compute\|compare` | hash dos documentos normalizados e propagação de staleness |
+| Ciclo | `features order` | ordem topológica das features por dependência, com detecção de ciclo |
+| Ciclo | `git-strategy plan` | branch e idempotência para Git Flow ou trunk-based |
+| Ciclo | `gates detect` | os comandos reais de build/test/lint/coverage e os scanners SAST/secrets já configurados; `.spec-master/gates.json` tem precedência |
+| Ciclo | `constitution diff` | diff estrutural, seção a seção, entre a constitution existente e uma proposta |
+| Ciclo | `traceability add\|render\|migrate` | matriz de rastreabilidade por feature |
+| Ciclo | `delta snapshot\|report` | o que entrou, mudou ou saiu de spec/plan/tasks entre execuções, e as fases que ficaram stale |
+| Ciclo | `hooks init\|list\|validate\|emit\|firings` | hooks declarativos por evento (`.spec-master/hooks.json`): gate falhou → repair, contrato mudou → revalidar constitution |
+| Ciclo | `risk classify\|override\|profiles\|work-packages` | tier de cerimônia XS–XL por feature: se o clarify é pulável, a profundidade do analyze, revisores e work packages |
+| Métricas | `telemetry locate\|ingest` | uso medido pelo host (transcript do Claude Code ou JSON do `claude -p`) |
+| Métricas | `metrics record-round\|summarize\|validate\|export\|calibrate` | rodadas, velocidade, validação do schema, export OTLP/JSONL e calibração dos tiers |
+| Métricas | `baseline plan\|run\|summarize` | fluxo do Spec Master × agente direto nos mesmos casos (`run` exige `--yes`) |
+| Team Mode | `team roles\|intake\|adopt\|workstreams\|escalate\|resolve\|decisions\|routes` | papéis, intake guiado, adoção incremental, work packages, escalonamento e memória de decisão |
+| Team Mode | `workstreams review\|integrate\|aggregate` | vereditos de peer review e integração dos pacotes paralelos |
+| Extras | `worktree waves\|plan\|conflicts\|aggregate` | features independentes em paralelo, em git worktrees |
+| Extras | `tracker orchestrate` | qual extensão de tracker do Spec Kit (Jira, Azure DevOps, Linear, GitHub Issues) invocar |
+| Extras | `dashboard render\|model` | dashboard HTML autocontido, re-renderizado a cada fase |
+| Extras | `pr plan` | corpo do PR no fim de uma feature Git Flow; o comando `gh`/`glab`/`az` só sai depois de confirmação explícita |
+| Extras | `ears check` | lint opcional de critérios de aceite em EARS (EN/PT) |
+| Extras | `bundle build` | um Markdown colável (prompt da fase + artefatos + contexto) para chats sem acesso a arquivos |
 
 ```bash
-/spec-master CLAUDE.md
+python3 spec-master/lib/cli.py discovery scan --path .
+python3 spec-master/lib/cli.py gates detect --path .
+python3 spec-master/lib/cli.py git-strategy plan --strategy trunk --feature-name "Demo feature"
+python3 spec-master/lib/cli.py doctor run --path .
 ```
 
-Se `.spec-master/state.json` já existir, Spec Master compara o fingerprint
-do contexto:
-
-- **Idêntico** → retoma sozinho, da primeira fase que não estiver
-  `PASSED`/`COMPLETED` — sem perguntar nada.
-- **Diferente** → pergunta **Resume** vs **Restart**; se retomar, só refaz as
-  fases que o fingerprint marcou como stale (uma mudança em `tech-stack.md`
-  nunca invalida `specify`; nenhuma mudança invalida `implement`
-  automaticamente — o impacto é avaliado, não presumido).
-
-Toda fase administrativa é idempotente: Spec Kit já instalado não é
-reinstalado, extensão git já presente não é readicionada, constitution já
-compatível não é reescrita, feature já validada não é reimplementada.
+A referência de cada subcomando está no `--help` do CLI e em
+[`spec-master/PROTOCOL.md`](spec-master/PROTOCOL.md).
 
 ## Team Mode
 
-Team Mode adiciona uma organização multiagente sobre o fluxo canônico do
-Spec Kit, sem substituir suas fases:
+O Team Mode organiza o mesmo ciclo como uma equipe multiagente, sem trocar as
+fases do Spec Kit:
 
-| Papel | Responsabilidade principal |
+| Papel | Responsabilidade |
 |---|---|
-| Spec Master | orquestra processo, estado, rastreabilidade e gates |
-| PO Agent | escopo, valor, MVP, prioridade e decisões de negócio |
-| Scrum Master Agent | bloqueios, dependências e paralelismo seguro |
-| Architect Agent | arquitetura macro, integrações e riscos técnicos |
-| Tech Lead Agent | quebra técnica, ownership, conflitos de código e integração |
-| UI/UX + Brand Agent | experiência, fluxos, identidade visual e design system inicial |
-| Backend Dev Agent | APIs, dados, regras de negócio, integrações e testes backend |
-| Frontend Dev Agent | telas, componentes, estado, acessibilidade e testes UI |
-| Fullstack Dev Agent | slices ponta a ponta e costura front/back |
-| QA / DevOps / Infra / Security | validação, entrega operacional, ambientes e riscos |
+| Spec Master | processo, estado, rastreabilidade e gates |
+| PO | escopo, valor, MVP, prioridade e decisões de negócio |
+| Scrum Master | bloqueios, dependências e paralelismo seguro |
+| Architect | arquitetura macro, integrações e riscos técnicos |
+| Tech Lead | quebra técnica, ownership, conflitos de código e integração |
+| UI/UX + Brand | experiência, fluxos, identidade visual e design system inicial |
+| Backend / Frontend / Fullstack Dev | implementação dos pacotes, com peer review obrigatório |
+| QA / DevOps / Infra / Security | validação, entrega, ambientes e riscos |
 
-Em projeto novo, `/spec-master new` usa `team intake` para gerar o contexto.
-Em projeto que já está rodando Spec Master, `team adopt` adequa o workflow de
-forma incremental: preserva estado, constitution, decisões e fases já
-concluídas, cria `.spec-master/workstreams.json` e aplica os novos gates só
-daquele ponto em diante.
+Num projeto novo, `/spec-master new` usa `team intake` para gerar o contexto.
+Num projeto que já roda o Spec Master, `team adopt` adota o Team Mode sem
+refazer nada: preserva estado, constitution, decisões e fases concluídas, e
+aplica os novos gates dali em diante. Cada papel tem um playbook em
+`spec-master/knowledge/playbooks/<papel>.md` (mandato, direitos de decisão,
+práticas obrigatórias e rotas de escalonamento), que o Knowledge Router
+(`knowledge for-role`, `knowledge route`) prioriza. Detalhes em
+[`spec-master/docs/team-mode.md`](spec-master/docs/team-mode.md).
 
-### Playbooks de agente
+## Git, retomada e condições de parada
 
-Cada papel do Team Mode tem um playbook próprio em
-`spec-master/knowledge/playbooks/<papel>.md`: mandato, direitos de decisão,
-práticas obrigatórias (convenção de testes unitários e de integração, layout
-de pacotes hexagonal, WireMock/Cypress, IaC/CI-CD por tecnologia), o que
-evitar, e para quem escalar cada tipo de decisão (ex.: Backend Dev detecta
-inconsistência arquitetural → Architect Agent → Tech Lead cria o pacote de
-remediação → Scrum Master registra métricas e replaneja). O Knowledge Router
-(`knowledge for-role` / `knowledge for-context`) prioriza o playbook do papel
-antes de qualquer outro módulo de conhecimento — ver §6 do `PROTOCOL.md`.
-GoF design patterns (quando usar cada um, por sintoma no código) ficam em
-`knowledge/design/gof-patterns.md`.
+A estratégia de git é perguntada uma única vez por workflow:
 
-## Métricas de entrega
+| Estratégia | Comportamento |
+|---|---|
+| **Git Flow / Feature Branches** | cada feature ganha uma branch (`feature/<slug>`, ou um identificador explícito como `APP-1234`, preservado); reaproveita a extensão git do Spec Kit se ela já existir |
+| **Trunk-Based Development** | nenhuma branch automática; o trabalho segue na branch atual e as features se separam em `specs/<feature>/` |
 
-Ao final de cada rodada significativa, Spec Master registra métricas em:
+Rodar `/spec-master` de novo com `.spec-master/state.json` existente compara
+o fingerprint do contexto. Se for idêntico, retoma sozinho da primeira fase
+não concluída. Se mudou, pergunta se deve retomar ou recomeçar e, ao retomar,
+refaz só as fases que ficaram stale. Toda etapa administrativa é idempotente:
+nada é reinstalado, reescrito ou reimplementado à toa.
 
-```text
-.spec-master/metrics/rounds.json
-```
+| Status | Quando |
+|---|---|
+| `SUCCESS` | constitution válida, todas as features implementadas, todo critério de aceite rastreado, analyze sem findings bloqueantes, gates bloqueantes passando, nenhum `SPEC_DRIFT` aberto |
+| `BLOCKED` | ambiguidade sem resolução, conflito com a constitution, decisão destrutiva pendente, dependência ou credencial faltando, gate falhando sem correção segura |
+| `FAILED` | Spec Kit indisponível, repositório inconsistente além de reparo seguro, critérios de aceite impossíveis, testes críticos falhando |
+| `PARTIAL` | algumas features `SUCCESS`, outras `BLOCKED` ou `FAILED`, reportado por feature |
 
-Cada rodada guarda fase, início/fim, tokens de entrada/saída quando o adapter
-expor esses dados, pacotes/features concluídos e velocidade calculada. O
-relatório final inclui total de tokens, tokens por minuto, pacotes por hora,
-features por hora e observações quando a plataforma não expõe contagem exata
-de tokens.
+## Modo guarded (experimental)
 
-## Modo guarded (opt-in, experimental)
-
-O comportamento padrão de `/spec-master` documentado acima — o agente
-conduz o workflow inteiro — **não muda**. Existe, além dele, um
-controlador determinístico opcional que conduz cada fase do Spec Kit
-(`constitution` → `specify` → `clarify` → `plan` → `tasks` → `analyze` →
-`implement` → `validate`) em uma sessão isolada, validando o artefato
-obrigatório de cada fase antes de promovê-la — pensado para modelos
-locais menos confiáveis (que podem implementar cedo demais, simular
-chamadas de ferramenta como texto, ou declarar sucesso sem produzir o
-artefato esperado). Hoje ele é acionado diretamente, não pelo comando
-`/spec-master`:
+Para modelos locais menos confiáveis, que podem implementar cedo demais,
+simular chamadas de ferramenta ou declarar sucesso sem artefato, um
+controlador determinístico conduz cada fase numa sessão isolada e valida o
+artefato antes de promovê-la. Por enquanto ele suporta só a integração
+OpenCode e é chamado direto:
 
 ```bash
-python3 spec-master/lib/controller.py run \
-  --project . --context context.md \
+python3 spec-master/lib/controller.py run --project . --context context.md \
   --mode guarded --integration opencode --model <modelo>
-
 python3 spec-master/lib/controller.py resume --project .
 python3 spec-master/lib/controller.py status --project .
 ```
 
-Suporta apenas a integração OpenCode nesta primeira versão. Detalhes de
-design, contrato de fases e escopo em
-[`docs/spec-master/guarded-mode-spec.md`](docs/spec-master/guarded-mode-spec.md)
-e [`specs/001-guarded-mode-controller/`](specs/001-guarded-mode-controller/).
+Design e contrato das fases em
+[`docs/spec-master/guarded-mode-spec.md`](docs/spec-master/guarded-mode-spec.md).
 
 ## Arquitetura
 
 ```text
-spec-master/                    engine neutro, na raiz — fora de .claude/, .github/
-│                                e .agents/ porque é compartilhado por todos os adapters
-├── PROTOCOL.md                 protocolo model-agnostic (fonte da verdade)
-├── adapters/{claude-code,copilot,codex,qwen,generic}.md
-├── templates/                  templates dos 3 docs normalizados + prompts por fase
-├── lib/                        core determinístico, Python 3 stdlib, zero deps
-│   ├── cli.py                  todos os grupos de comando, JSON no stdout
-│   ├── team_model.py           Team Mode: papeis, intake, adoção, workstreams,
-│   │                           Tech Lead ownership, peer review e escalonamento
-│   ├── decision_memory.py      decisões de escalonamento no grafo + ADR
-│   ├── metrics.py              rodadas, tokens e velocidade de entrega
-│   ├── calibration.py          calibração dos tiers de risco a partir das rodadas
-│   ├── metrics_export.py       export OpenTelemetry/JSON das métricas
-│   ├── risk_profile.py         tiers de ceremônia por escopo × sensibilidade
-│   ├── hooks.py                hooks declarativos por evento
-│   ├── context_delta.py        delta de spec/plan/tasks entre execuções
-│   ├── traceability.py         rastreabilidade por feature + render
-│   ├── worktree.py             ondas paralelas em git worktrees
-│   ├── sast_gates.py           scanners SAST/secrets como gate
-│   ├── tracker_orchestration.py  extensões de tracker do Spec Kit
-│   ├── pr_step.py · ears.py    PR opcional (Git Flow) · lint EARS
-│   ├── dashboard.py            dashboard HTML autocontido
-│   ├── web_bundle.py           bundle de arquivo único para chat UIs
-│   └── adapters_gen.py         gera os entrypoints dos 30+ agentes não-bespoke
-│                                (tabela == registro de integrações do Spec Kit)
-├── mcp/spec_master_mcp.py      servidor MCP stdio (todos os comandos como tools)
-├── schemas/                    JSON schema do registro de rodada de métricas
-└── tests/                      suíte unittest, sem LLM
+spec-master/                  engine neutro, compartilhado por todos os adapters
+├── PROTOCOL.md               protocolo model-agnostic do ciclo completo
+├── cards/                    instruções curtas do fluxo por lane (roteador, patch, escalada)
+├── adapters/                 mecânicas de Claude Code, Copilot, Codex, Qwen e dos genéricos
+├── templates/                documentos normalizados e prompts por fase
+├── lib/                      core determinístico, Python 3 stdlib
+│   ├── cli.py                todos os grupos de comando
+│   ├── kernel/               harness: lanes, step, política, verify, hookd, auditoria, doctor
+│   ├── state.py · evidence.py   estado atômico sob lock e evidência por fase
+│   ├── telemetry.py · baseline.py · metrics*.py   métricas medidas pelo host
+│   ├── risk_profile.py · hooks.py · quality_gates.py · discovery.py
+│   ├── team_model.py · decision_memory.py · traceability.py · context_delta.py
+│   └── adapters_gen.py       entrypoints dos 30+ agentes, a partir de uma tabela
+├── .claude-plugin/ · .codex-plugin/ · .cursor-plugin/ · .github/plugin/
+│   hooks/ · skills/          plugin de cada host, gerado por lib/packaging.py
+├── mcp/                      servidor MCP stdio
+├── docs/                     referência do protocolo e do Team Mode, lida sob demanda
+└── tests/                    suíte unittest, sem LLM
 
-.claude/commands/spec-master.md      entrypoint Claude Code — $ARGUMENTS, AskUserQuestion
-.claude/skills/spec-master/          pointer de auto-discovery do Claude Code
-.github/skills/spec-master/          entrypoint GitHub Copilot
-.agents/skills/spec-master/          entrypoint OpenAI Codex CLI
-.agents/agents/spec-master/agent.md  custom agent Antigravity (agy)
-.qwen/commands/spec-master.md        entrypoint Qwen-compatible shells
-
-init.sh                         instalador global (~/.spec-master-engine +
-                                 entrypoint global para os 4 agentes confirmados,
-                                 ver abaixo) + `link` para os 30+ restantes por projeto
+.claude/ · .github/ · .agents/ · .qwen/   entrypoints finos de cada agente
+plugin.json · mcp.json · skills/          pacote Agent Plugins (Kiro, Qwen Code, Antigravity)
+gemini-extension.json · hooks/            extensão do Gemini CLI
+hooks.json · mcp_config.json              hooks e MCP do Antigravity
+.claude-plugin/ · .cursor-plugin/         marketplaces (Claude, Codex, Copilot, VS Code, Cursor)
+.github/workflows/ci.yml      suíte e doctor em Python 3.10 a 3.13
+init.sh                       instalador global e `link` por projeto
+docs/                         referência técnica, reformulação do harness e a logo
 ```
 
-Nenhum diretório de plataforma contém Python, template ou protocolo próprio
-— cada um é um arquivo fino que diz "leia `spec-master/PROTOCOL.md`, chame
-`spec-master/lib/cli.py`, e aqui está como *esta* plataforma pergunta ao
-usuário / resolve seu argumento de invocação". Um único core testado, quatro
-adapters escritos à mão (Claude, Copilot, Codex, Qwen), um custom agent local
-para Antigravity, e mais 30+ adapters gerados sob demanda a partir de uma
-única tabela. Depois de `./init.sh`, há registro global nos agentes com
-convenção pessoal confirmada; depois de `./init.sh link <projeto>`, os
-entrypoints da longa cauda são materializados no projeto alvo.
+Nenhum diretório de plataforma contém Python, template ou protocolo próprio:
+cada um é um arquivo fino que manda ler o protocolo, chamar o `cli.py` e
+explica como *aquela* plataforma pergunta ao usuário. Um core testado, cinco
+entrypoints escritos à mão e 30+ gerados de uma única tabela. O detalhamento
+de cada módulo está em [`docs/spec-master/README.md`](docs/spec-master/README.md).
 
-## Estrutura do repositório
-
-```text
-.
-├── README.md                   você está aqui
-├── CLAUDE.md                   especificação original da skill
-├── init.sh                     instalador global
-├── spec-master/                engine (protocolo + core + templates + testes)
-├── docs/spec-master/README.md  referência técnica detalhada
-├── .claude/                    entrypoints Claude Code
-├── .github/                    entrypoint GitHub Copilot
-├── .agents/                    entrypoint OpenAI Codex CLI + custom agent Antigravity
-└── .qwen/                      entrypoint Qwen-compatible shells
-```
-
-Para o detalhamento completo de cada arquivo do core, veja
-[`docs/spec-master/README.md`](docs/spec-master/README.md).
-
-## Testes
+## Qualidade
 
 ```bash
-python3 -m unittest discover -s spec-master/tests
+python3 -m unittest discover -s spec-master/tests   # 896 testes
+python3 spec-master/lib/cli.py doctor run --path .
 ```
 
-O core e a suíte são stdlib pura: todos os módulos de teste são
-`unittest.TestCase`, então nada precisa ser instalado. Se você preferir
-`pytest`, ele também roda a mesma suíte a partir da raiz, sem opções extras
-(`python3 -m pytest -q`): o `spec-master/tests/conftest.py` só ajusta o
-`sys.path`.
+O core e a suíte são stdlib pura; o `PyYAML`, se instalado, é só um parser
+mais rápido para o front matter do grafo. A suíte roda sem LLM e cobre desde
+a máquina de estados e o repair loop até evals de replay do harness: o lane
+patch de ponta a ponta num repositório git temporário com gate real
+(inclusive um bugfix que precisa falhar no commit base) e o `hookd` recebendo
+os eventos que o host mandaria. O CI
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda a suíte e o
+`doctor` em Python 3.10 a 3.13 a cada push no `main` e em cada pull request.
 
-658 testes, sem depender de nenhum LLM: transições de estado (incluindo o
-teto de 3 ciclos de repair e a regra de que uma fase não começa antes da
-anterior ter `PASSED`), propagação de staleness por fingerprint, discovery
-de repositório (nunca inventa comando para uma stack sem manifest; uma suíte
-Python sem manifest em `tests/` ou `<pacote>/tests/` vira gate de teste),
-ordenação de dependências (com detecção de ciclo), idempotência e
-preservação de identificador na estratégia de git, detecção de quality gate
-por stack, diff estrutural de constitution, renderização de rastreabilidade,
-Team Mode com intake guiado, adoção incremental, papeis, workstreams e peer
-review, métricas de tokens e velocidade de entrega, e cada item do roadmap:
-SAST/secrets, dashboard, servidor MCP, delta entre execuções, hooks, memória
-de decisão, PR opcional, EARS, export OpenTelemetry, web bundle,
-rastreabilidade por feature, tiers de risco e calibração.
+O projeto segue a própria
+[constitution](.specify/memory/constitution.md) (versão 2.0.0): core
+determinístico e model-agnostic, só stdlib, testes com fronteiras mockáveis,
+promoção de estado atômica e verificável, recuperação que nunca destrói
+trabalho, evolução compatível, o Spec Master dono do harness sem
+reimplementar o Spec Kit, gates detectados em vez de hardcoded e confirmação
+explícita antes de qualquer publicação.
 
-## Condições de parada
+## Roadmap
 
-| Status | Quando |
-|---|---|
-| `SUCCESS` | constitution válida, todas as features implementadas, todo critério de aceite rastreado, analyze sem findings bloqueantes, todos os quality gates bloqueantes passando, nenhum `SPEC_DRIFT` não resolvido |
-| `BLOCKED` | ambiguidade não resolvível, conflito constitucional, decisão arquitetural destrutiva pendente de aprovação, dependência/credencial/serviço faltando, quality gate falhando repetidamente sem correção segura, spec drift exigindo decisão de produto |
-| `FAILED` | Spec Kit indisponível (usuário recusou inicializar, ou `specify`/`uvx` não encontrado), repositório inconsistente além de reparo seguro, implementação não consegue satisfazer os critérios de aceite, testes críticos continuam falhando |
-| `PARTIAL` | algumas features `SUCCESS`, outras `BLOCKED`/`FAILED` — reportado por feature |
+| Onda | Conteúdo | Status |
+|---|---|---|
+| 0 | medir e parar o desperdício: telemetria do host, evidência, estado sob lock, contratos por feature, saída enxuta do CLI | feita |
+| 1 | kernel do harness: lanes, lane patch, hooks, plugin, doctor, CI | feita (opt-in); hooks em auditoria até 2026-10-12 |
+| 2 | lane standard (spec-lite), subagentes isolados, escalonamento automático, evals com e sem plugin | depende do baseline medido |
+| 3 | lane critical via compat do Spec Kit 1.x, runner self-hosted, consolidação do protocolo em cards | planejada |
+| 4 | paralelismo e modelo por passo, só com demanda | condicional |
 
-## FAQ / Troubleshooting
+O que falta em cada onda, e os números medidos até aqui, estão em
+[`docs/harness-reformulation/implementation-status.md`](docs/harness-reformulation/implementation-status.md);
+a proposta completa, em
+[`docs/harness-reformulation/proposal.md`](docs/harness-reformulation/proposal.md).
+Os 16 itens do benchmark de mercado
+([`docs/market-benchmark-roadmap.md`](docs/market-benchmark-roadmap.md)) já
+estão implementados.
+
+## FAQ
 
 <details>
-<summary><strong>Rodei <code>/spec-master</code> e ele parou dizendo <code>FAILED — Spec Kit unavailable</code></strong></summary>
+<summary><strong>Os hooks vão travar o meu agente?</strong></summary>
 
-O projeto não tem `.specify/` e você recusou (ou não pôde) inicializar. Rode
-`specify init --here` no projeto (ou `./init.sh link .` para deixar o
-Spec Master oferecer isso de novo) e invoque `/spec-master` outra vez — ele
-retoma do ponto em que parou, não reinicia o workflow.
+Não enquanto estiverem em modo audit, que é o padrão: eles só registram o que
+fariam. O bloqueio só é ligado depois da auditoria, e mesmo em modo block um
+engine ausente não bloqueia nada, porque o comando termina em `|| true`.
 </details>
 
 <details>
-<summary><strong>Preciso reinstalar/atualizar o engine global depois de mudar algo em <code>spec-master/</code></strong></summary>
+<summary><strong>Posso continuar usando só o ciclo completo do Spec Kit?</strong></summary>
+
+Sim. `/spec-master <contexto>` roda o ciclo completo, como sempre; o fluxo
+por lane só entra quando você chama `/spec-master --lane ...`.
+</details>
+
+<details>
+<summary><strong><code>/spec-master</code> parou com <code>FAILED: Spec Kit unavailable</code></strong></summary>
+
+O projeto não tem `.specify/` e você recusou (ou não pôde) inicializar. Rode
+`specify init --here` no projeto, ou `./init.sh link .` para o Spec Master
+oferecer isso de novo, e chame `/spec-master` outra vez: ele retoma de onde
+parou.
+</details>
+
+<details>
+<summary><strong>Mudei algo em <code>spec-master/</code>; como atualizo o engine global?</strong></summary>
 
 ```bash
 ./init.sh --engine-only
 ```
 
-Reflete as mudanças em `~/.spec-master-engine` sem tocar em nenhum projeto.
+Isso atualiza `~/.spec-master-engine` sem tocar em nenhum projeto.
 </details>
 
 <details>
-<summary><strong>Como uso em um projeto Copilot ou Codex depois de instalar globalmente?</strong></summary>
+<summary><strong>Como uso num projeto Copilot ou Codex depois da instalação global?</strong></summary>
 
 ```bash
 ./init.sh link /caminho/do/projeto
 ```
 
-Gera só os dois arquivos-pointer (`.github/skills/spec-master/SKILL.md`,
-`.agents/skills/spec-master/SKILL.md`) apontando para o engine global — nada
-do core é copiado para lá.
+Gera só os arquivos-pointer (`.github/skills/spec-master/SKILL.md`,
+`.agents/skills/spec-master/SKILL.md`) apontando para o engine global; nada
+do core é copiado.
 </details>
 
 <details>
 <summary><strong>Por que existem <code>spec-master/</code> e <code>.spec-master/</code>?</strong></summary>
 
-`spec-master/` (sem ponto) é o código-fonte do orquestrador, versionado.
-`.spec-master/` (com ponto) é gerado em runtime por cada execução — estado,
-relatórios, logs. Propositalmente parecidos (um é a ferramenta, o outro é a
-saída dela), mas são diretórios diferentes.
+`spec-master/` (sem ponto) é o código-fonte, versionado. `.spec-master/`
+(com ponto) é o que cada execução gera no projeto: estado, relatórios,
+métricas, mudanças e a política dos hooks.
 </details>
-
-## Roadmap
-
-O roadmap de benchmark de mercado
-([`docs/market-benchmark-roadmap.md`](docs/market-benchmark-roadmap.md), itens
-1–16) está implementado: worktrees paralelos, workstreams do Team Mode,
-trackers via extensões do Spec Kit, SAST como gate, dashboard, MCP, delta por
-resume, hooks, memória de decisão, PR opcional, EARS, export de métricas, web
-bundle, rastreabilidade por feature, ceremônia adaptativa por risco e
-calibração por tier. A tabela de status com módulo e comando de cada item fica
-no próprio documento.
-
-Próximos passos:
-
-- Validar ponta a ponta num projeto real com Spec Kit inicializado (hoje a
-  cobertura é de core, testes unitários e smoke tests de CLI).
-- Acompanhar mudanças nos diretórios globais de Copilot CLI/Codex CLI (ainda
-  evoluindo rápido nesses agentes) e ajustar `init.sh` se algum deles mudar
-  de convenção.
 
 ## Contribuindo
 
-Este repositório é a fonte de um único artefato: a skill `/spec-master`.
+- Lógica estrutural nova vai em `spec-master/lib/`, com teste `unittest`
+  espelhado em `spec-master/tests/` (sem LLM).
+- Mudança de protocolo ou prompt vai em `spec-master/PROTOCOL.md`,
+  `spec-master/cards/` e `spec-master/templates/prompts/`.
+- Mudança de um agente com adapter dedicado vai no `adapters/*.md` dele; o
+  entrypoint real (`.claude/`, `.github/`, `.agents/`, `.qwen/`) continua um
+  pointer fino.
+- Se o Spec Kit mudou um dos 30+ agentes gerados, atualize a tabela `AGENTS`
+  em [`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py) e
+  rode `python3 spec-master/lib/adapters_gen.py generate --root . --engine-ref spec-master`.
+  Nunca edite um arquivo gerado à mão.
 
-- Lógica estrutural nova → `spec-master/lib/`, com teste `unittest`
-  correspondente em `spec-master/tests/` (sem depender de LLM).
-- Mudança de protocolo/prompt → `spec-master/PROTOCOL.md` e
-  `spec-master/templates/prompts/*.md`.
-- Mudança específica de um dos 4 agentes com adapter dedicado (Claude,
-  Copilot, Codex, Qwen) → o `adapters/*.md` correspondente, mantendo o
-  entrypoint real (`.claude/`, `.github/`, `.agents/`, `.qwen/`) como um
-  pointer fino, nunca uma cópia do protocolo.
-- Spec Kit adicionou/renomeou/reconfigurou um agente do outro grupo (os 30+
-  gerados) → atualize a tabela `AGENTS` em
-  [`spec-master/lib/adapters_gen.py`](spec-master/lib/adapters_gen.py) e
-  rode `python3 spec-master/lib/adapters_gen.py generate --root . --engine-ref spec-master`
-  para regenerar os entrypoints afetados — nunca edite um arquivo gerado à
-  mão, a próxima regeneração o sobrescreveria.
-
-Depois de qualquer mudança:
+Antes de enviar, rode o mesmo que o CI:
 
 ```bash
 python3 -m unittest discover -s spec-master/tests
+python3 spec-master/lib/cli.py doctor run --path .
 ```
 
-## Créditos
+## Licença e créditos
 
-Construído sobre o [GitHub Spec Kit](https://github.com/github/spec-kit) —
-Spec Master orquestra, mas nunca reimplementa, os comandos `speckit.*`.
-</content>
+O Spec Master é distribuído sob a [licença MIT](LICENSE). Os arquivos que o
+`specify init` instala neste repositório (`.specify/` e as skills
+`speckit-*`) são do Spec Kit, também MIT, e estão listados em
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+Construído sobre o [GitHub Spec Kit](https://github.com/github/spec-kit): o
+Spec Master orquestra os comandos `speckit.*` e nunca os reimplementa. A logo
+é uma arte original em estética retro de neon, gerada por
+[`docs/assets/build_logos.py`](docs/assets/build_logos.py), que também
+produz a versão quadrada ([`spec-master-mark.svg`](docs/assets/spec-master-mark.svg)).

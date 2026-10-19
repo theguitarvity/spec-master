@@ -2,6 +2,7 @@ import _pathfix  # noqa: F401
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -48,7 +49,8 @@ class ProtocolTest(_ServerCase):
         result = response["result"]
         self.assertEqual(response["id"], 1)
         self.assertEqual(result["protocolVersion"], "2025-03-26")
-        self.assertEqual(result["capabilities"], {"tools": {"listChanged": False}})
+        self.assertEqual(result["capabilities"], {"tools": {"listChanged": False},
+                                                  "prompts": {"listChanged": False}})
         self.assertEqual(result["serverInfo"]["name"], "spec-master")
         self.assertIn("version", result["serverInfo"])
         self.assertIn(self.server.project_root, result["instructions"])
@@ -142,6 +144,121 @@ class ProtocolTest(_ServerCase):
         self.assertIn("boom", result["content"][0]["text"])
 
 
+class PromptTest(_ServerCase):
+    def test_prompts_are_listed_with_their_argument(self):
+        prompts = {p["name"]: p for p in self.server.handle(_request(1, "prompts/list"))["result"]["prompts"]}
+        self.assertEqual(sorted(prompts), ["spec-master", "spec-master-lane"])
+        self.assertEqual(prompts["spec-master-lane"]["arguments"][0]["name"], "request")
+        self.assertTrue(prompts["spec-master-lane"]["arguments"][0]["required"])
+        self.assertFalse(prompts["spec-master"]["arguments"][0]["required"])
+
+    def get(self, name, arguments=None):
+        return self.server.handle(_request(2, "prompts/get", {"name": name, "arguments": arguments or {}}))
+
+    def text(self, name, arguments=None):
+        return self.get(name, arguments)["result"]["messages"][0]["content"]["text"]
+
+    def test_the_engine_path_is_filled_in(self):
+        engine = mcp.PACKAGE_DIR.as_posix()
+        full = self.text("spec-master", {"context": "docs/context.md"})
+        self.assertIn(f"`{engine}/PROTOCOL.md`", full)
+        self.assertIn(f"python3 {engine}/lib/cli.py", full)
+        self.assertIn("`docs/context.md`", full)
+        self.assertNotIn("{engine}", full)
+        self.assertTrue((mcp.PACKAGE_DIR / "PROTOCOL.md").is_file())
+        lane = self.text("spec-master-lane", {"request": "fix the rounding"})
+        self.assertIn(f"`{engine}/cards/router.md`", lane)
+        self.assertIn("The request: fix the rounding", lane)
+        self.assertTrue((mcp.PACKAGE_DIR / "cards" / "router.md").is_file())
+
+    def test_no_context_means_guided_discovery(self):
+        self.assertIn("guided discovery", self.text("spec-master"))
+
+    def test_bad_prompt_requests(self):
+        self.assertEqual(self.get("nope")["error"]["code"], mcp.INVALID_PARAMS)
+        self.assertEqual(self.get("spec-master-lane")["error"]["code"], mcp.INVALID_PARAMS)
+        missing_name = self.server.handle(_request(3, "prompts/get", {}))
+        self.assertEqual(missing_name["error"]["code"], mcp.INVALID_PARAMS)
+
+
+class ProjectRootTest(unittest.TestCase):
+    """Plugin hosts often start the server in the plugin directory."""
+
+    def setUp(self):
+        self.project = tempfile.TemporaryDirectory()
+        self.env = mock.patch.dict(os.environ)
+        self.env.start()
+        for name in mcp.PROJECT_ENV_VARS:
+            os.environ.pop(name, None)
+
+    def tearDown(self):
+        self.env.stop()
+        self.project.cleanup()
+
+    def server_in(self, cwd):
+        with mock.patch("os.getcwd", return_value=str(cwd)):
+            return mcp.Server(timeout=30)
+
+    def test_roots_from_the_client_replace_the_plugin_directory(self):
+        server = self.server_in(mcp.PACKAGE_DIR)
+        self.assertEqual(server.project_source, "cwd")
+        server.handle(_request(1, "initialize", {"protocolVersion": "2025-06-18",
+                                                 "capabilities": {"roots": {"listChanged": True}}}))
+        self.assertIsNone(server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
+        request = server.outbox.pop()
+        self.assertEqual(request["method"], "roots/list")
+        uri = Path(self.project.name).resolve().as_uri()
+        self.assertIsNone(server.handle({"jsonrpc": "2.0", "id": request["id"],
+                                         "result": {"roots": [{"uri": "https://example.test"}, {"uri": uri}]}}))
+        self.assertEqual((server.project_root, server.project_source),
+                         (str(Path(self.project.name).resolve()), "roots"))
+
+    def test_no_roots_capability_means_no_request(self):
+        server = self.server_in(self.project.name)
+        server.handle(_request(1, "initialize", {"capabilities": {}}))
+        server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        self.assertEqual(server.outbox, [])
+
+    def test_host_variables_win_over_the_cwd(self):
+        with mock.patch.dict("os.environ", {"CURSOR_PROJECT_DIR": self.project.name}):
+            server = self.server_in(mcp.PACKAGE_DIR)
+        self.assertEqual((server.project_root, server.project_source),
+                         (str(Path(self.project.name).resolve()), "CURSOR_PROJECT_DIR"))
+
+    def test_an_install_directory_never_receives_state(self):
+        server = self.server_in(mcp.PACKAGE_DIR)
+        refused = server.call_tool("state_show", {})
+        self.assertTrue(refused["isError"])
+        self.assertIn("does not know your project directory", refused["content"][0]["text"])
+        allowed = server.call_tool("harness_entrypoint", {"flow": "lane", "argument": "fix it"})
+        self.assertFalse(allowed["isError"], allowed)
+        self.assertIn("cards/router.md", allowed["structuredContent"]["instructions"])
+        self.assertIn("cannot see your project", allowed["structuredContent"]["note"])  # so the agent uses the CLI
+        prompt = server.get_prompt("spec-master-lane", {"request": "fix it"})["messages"][0]["content"]["text"]
+        self.assertIn("cannot see your project", prompt)
+        seeing = self.server_in(self.project.name).call_tool("harness_entrypoint", {"flow": "lane", "argument": "x"})
+        self.assertNotIn("note", seeing["structuredContent"])
+
+    def test_the_plugins_toolset_is_the_entrypoint_alone(self):
+        with mock.patch("os.getcwd", return_value=str(mcp.PACKAGE_DIR)):
+            server = mcp.Server(timeout=30, toolset="entrypoint")
+        self.assertEqual([t["name"] for t in server.list_tools()["tools"]], ["harness_entrypoint"])
+        self.assertIn("CLI", server.instructions())
+        reply = server.call_tool("harness_entrypoint", {"flow": "full-cycle"})
+        self.assertFalse(reply["isError"], reply)
+        self.assertNotIn("note", reply["structuredContent"])  # the instructions already say "CLI"
+        self.assertTrue(server.call_tool("state_show", {})["isError"])
+        self.assertLess(len(json.dumps(server.list_tools())), 2048)
+
+    def test_install_directory_heuristic(self):
+        self.assertTrue(mcp.looks_like_install_dir(mcp.PACKAGE_DIR))
+        self.assertFalse(mcp.looks_like_install_dir(self.project.name))
+        self.assertIsNone(mcp._path_from_uri("https://example.test/x"))
+        spaced = Path(self.project.name, "with space")
+        spaced.mkdir()
+        self.assertEqual(mcp._path_from_uri(spaced.resolve().as_uri()), str(spaced.resolve()))
+
+
 class ToolListTest(_ServerCase):
     def test_tools_list_via_handle(self):
         names = {t["name"] for t in self.server.handle(_request(1, "tools/list"))["result"]["tools"]}
@@ -187,10 +304,13 @@ class ToolListTest(_ServerCase):
 
     def test_read_only_annotations_are_conservative(self):
         for name in ("state_show", "graph_stats", "graph_neighbors", "hooks_list", "team_decisions",
-                     "gates_detect", "git_strategy_plan"):
+                     "gates_detect", "git_strategy_plan", "telemetry_locate", "baseline_plan", "lane_triage",
+                     "step_next"):
             self.assertTrue(self.tools[name]["annotations"]["readOnlyHint"], name)
         for name in ("state_init", "state_transition", "traceability_render", "hooks_init", "hooks_emit",
-                     "worktree_plan", "graph_health", "graph_snapshot", "delta_report", "team_resolve"):
+                     "worktree_plan", "graph_health", "graph_snapshot", "delta_report", "team_resolve",
+                     "metrics_record_round", "telemetry_ingest", "baseline_run", "step_begin", "step_end",
+                     "harness_install_hooks", "harness_mode"):
             self.assertFalse(self.tools[name]["annotations"]["readOnlyHint"], name)
 
 

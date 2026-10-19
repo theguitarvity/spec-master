@@ -1,20 +1,33 @@
-"""Delivery metrics helpers for Spec Master rounds."""
+"""Delivery metrics helpers for Spec Master rounds.
+
+Provenance (metrics schema v2): a row may carry `source`, saying where its
+numbers came from:
+
+- `host-transcript` / `host-headless`: measured by the host (Claude Code
+  session transcript, or the `claude -p --output-format json` result), built
+  by `telemetry.to_round()`;
+- `manual`: typed in by a person or an agent, with non-zero tokens;
+- `manual-unverified`: typed in with no token usage at all, i.e. nothing was
+  measured. `record_round(source="manual")` downgrades to this automatically.
+
+Rows without `source` are v1 rows: `metrics_export.validate_rounds` warns
+about them, and `calibration` ignores the zero-token ones as unverified once
+the input carries provenance (see `calibration.calibrate(require_measured=)`).
+"""
 from __future__ import annotations
 
-import json
-import os
-import tempfile
-from contextlib import contextmanager
 from datetime import datetime, timezone
-
-try:  # advisory locking is POSIX-only; the atomic rename alone still holds elsewhere
-    import fcntl
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    fcntl = None
 
 # Ceremony tiers (mirrors risk_profile / hooks.TIER_ORDER; kept local so this
 # module stays dependency-free).
 TIERS = ("XS", "S", "M", "L", "XL")
+
+# Provenance of a round (schema v2 `source`). Order matches the schema enum.
+SOURCES = ("host-transcript", "host-headless", "manual", "manual-unverified")
+HOST_SOURCES = ("host-transcript", "host-headless")
+UNVERIFIED_SOURCE = "manual-unverified"
+# How a `cost_usd` value was obtained (schema v2 `cost_basis`).
+COST_BASES = ("measured", "estimated")
 
 
 def _parse_iso(value: str) -> datetime:
@@ -38,12 +51,24 @@ def record_round(
     notes: str | None = None,
     feature_id: str | None = None,
     tier: str | None = None,
+    source: str | None = None,
 ) -> dict:
     """Create a deterministic metrics row for one delivery round.
 
     `feature_id` / `tier` are optional attribution for per-tier calibration
     (`calibration.py`); the keys are only written when given, so rows without
-    them are unchanged."""
+    them are unchanged.
+
+    `source` is the optional provenance (one of `SOURCES`). Like the other
+    optional fields, the key is written ONLY when `source` is passed, so a
+    call without it returns exactly the v1 row (existing callers and tests
+    that compare whole rows are unaffected). Two rules keep rows honest:
+
+    - `source="manual"` with input + output tokens == 0 is stored as
+      `manual-unverified`: nothing was measured, so the row says so;
+    - a host source (`host-transcript` / `host-headless`) with 0 tokens is
+      rejected (ValueError): `metrics_export.validate_rounds` would flag
+      such a row as an ERROR, so it is never produced here."""
     if tier:
         tier = str(tier).strip().upper()
         if tier not in TIERS:
@@ -57,6 +82,16 @@ def record_round(
     end = _parse_iso(ended_at)
     duration_seconds = max(0.0, (end - start).total_seconds())
     total_tokens = input_tokens + output_tokens
+
+    if source is not None:
+        source = str(source).strip()
+        if source not in SOURCES:
+            raise ValueError(f"unknown source: {source!r} (known: {', '.join(SOURCES)})")
+        if source in HOST_SOURCES and total_tokens == 0:
+            raise ValueError(f"source {source!r} requires measured tokens; got input + output == 0 "
+                             f"(use source='manual' to record an unmeasured round as {UNVERIFIED_SOURCE!r})")
+        if source == "manual" and total_tokens == 0:
+            source = UNVERIFIED_SOURCE
     duration_minutes = duration_seconds / 60 if duration_seconds else 0.0
 
     payload = {
@@ -84,6 +119,8 @@ def record_round(
         payload["feature_id"] = feature_id
     if tier:
         payload["tier"] = tier
+    if source is not None:
+        payload["source"] = source
     return payload
 
 
@@ -109,70 +146,3 @@ def summarize(rounds: list[dict]) -> dict:
         if total_seconds
         else 0.0,
     }
-
-
-@contextmanager
-def _locked_dir(directory: str):
-    """Serialise appenders on the same directory (``fcntl.flock`` when available)."""
-    if fcntl is None:
-        yield
-        return
-    fd = os.open(directory, os.O_RDONLY)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        yield
-    finally:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        finally:
-            os.close(fd)
-
-
-def _target_mode(target: str) -> int:
-    try:
-        return os.stat(target).st_mode & 0o777
-    except FileNotFoundError:
-        umask = os.umask(0)
-        os.umask(umask)
-        return 0o666 & ~umask
-
-
-def append_round(path, row: dict) -> list[dict]:
-    """Append ``row`` to the JSON-array rounds file at ``path`` atomically.
-
-    A missing file (and parent directory) is created. An unreadable, invalid
-    or non-list file raises ``ValueError`` and is left untouched. The new
-    content is written to a temp file in the same directory and swapped in
-    with ``os.replace`` under an advisory directory lock, so concurrent
-    appenders never lose rows or leave a half-written file.
-    """
-    # Resolve symlinks so the link survives and the real file is updated.
-    target = os.path.realpath(os.fspath(path))
-    directory = os.path.dirname(target)
-    os.makedirs(directory, exist_ok=True)
-    with _locked_dir(directory):
-        rows: list = []
-        if os.path.exists(target):
-            try:
-                with open(target, "r", encoding="utf-8") as fh:
-                    rows = json.load(fh)
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise ValueError(f"cannot append to {target}: invalid JSON ({exc})") from exc
-            if not isinstance(rows, list):
-                raise ValueError(f"cannot append to {target}: root is not a JSON array")
-        rows.append(row)
-        mode = _target_mode(target)
-        fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".rounds-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(rows, fh, indent=2)
-                fh.write("\n")
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.chmod(tmp_path, mode)  # mkstemp creates 0600; keep the file's own mode
-            os.replace(tmp_path, target)
-        except BaseException:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
-    return rows

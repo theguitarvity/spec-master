@@ -1,0 +1,19 @@
+{
+  "name": "spec-master",
+  "version": "0.3.0",
+  "description": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle.",
+  "author": {
+    "name": "Spec Master maintainers"
+  },
+  "homepage": "https://github.com/theguitarvity/spec-master",
+  "repository": "https://github.com/theguitarvity/spec-master",
+  "license": "MIT",
+  "keywords": [
+    "spec-driven-development",
+    "harness",
+    "spec-kit",
+    "hooks",
+    "mcp"
+  ],
+  "hooks": "hooks/copilot-hooks.json"
+}

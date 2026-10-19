@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -210,6 +211,44 @@ class PhaseRunnerTests(unittest.TestCase):
         result = self._run("tasks", [step], history=[tainted_prior_attempt])
         self.assertEqual(result["status"], "FAILED")
         self.assertEqual(result["reason"], "unchanged_artifact")
+
+
+class DeclaredQualityGateExecutionTests(unittest.TestCase):
+    """`.spec-master/gates.json` cwd and timeout_seconds are honored when gates run."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _declare(self, gates):
+        path = self.tmp / ".spec-master" / "gates.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(gates), encoding="utf-8")
+
+    def test_declared_gate_runs_in_its_cwd(self):
+        (self.tmp / "backend").mkdir()
+        check = "import os, sys; sys.exit(0 if os.path.basename(os.getcwd()) == 'backend' else 3)"
+        self._declare([
+            {"name": "in backend", "command": [sys.executable, "-c", check], "cwd": "backend"},
+            {"name": "at root", "command": [sys.executable, "-c", check]},
+        ])
+        results = phase_runner._run_quality_gates(self.tmp)
+        self.assertEqual([(r["name"], r["result"], r["exit_code"]) for r in results],
+                         [("in backend", "PASSED", 0), ("at root", "FAILED", 3)])
+
+    def test_declared_gate_timeout_fails_the_gate(self):
+        self._declare([{"name": "slow", "command": [sys.executable, "-c", "import time; time.sleep(3)"],
+                        "timeout_seconds": 1}])
+        [result] = phase_runner._run_quality_gates(self.tmp)
+        self.assertEqual(result["result"], "FAILED")
+        self.assertIsNone(result["exit_code"])
+        self.assertTrue(result["timed_out"])
+        self.assertTrue(result["blocking"])
+        report = (self.tmp / ".spec-master" / "reports" / "quality-gates.md").read_text(encoding="utf-8")
+        self.assertIn("**slow**", report)
+        self.assertIn("FAILED", report)
 
 
 if __name__ == "__main__":

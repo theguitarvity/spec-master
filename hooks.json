@@ -1,0 +1,23 @@
+{
+  "spec-master": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 spec-master/lib/kernel/hookd.py pre-tool-use --host antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 spec-master/lib/kernel/hookd.py stop --host antigravity",
+        "timeout": 10
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "spec-master": {
+      "command": "python3",
+      "args": [
+        "spec-master/mcp/spec_master_mcp.py",
+        "--tools",
+        "entrypoint"
+      ]
+    }
+  }
+}

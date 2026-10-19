@@ -7,6 +7,15 @@ converte um documento de contexto humano em constitution, specs, planos,
 tasks e implementação validada via GitHub Spec Kit, com o mínimo de
 interação manual possível.
 
+**Lane flow (opt-in)**: se `$ARGUMENTS` começar com `--lane` (ex.:
+`/spec-master --lane corrigir o arredondamento do total`), **não** leia o
+PROTOCOL.md: siga `spec-master/cards/router.md` (regras em
+`spec-master/cards/core.md`). O resto de `$ARGUMENTS` é o pedido: se a
+primeira palavra for `patch`, `standard` ou `critical`, ela é o lane mínimo
+pedido (vai como `--lane` no `lane triage`) e o restante, literal, é o
+`--intent`; senão, tudo é o `--intent`. A triagem decide se a mudança roda
+como patch aqui mesmo ou se vai para o ciclo completo abaixo.
+
 O protocolo completo, model-agnostic, está em `spec-master/PROTOCOL.md`
 (raiz do repositório — **não** dentro de `.claude/`, porque é compartilhado
 pelos adapters Claude, Copilot e Codex) — **leia e siga esse arquivo
@@ -27,9 +36,9 @@ apenas para amarrar as três mecânicas específicas do Claude Code:
 3. **Perguntas ao usuário**: use `AskUserQuestion` exatamente nos gates
    descritos no PROTOCOL.md (estratégia Git — uma única vez por workflow;
    ambiguidades `USER_DECISION_REQUIRED` agrupadas; conflitos de
-   constitution; resume vs restart). Nunca pergunte o que já pode ser
-   determinado pelo contexto, pelo repositório ou pela constitution (§38 do
-   CLAUDE.md original desta skill).
+   constitution; resume vs restart), sempre em lote e na fronteira de fase
+   (PROTOCOL.md §4). Nunca pergunte o que já pode ser determinado pelo
+   contexto, pelo repositório ou pela constitution.
 
 Execute agora, em ordem, os passos 0–8 descritos em `spec-master/PROTOCOL.md`,
 usando:

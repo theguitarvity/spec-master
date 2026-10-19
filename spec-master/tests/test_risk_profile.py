@@ -134,7 +134,9 @@ class ScopeAndSensitivityTests(_Base):
         scope = result["scope"]
         self.assertEqual(scope["source"], "tasks.md")
         self.assertEqual(scope["signals"]["tasks"], 21)
-        self.assertEqual(scope["signals"]["files"], 12)  # 8 services + 3 pages + docs/guide.md
+        # 8 services + 3 pages; docs/guide.md is not counted (docs and tests are
+        # part of the work, not of its risk — the same rule `layers` applies).
+        self.assertEqual(scope["signals"]["files"], 11)
         self.assertEqual(scope["signals"]["layers"], 2)   # domain + ui (docs not counted)
         self.assertNotIn("research.md", scope["paths"])
         self.assertNotIn("contracts/api.md", scope["paths"])

@@ -1,0 +1,13 @@
+{
+  "name": "spec-master",
+  "owner": {
+    "name": "Spec Master maintainers"
+  },
+  "plugins": [
+    {
+      "name": "spec-master",
+      "source": "./spec-master",
+      "description": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle."
+    }
+  ]
+}

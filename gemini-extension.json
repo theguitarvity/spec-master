@@ -1,0 +1,16 @@
+{
+  "name": "spec-master",
+  "version": "0.3.0",
+  "description": "Harness for spec-driven development: a deterministic triage decides how much process each change needs, hooks enforce the workflow's rules, nothing is done without evidence, and GitHub Spec Kit runs the full cycle.",
+  "mcpServers": {
+    "spec-master": {
+      "command": "python3",
+      "args": [
+        "${extensionPath}${/}spec-master${/}mcp${/}spec_master_mcp.py",
+        "--tools",
+        "entrypoint"
+      ],
+      "cwd": "${workspacePath}"
+    }
+  }
+}

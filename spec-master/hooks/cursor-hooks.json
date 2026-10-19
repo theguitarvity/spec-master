@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "python3 \"${CURSOR_PLUGIN_ROOT}/lib/kernel/hookd.py\" pre-tool-use --host cursor",
+        "timeout": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 \"${CURSOR_PLUGIN_ROOT}/lib/kernel/hookd.py\" pre-tool-use --host cursor",
+        "timeout": 10,
+        "matcher": "Write|Delete"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "python3 \"${CURSOR_PLUGIN_ROOT}/lib/kernel/hookd.py\" post-tool-use --host cursor",
+        "timeout": 30,
+        "matcher": "Write"
+      }
+    ],
+    "stop": [
+      {
+        "command": "python3 \"${CURSOR_PLUGIN_ROOT}/lib/kernel/hookd.py\" stop --host cursor",
+        "timeout": 10,
+        "loop_limit": 2
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "python3 \"${CURSOR_PLUGIN_ROOT}/lib/kernel/hookd.py\" session-start --host cursor",
+        "timeout": 10
+      }
+    ]
+  }
+}

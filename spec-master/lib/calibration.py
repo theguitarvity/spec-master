@@ -6,6 +6,15 @@ This module closes the loop with what delivery actually cost:
 1. Rounds in `.spec-master/metrics/rounds.json` that carry `feature_id` and
    `tier` (`metrics record-round --feature-id --tier`) are grouped per
    feature. Rounds without that attribution are ignored and counted.
+   Rounds with no measured usage never feed the calibration either: they are
+   ignored and counted under reason "unverified" (`ignored_by_reason`):
+   - `source == "manual-unverified"`, or any other `source` with 0 tokens
+     (e.g. a hand-edited host row): always;
+   - no `source` and 0 tokens (a v1 row nobody measured): whenever the input
+     carries provenance (any row has a `source`) or `require_measured=True`.
+     A purely v1 input (no row has a `source`) keeps the v1 behaviour below —
+     such rows still feed the duration / round-count fallback — and the
+     result flags them in `unverified_rounds_used` and `notes`.
 2. Each completed feature's cost is compared with its tier's budget
    (`TIER_BUDGETS`, data): **under** = the tier underestimated the work (cost
    above the tier's budget), **over** = it overestimated it (cost well under the
@@ -147,15 +156,45 @@ def _costs_like(cost: float, basis: str, budgets: dict) -> str:
     return TIER_ORDER[-1]
 
 
-def _feature_observations(rounds: list[dict], budgets: dict, risk: dict) -> tuple[list[dict], int, dict]:
+def _row_tokens(row: dict) -> int:
+    """total_tokens of a row (input + output when total is absent); 0 if unreadable."""
+    def _count(value) -> int:
+        return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+    if "total_tokens" in row:
+        return _count(row.get("total_tokens"))
+    return _count(row.get("input_tokens")) + _count(row.get("output_tokens"))
+
+
+def _unsourced_zero_tokens(row: dict) -> bool:
+    return row.get("source") is None and _row_tokens(row) == 0
+
+
+def _unverified(row: dict, require_measured: bool) -> bool:
+    """True when the row carries no measured usage and must not feed calibration."""
+    source = row.get("source")
+    if source == metrics.UNVERIFIED_SOURCE:
+        return True
+    if _row_tokens(row) > 0:
+        return False
+    return source is not None or require_measured
+
+
+def _feature_observations(rounds: list[dict], budgets: dict, risk: dict,
+                          require_measured: bool) -> tuple[list[dict], dict, dict, int]:
     grouped: dict[str, list[tuple[int, dict]]] = {}
-    ignored = 0
+    ignored = {"unattributed": 0, "unverified": 0}
+    legacy_unverified_used = 0
     for index, row in enumerate(rounds):
+        if _unverified(row, require_measured):
+            ignored["unverified"] += 1
+            continue
         feature_id = row.get("feature_id")
         tier = _tier_or_none(row.get("tier"))
         if not feature_id or not tier:
-            ignored += 1
+            ignored["unattributed"] += 1
             continue
+        if _unsourced_zero_tokens(row):
+            legacy_unverified_used += 1
         grouped.setdefault(feature_id, []).append((index, row))
 
     observations = []
@@ -206,7 +245,7 @@ def _feature_observations(rounds: list[dict], budgets: dict, risk: dict) -> tupl
         if note:
             observation["note"] = note
         observations.append(observation)
-    return observations, ignored, basis_counts
+    return observations, ignored, basis_counts, legacy_unverified_used
 
 
 def _override_observations(overrides: list[dict]) -> list[dict]:
@@ -257,7 +296,7 @@ def scale_tier(thresholds: dict, tier: str, factor: float) -> dict:
 
 def calibrate(rounds: list[dict], overrides: list[dict] | None = None, thresholds: dict | None = None,
               window: int = DEFAULT_WINDOW, *, budgets: dict | None = None, risk: dict | None = None,
-              since: dict | None = None) -> dict:
+              since: dict | None = None, require_measured: bool | None = None) -> dict:
     """Compare estimated vs actual cost per tier, flag drift, propose thresholds.
 
     rounds      rows of rounds.json (only rows with feature_id + tier count)
@@ -267,6 +306,12 @@ def calibrate(rounds: list[dict], overrides: list[dict] | None = None, threshold
     risk        {feature_id: feature["risk"]} — skips "over" when the tier came
                 from a sensitivity floor or override instead of scope
     since       {tier: timestamp} — ignore observations already consumed
+    require_measured
+                True: rows without `source` and with 0 tokens are ignored as
+                unverified. False: they feed the v1 duration / round-count
+                fallback. None (default): True as soon as any row carries a
+                `source`, else False. `manual-unverified` rows, and sourced
+                rows with 0 tokens, are ignored in every mode.
     """
     if isinstance(window, bool) or not isinstance(window, int) or window < 1:
         raise ValueError("window must be an integer >= 1")
@@ -274,8 +319,13 @@ def calibrate(rounds: list[dict], overrides: list[dict] | None = None, threshold
     current = risk_profile.merge_thresholds(thresholds)
     risk = risk or {}
     since = since or {}
+    rounds = rounds or []
+    if require_measured is None:
+        require_measured = any(row.get("source") is not None for row in rounds)
 
-    feature_obs, ignored, basis_counts = _feature_observations(rounds or [], budgets, risk)
+    feature_obs, ignored_by_reason, basis_counts, legacy_unverified_used = _feature_observations(
+        rounds, budgets, risk, bool(require_measured))
+    ignored = sum(ignored_by_reason.values())
     all_obs = feature_obs + _override_observations(overrides or [])
 
     # one observation per (tier, feature): the latest wins
@@ -346,9 +396,16 @@ def calibrate(rounds: list[dict], overrides: list[dict] | None = None, threshold
         raise ValueError("calibration produced invalid thresholds: " + "; ".join(errors))
 
     notes = []
-    if ignored:
-        notes.append(f"{ignored} round(s) sem feature_id/tier ignorados — registre com "
+    if ignored_by_reason["unattributed"]:
+        notes.append(f"{ignored_by_reason['unattributed']} round(s) sem feature_id/tier ignorados — registre com "
                      "`metrics record-round --feature-id ID --tier T`")
+    if ignored_by_reason["unverified"]:
+        notes.append(f"{ignored_by_reason['unverified']} round(s) sem usage medido ignorados "
+                     f"(source {metrics.UNVERIFIED_SOURCE} ou 0 tokens) — não alimentam a "
+                     "calibração; registre rounds com a telemetria do host")
+    if legacy_unverified_used:
+        notes.append(f"{legacy_unverified_used} round(s) v1 sem source e com 0 tokens usados como fallback "
+                     "(duração / nº de rounds): dado não verificado; use require_measured=True para ignorá-los")
     if basis_counts["duration_seconds"]:
         notes.append(f"{basis_counts['duration_seconds']} feature(s) sem contagem de tokens: custo medido pela "
                      "duração dos rounds")
@@ -362,6 +419,9 @@ def calibrate(rounds: list[dict], overrides: list[dict] | None = None, threshold
         "window": window,
         "rounds_used": sum(o.get("rounds", 0) for o in feature_obs),
         "ignored_rounds": ignored,
+        "ignored_by_reason": ignored_by_reason,
+        "require_measured": bool(require_measured),
+        "unverified_rounds_used": legacy_unverified_used,
         "basis_counts": basis_counts,
         "features": observations,
         "tiers": tiers,

@@ -1,18 +1,17 @@
-import unittest
-import shutil
 import tempfile
+import unittest
 from pathlib import Path
-import _pathfix
 
+import _pathfix  # noqa: F401
 from graph.model import Graph, GraphNode, GraphEdge
 from graph import health as graph_health
 
 
 class GraphHealthTests(unittest.TestCase):
-    def _tmp_path(self):
-        path = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
-        return path
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp_path = Path(tmp.name)
 
     def test_compute_health_perfect_graph_scores_100(self):
         g = Graph()
@@ -21,9 +20,9 @@ class GraphHealthTests(unittest.TestCase):
         g.add_edge(GraphEdge(source="a", relation="DEPENDS_ON", target="b", provenance="EXPLICIT"))
 
         report = graph_health.compute_health(g)
-        assert report["score"] == 100
-        assert report["grade"] == "A"
-        assert report["validation"]["valid"] is True
+        self.assertEqual(report["score"], 100)
+        self.assertEqual(report["grade"], "A")
+        self.assertIs(report["validation"]["valid"], True)
 
     def test_compute_health_deducts_for_broken_wikilinks(self):
         g = Graph()
@@ -31,8 +30,8 @@ class GraphHealthTests(unittest.TestCase):
         g.add_edge(GraphEdge(source="a", relation="DEPENDS_ON", target="missing"))
 
         report = graph_health.compute_health(g)
-        assert report["score"] < 100
-        assert "broken_wikilinks" in report["deductions"]
+        self.assertLess(report["score"], 100)
+        self.assertIn("broken_wikilinks", report["deductions"])
 
     def test_compute_health_deducts_for_stale_nodes(self):
         old_ts = {"timestamp": "2000-01-01T00:00:00+00:00"}
@@ -40,9 +39,9 @@ class GraphHealthTests(unittest.TestCase):
         g.add_node(GraphNode(id="a", type="Component", name="A", last_verified=old_ts))
 
         report = graph_health.compute_health(g, max_age_days=30)
-        assert report["score"] < 100
-        assert "stale_nodes" in report["deductions"]
-        assert report["temporal_drift"]["stale_nodes"] == ["a"]
+        self.assertLess(report["score"], 100)
+        self.assertIn("stale_nodes", report["deductions"])
+        self.assertEqual(report["temporal_drift"]["stale_nodes"], ["a"])
 
     def test_compute_health_score_never_negative(self):
         g = Graph()
@@ -51,12 +50,12 @@ class GraphHealthTests(unittest.TestCase):
             g.add_edge(GraphEdge(source=f"n{i}", relation="DEPENDS_ON", target="missing"))
 
         report = graph_health.compute_health(g)
-        assert report["score"] >= 0
+        self.assertGreaterEqual(report["score"], 0)
 
     def test_compute_health_empty_graph(self):
         report = graph_health.compute_health(Graph())
-        assert report["score"] == 100
-        assert report["total_nodes"] == 0
+        self.assertEqual(report["score"], 100)
+        self.assertEqual(report["total_nodes"], 0)
 
     def test_render_health_report_contains_score_and_grade(self):
         g = Graph()
@@ -65,9 +64,9 @@ class GraphHealthTests(unittest.TestCase):
         g.add_edge(GraphEdge(source="a", relation="DEPENDS_ON", target="b", provenance="EXPLICIT"))
         report = graph_health.compute_health(g)
         md = graph_health.render_health_report(report)
-        assert "Score:" in md
-        assert "100/100" in md
-        assert "grade A" in md
+        self.assertIn("Score:", md)
+        self.assertIn("100/100", md)
+        self.assertIn("grade A", md)
 
     def test_render_health_report_lists_issues_when_present(self):
         g = Graph()
@@ -75,23 +74,22 @@ class GraphHealthTests(unittest.TestCase):
         g.add_edge(GraphEdge(source="a", relation="DEPENDS_ON", target="missing"))
         report = graph_health.compute_health(g)
         md = graph_health.render_health_report(report)
-        assert "broken wikilinks" in md
+        self.assertIn("broken wikilinks", md)
 
     def test_record_stale_nodes_writes_events(self):
-        tmp_path = self._tmp_path()
         old_ts = {"timestamp": "2000-01-01T00:00:00+00:00"}
         g = Graph()
         g.add_node(GraphNode(id="a", type="Component", name="A", last_verified=old_ts))
 
-        events_path = tmp_path / "events.jsonl"
+        events_path = self.tmp_path / "events.jsonl"
         stale = graph_health.record_stale_nodes(g, str(events_path), max_age_days=30)
-        assert stale == ["a"]
+        self.assertEqual(stale, ["a"])
 
         from graph.events import read_events
         events = read_events(events_path)
-        assert len(events) == 1
-        assert events[0]["event"] == "STALE_NODE_DETECTED"
-        assert events[0]["node_id"] == "a"
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event"], "STALE_NODE_DETECTED")
+        self.assertEqual(events[0]["node_id"], "a")
 
 
 if __name__ == "__main__":

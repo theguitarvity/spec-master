@@ -110,9 +110,59 @@ def validate_transcript(text: str) -> list[str]:
     return [marker for marker in FAKE_TOOL_MARKERS if marker in text]
 
 
-def validate_artifacts(project: Path, phase: str) -> list[str]:
+def placeholder_markers(text: str) -> list[str]:
+    """The unresolved template markers found in `text` (empty when clean)."""
+    found = []
+    for pattern in _PLACEHOLDER_PATTERNS:
+        match = pattern.search(text or "")
+        if match:
+            found.append(match.group(0))
+    return found
+
+
+def _safe_feature_dir(feature_dir: str | None) -> str | None:
+    if not feature_dir:
+        return None
+    candidate = Path(feature_dir)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError(f"feature_dir is not a safe relative path: {feature_dir!r}")
+    return candidate.as_posix().strip("/")
+
+
+def scoped_patterns(patterns, feature_dir: str | None, *, keep_feature_json: bool = False) -> tuple[str, ...]:
+    """Rewrite `specs/*/...` patterns to the given feature directory.
+
+    With several feature directories in `specs/`, a `specs/*/plan.md` glob is
+    satisfied (or tripped) by any feature, not the one being worked on. When
+    the caller knows the feature's directory, every `specs/*` pattern is
+    narrowed to it; `.specify/feature.json` (Spec Kit's own pointer to the
+    active feature, gitignored by Spec Kit itself) is then no longer needed as
+    an artifact, since the feature directory is already known. `feature_dir`
+    None keeps the historical global patterns unchanged.
+    """
+    scoped_dir = _safe_feature_dir(feature_dir)
+    if scoped_dir is None:
+        return tuple(patterns)
+    result = []
+    for pattern in patterns:
+        if pattern.startswith("specs/*/"):
+            result.append(f"{scoped_dir}/{pattern[len('specs/*/'):]}")
+        elif pattern == "specs/*":
+            result.append(f"{scoped_dir}/*")
+        elif pattern == ".specify/feature.json" and not keep_feature_json:
+            continue
+        else:
+            result.append(pattern)
+    return tuple(result)
+
+
+def phase_artifacts(phase: str, feature_dir: str | None = None) -> tuple[str, ...]:
+    return scoped_patterns(PHASE_ARTIFACTS[phase], feature_dir)
+
+
+def validate_artifacts(project: Path, phase: str, feature_dir: str | None = None) -> list[str]:
     missing = []
-    for pattern in PHASE_ARTIFACTS[phase]:
+    for pattern in phase_artifacts(phase, feature_dir):
         matches = list(project.glob(pattern))
         if not matches or not any(path.is_file() and path.stat().st_size for path in matches):
             missing.append(pattern)
@@ -144,8 +194,10 @@ def changed_paths(before: dict[str, str], after: dict[str, str]) -> list[str]:
     return sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
 
 
-def forbidden_writes(paths: list[str], phase: str) -> list[str]:
-    allowed = PHASE_ALLOWED_WRITES[phase]
+def forbidden_writes(paths: list[str], phase: str, feature_dir: str | None = None) -> list[str]:
+    # Spec Kit's create-new-feature script still writes .specify/feature.json,
+    # so it stays writable even when the allowlist is narrowed to one feature.
+    allowed = scoped_patterns(PHASE_ALLOWED_WRITES[phase], feature_dir, keep_feature_json=True)
     ignored = (".spec-master/run.lock", ".opencode/package.json", ".opencode/package-lock.json")
     protected = PROTECTED_PATHS
     return sorted([
@@ -158,9 +210,9 @@ def forbidden_writes(paths: list[str], phase: str) -> list[str]:
     ])
 
 
-def placeholder_artifacts(project: Path, phase: str) -> list[str]:
+def placeholder_artifacts(project: Path, phase: str, feature_dir: str | None = None) -> list[str]:
     placeholders = []
-    for pattern in PHASE_ARTIFACTS[phase]:
+    for pattern in phase_artifacts(phase, feature_dir):
         for path in project.glob(pattern):
             if not path.is_file():
                 continue
@@ -214,21 +266,41 @@ def _has_blocking_placeholder(path: Path) -> bool:
     return any(marker.search(text) for marker in _PLACEHOLDER_PATTERNS)
 
 
-def clarify_result_ok(project: Path, structured_result: dict) -> bool:
+def feature_dir_path(project: Path, feature_dir: str | None = None) -> Path:
+    """The feature directory: the known one when given (it must exist inside
+    the project), else Spec Kit's `.specify/feature.json` pointer."""
+    if not feature_dir:
+        return resolve_active_feature_dir(project)
+    project = Path(project).resolve()
+    try:
+        relative = _safe_feature_dir(feature_dir)
+    except ValueError as exc:
+        raise ActiveFeatureUnresolved(str(exc)) from exc
+    resolved = (project / relative).resolve()
+    try:
+        resolved.relative_to(project)
+    except ValueError as exc:
+        raise ActiveFeatureUnresolved(f"feature_dir resolves outside the project: {feature_dir!r}") from exc
+    if not resolved.is_dir():
+        raise ActiveFeatureUnresolved(f"feature_dir not found: {feature_dir!r}")
+    return resolved
+
+
+def clarify_result_ok(project: Path, structured_result: dict, feature_dir: str | None = None) -> bool:
     """Filesystem-level conditions 5-8 of spec.md §5 for a `clarify` no-op.
 
     Conditions 1-4 (process/transcript-level) and 9-11 (outcome-level) are
     already evaluated by `phase_runner.py` before this is called.
     """
-    feature_dir = resolve_active_feature_dir(project)  # may raise ActiveFeatureUnresolved
-    spec_path = feature_dir / "spec.md"
+    resolved = feature_dir_path(project, feature_dir)  # may raise ActiveFeatureUnresolved
+    spec_path = resolved / "spec.md"
     return not _has_blocking_placeholder(spec_path)
 
 
-def analyze_result_ok(project: Path, structured_result: dict) -> bool:
+def analyze_result_ok(project: Path, structured_result: dict, feature_dir: str | None = None) -> bool:
     """Filesystem-level conditions 1-2 of spec.md §8 for an `analyze` no-op."""
-    feature_dir = resolve_active_feature_dir(project)  # may raise ActiveFeatureUnresolved
+    resolved = feature_dir_path(project, feature_dir)  # may raise ActiveFeatureUnresolved
     return not any(
-        _has_blocking_placeholder(feature_dir / name)
+        _has_blocking_placeholder(resolved / name)
         for name in ("spec.md", "plan.md", "tasks.md")
     )

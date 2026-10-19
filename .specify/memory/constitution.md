@@ -49,20 +49,26 @@ baseline behavior every other mode is defined relative to, and its tests
 must keep passing unmodified when new modes are added.
 
 ### VII. Reuse the Ecosystem Before Reimplementing It
-The principle that Spec Master never reimplements a `speckit.*` command,
-only orchestrates it, extends to third-party integrations the Spec Kit
-ecosystem already covers (issue trackers, extensions, presets). Before
-adding a new integration (e.g. Jira, Azure DevOps, Linear, GitHub Issues),
-an existing Spec Kit extension/skill that already provides it MUST be
-reused or extended instead of building a parallel implementation from
-scratch.
+Spec Master owns the harness: lane triage, step sequencing, the evidence
+required to close a step, and the host enforcement (hooks) around the
+agent. GitHub Spec Kit is the Critical-lane pack and the interchange
+format: whenever a change runs the full cycle, every `speckit.*` phase is
+executed through the integration installed for the running agent and is
+never reimplemented. A change MAY close without Spec Kit artifacts only when
+the deterministic triage placed it in a lighter lane (the agent can never
+lower a lane) and it passes the same evidence checks as any other promotion
+(Principle IV). Third-party integrations the Spec Kit ecosystem already
+covers (issue trackers, extensions, presets) MUST be reused or extended
+instead of building a parallel implementation from scratch.
 
 ### VIII. Auto-Detected Quality Gates, Never Hardcoded
 The auto-detection precedent already used for build/test/lint gates
 (`quality_gates.py`) applies to every quality gate the core adds,
 including security/SAST gates: a gate's underlying command MUST be
 detected from the target repository's own configuration/tooling, never
-hardcoded into `spec-master/lib/`.
+hardcoded into `spec-master/lib/`. A gate the target repository declares
+itself (`.spec-master/gates.json`) counts as that repository's own
+configuration.
 
 ### IX. Scoped, Documented Dependency Exceptions
 Where an isolated component needs a runtime a stdlib-only implementation
@@ -100,7 +106,9 @@ default branch, and individual features are isolated logically under
 phases (`speckit.*`) are executed through whichever integration/adapter is
 actually installed for the running agent (Skills, commands, or generated
 entrypoints) — never simulated or hand-authored as a substitute for a real
-phase run.
+phase run. A change the triage places in a lane that does not run Spec Kit
+produces that lane's own artifacts (a change note, a spec-lite) instead;
+they are never presented as Spec Kit phase output.
 
 ## Governance
 
@@ -112,4 +120,4 @@ with a `MUST`/`NEVER`-style clause, or the removal of an existing
 principle, requires explicit user approval before the file is overwritten.
 Complexity in any new module must be justified against Principle I.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-17 | **Last Amended**: 2026-08-17
+**Version**: 2.0.0 | **Ratified**: 2026-08-17 | **Last Amended**: 2026-09-28

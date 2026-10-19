@@ -20,21 +20,25 @@ Mapping to the core:
 - The command body is intentionally short: it points at `spec-master/PROTOCOL.md`
   as the protocol to follow and repeats only the two Claude-specific
   mechanics — how `$ARGUMENTS` is resolved and that `AskUserQuestion` is the
-  tool to use for every gate (§7 git-strategy question, §21 batched
-  clarifications, §16 constitution conflicts).
+  tool to use for every gate (the Step 2 Spec Kit/git-strategy question, the
+  batched clarifications of §4, constitution conflicts in Step 4).
 - All structural decisions go through `Bash` calls to
   `python3 spec-master/lib/cli.py ...` — identical to every other adapter,
   so the tested behavior (state machine, fingerprint, ordering, git
   strategy, quality gates, traceability) is shared, not reimplemented in the
   prompt.
 - Reading/writing files uses Claude Code's `Read`/`Write`/`Edit` tools.
-- Executing an actual Spec Kit phase means reading the installed
-  `.claude/commands/speckit.<phase>.md` file (created by the Spec Kit's own
-  installer) and following its instructions with the prompt generated from
-  `spec-master/templates/prompts/<phase>.md` as the effective argument —
+- Executing an actual Spec Kit phase means reading the entrypoint the Spec
+  Kit installer created for that phase — `discovery scan` reports it under
+  `speckit_phase_entrypoints`: `.claude/skills/speckit-<phase>/SKILL.md`
+  (`/speckit-<phase>`) for current Spec Kit releases, or
+  `.claude/commands/speckit.<phase>.md` for older ones — and following its
+  instructions with the prompt generated from
+  `spec-master/templates/prompts/<phase>.md` as the effective argument.
   Claude Code has no way to programmatically invoke another slash command,
-  so the adapter inlines the target command's own protocol instead of
-  trying to "call" it.
+  so the adapter inlines the target skill's own protocol instead of trying
+  to "call" it; where that skill asks the user something, the batching rule
+  of `PROTOCOL.md` §4 applies.
 
 ## Resuming
 

@@ -1,20 +1,18 @@
-import unittest
-import shutil
 import tempfile
+import unittest
 from pathlib import Path
-import _pathfix
 
+import _pathfix  # noqa: F401
 from knowledge.model import KnowledgeModule
 
 
-class KnowledgeModelTests(unittest.TestCase):
-    def _tmp_path(self):
-        path = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
-        return path
+class KnowledgeModuleTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp_path = Path(tmp.name)
 
     def test_from_file_valid(self):
-        tmp_path = self._tmp_path()
         md_content = """---
 id: architecture.hexagonal
 type: Pattern
@@ -35,53 +33,52 @@ depth:
 - [[architecture.clean]]
 - [[architecture.onion]]
 """
-        p = tmp_path / "hexagonal.md"
+        p = self.tmp_path / "hexagonal.md"
         p.write_text(md_content)
 
         mod = KnowledgeModule.from_file(p)
-        assert mod is not None
-        assert mod.id == "architecture.hexagonal"
-        assert mod.type == "Pattern"
-        assert mod.name == "Hexagonal Architecture"
-        assert mod.category == "architecture"
-        assert "architect" in mod.applicable_roles
-        assert "architecture" in mod.tags
-        assert mod.depth["architect"] == "L4"
-        assert "architecture.clean" in mod.related
-        assert "Hexagonal Architecture" in mod.content
+        self.assertIsNotNone(mod)
+        self.assertEqual(mod.id, "architecture.hexagonal")
+        self.assertEqual(mod.type, "Pattern")
+        self.assertEqual(mod.name, "Hexagonal Architecture")
+        self.assertEqual(mod.category, "architecture")
+        self.assertIn("architect", mod.applicable_roles)
+        self.assertIn("architecture", mod.tags)
+        self.assertEqual(mod.depth["architect"], "L4")
+        self.assertIn("architecture.clean", mod.related)
+        self.assertIn("Hexagonal Architecture", mod.content)
 
     def test_from_file_no_id(self):
-        tmp_path = self._tmp_path()
         md_content = """---
 type: Pattern
 ---
 """
-        p = tmp_path / "no_id.md"
+        p = self.tmp_path / "no_id.md"
         p.write_text(md_content)
-        assert KnowledgeModule.from_file(p) is None
+        self.assertIsNone(KnowledgeModule.from_file(p))
 
     def test_is_applicable_to(self):
         mod = KnowledgeModule(id="test", type="Pattern", name="T", category="T", applicable_roles=["architect"])
-        assert mod.is_applicable_to("architect") is True
-        assert mod.is_applicable_to("backend-dev") is False
+        self.assertIs(mod.is_applicable_to("architect"), True)
+        self.assertIs(mod.is_applicable_to("backend-dev"), False)
 
     def test_is_applicable_to_empty(self):
         mod = KnowledgeModule(id="test", type="Pattern", name="T", category="T", applicable_roles=[])
-        assert mod.is_applicable_to("architect") is True
-        assert mod.is_applicable_to("unknown") is True
+        self.assertIs(mod.is_applicable_to("architect"), True)
+        self.assertIs(mod.is_applicable_to("unknown"), True)
 
     def test_depth_for_role(self):
         mod = KnowledgeModule(id="test", type="Pattern", name="T", category="T", depth={"architect": "L4"})
-        assert mod.depth_for_role("architect") == "L4"
-        assert mod.depth_for_role("tech-lead") == "L0"
+        self.assertEqual(mod.depth_for_role("architect"), "L4")
+        self.assertEqual(mod.depth_for_role("tech-lead"), "L0")
 
     def test_to_dict(self):
         mod = KnowledgeModule(id="test", type="Pattern", name="T", category="T")
         d = mod.to_dict()
-        assert d["id"] == "test"
-        assert d["type"] == "Pattern"
-        assert d["name"] == "T"
-        assert d["category"] == "T"
+        self.assertEqual(d["id"], "test")
+        self.assertEqual(d["type"], "Pattern")
+        self.assertEqual(d["name"], "T")
+        self.assertEqual(d["category"], "T")
 
 
 if __name__ == "__main__":

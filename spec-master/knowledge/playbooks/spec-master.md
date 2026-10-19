@@ -26,12 +26,12 @@ right time, and records the outcome.
 Before instantiating any Team Mode role for a package or review, load that
 role's playbook and hand it in as binding context, not optional reading:
 ```
-python3 spec-master/lib/cli.py knowledge get --id playbook.<role-id>
+python3 spec-master/lib/cli.py knowledge get playbook.<role-id>
 ```
 Pair it with a budgeted context pull for anything beyond the playbook
 itself:
 ```
-python3 spec-master/lib/cli.py knowledge for-context --role <role-id> \
+python3 spec-master/lib/cli.py knowledge route --role <role-id> \
   --keywords "<feature/task keywords>" --tech-stacks "<detected stack>"
 ```
 `<role-id>` uses the knowledge-base id (`backend-dev`, `architect`,
