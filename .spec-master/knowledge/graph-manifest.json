@@ -1,8 +1,20 @@
 {
   "schema_version": "1.0",
-  "total_nodes": 6,
-  "total_edges": 4,
+  "total_nodes": 7,
+  "total_edges": 5,
   "nodes": [
+    {
+      "id": "agent.architect",
+      "type": "Agent",
+      "name": "architect agent",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "agent",
+        "role:architect"
+      ],
+      "aliases": []
+    },
     {
       "id": "artifact.docs",
       "type": "Artifact",
@@ -22,6 +34,24 @@
       "confidence": 1.0,
       "tags": [
         "documentation"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "decision.architecture-inconsistency-adr-check-for-harness-f48e2b65",
+      "type": "Decision",
+      "name": "ADR check for harness-hygiene (tier L)",
+      "status": "active",
+      "confidence": 1.0,
+      "tags": [
+        "decision",
+        "kind:architecture_inconsistency",
+        "decided-by:architect",
+        "raised-by:tech-lead",
+        "involves:architect",
+        "involves:tech-lead",
+        "involves:scrum-master",
+        "feature:harness-hygiene"
       ],
       "aliases": []
     },
@@ -49,32 +79,14 @@
       "aliases": []
     },
     {
-      "id": "decision.architecture-inconsistency-adr-check-for-harness-f48e2b65",
-      "type": "Decision",
-      "name": "ADR check for harness-hygiene (tier L)",
+      "id": "deployment.ci-cd",
+      "type": "Deployment",
+      "name": "CI/CD Pipeline",
       "status": "active",
-      "confidence": 1.0,
+      "confidence": 0.9,
       "tags": [
-        "decision",
-        "kind:architecture_inconsistency",
-        "decided-by:architect",
-        "raised-by:tech-lead",
-        "involves:architect",
-        "involves:tech-lead",
-        "involves:scrum-master",
-        "feature:harness-hygiene"
-      ],
-      "aliases": []
-    },
-    {
-      "id": "agent.architect",
-      "type": "Agent",
-      "name": "architect agent",
-      "status": "active",
-      "confidence": 1.0,
-      "tags": [
-        "agent",
-        "role:architect"
+        "ci-cd",
+        "deployment"
       ],
       "aliases": []
     }
@@ -141,20 +153,36 @@
       "valid_from": null,
       "valid_to": null,
       "status": "active"
+    },
+    {
+      "source": "project.spec-master",
+      "relation": "USES",
+      "target": "deployment.ci-cd",
+      "provenance": "DISCOVERED_FROM_CONFIG",
+      "confidence": 0.9,
+      "evidence": null,
+      "first_seen": null,
+      "last_verified": null,
+      "valid_from": null,
+      "valid_to": null,
+      "status": "active"
     }
   ],
   "types": [
     "Agent",
     "Artifact",
     "Decision",
+    "Deployment",
     "Package",
     "Project"
   ],
   "aliases": {},
   "tags": [
     "agent",
+    "ci-cd",
     "decided-by:architect",
     "decision",
+    "deployment",
     "documentation",
     "engine",
     "feature:harness-hygiene",

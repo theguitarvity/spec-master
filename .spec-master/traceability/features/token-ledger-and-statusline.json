@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "feature": "token-ledger-and-statusline",
+  "rows": [
+    {
+      "requirement": "Incremental stdlib transcript reader with persisted offset, no hardcoded paths",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "token-ledger-and-statusline",
+      "spec": "specs/014-token-ledger-and-statusline/spec.md FR-001, FR-003",
+      "plan": "specs/014-token-ledger-and-statusline/plan.md",
+      "task": "T002",
+      "test": "spec-master/tests/test_telemetry.py::ReadResponsesTests; spec-master/tests/test_ledger.py::IngestTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Tokens, model and estimated cost attributed to feature/phase/agent",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "token-ledger-and-statusline",
+      "spec": "specs/014-token-ledger-and-statusline/spec.md FR-003",
+      "plan": "specs/014-token-ledger-and-statusline/plan.md",
+      "task": "T004",
+      "test": "spec-master/tests/test_ledger.py::IngestTests; SummaryTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Attribution events written to .spec-master/events.jsonl by adapter hooks",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "token-ledger-and-statusline",
+      "spec": "specs/014-token-ledger-and-statusline/spec.md FR-002, FR-006",
+      "plan": "specs/014-token-ledger-and-statusline/plan.md",
+      "task": "T003",
+      "test": "spec-master/tests/test_events.py; spec-master/tests/test_kernel_hookd.py::test_subagent_hooks_write_attribution_events_and_allow",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Statusline shows feature, phase, tier, tokens, cost, cache hit, context %",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "token-ledger-and-statusline",
+      "spec": "specs/014-token-ledger-and-statusline/spec.md FR-005",
+      "plan": "specs/014-token-ledger-and-statusline/plan.md",
+      "task": "T007",
+      "test": "spec-master/tests/test_statusline.py",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Unknown transcript format degrades to 0 + note, never invents counts",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "token-ledger-and-statusline",
+      "spec": "specs/014-token-ledger-and-statusline/spec.md FR-007",
+      "plan": "specs/014-token-ledger-and-statusline/plan.md",
+      "task": "T004",
+      "test": "spec-master/tests/test_ledger.py::IngestTests::test_unknown_format_degrades_to_nothing_with_a_note",
+      "status": "COVERED",
+      "issue": ""
+    }
+  ]
+}

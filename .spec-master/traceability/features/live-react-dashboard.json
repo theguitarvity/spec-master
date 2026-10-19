@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "feature": "live-react-dashboard",
+  "rows": [
+    {
+      "requirement": "Serve command binds 127.0.0.1 and prints a JSON ready line",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-001",
+      "task": "T007,T009",
+      "test": "test_dashboard_server bind/ready tests; DashboardServeCliTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "/api/model returns the model plus tokens, agents, timeline",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-002",
+      "task": "T004-T007",
+      "test": "test_dashboard_server model/tokens/derive_events tests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "/api/events streams SSE for each ledger source, model events and heartbeat",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-003",
+      "task": "T004-T007",
+      "test": "test_dashboard_server tailer and SSE tests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Server hardening: GET/HEAD only, Host guard, traversal, SSE client cap",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-004",
+      "task": "T006,T007",
+      "test": "test_dashboard_server 405/403/404/503 tests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Static bundle serving with HTML fallback when dist is missing",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-005",
+      "task": "T006,T007",
+      "test": "test_dashboard_server static and fallback tests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Committed bundle is isolated, hash-verified and Principle IX documented",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-006",
+      "task": "T010-T013",
+      "test": "test_dashboard_bundle manifest/tamper/relative-asset tests; dashboard/web/README.md",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "React UI views render live (8 tabs) with connection status",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-007",
+      "task": "T011,T012,T015",
+      "test": "npm run build; browser smoke on 127.0.0.1:8791, no console errors",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "dashboard.py gains additive keys only",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-008",
+      "task": "T002,T003",
+      "test": "LiveModelKeysTests; existing test_dashboard* unchanged",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Guarded ledger import falls back to tokens null",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-009",
+      "task": "T004,T005",
+      "test": "test_dashboard_server tokens_summary tests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Packaging and doctor stay green",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-010",
+      "task": "T014",
+      "test": "test_dashboard_bundle packaging tests; doctor run --errors-only exit 0",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "README documents dashboard serve; protocol conformance green",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "live-react-dashboard",
+      "spec": "specs/016-live-react-dashboard/spec.md",
+      "plan": "FR-011",
+      "task": "T014",
+      "test": "README row; unittest discover Ran 1020 OK",
+      "status": "COVERED",
+      "issue": ""
+    }
+  ]
+}

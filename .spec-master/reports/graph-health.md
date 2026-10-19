@@ -1,7 +1,7 @@
 # Graph Health Report
 
-**Score:** 100/100 (grade A)
-**Nodes:** 4  **Edges:** 3
+**Score:** 98/100 (grade A)
+**Nodes:** 7  **Edges:** 5
 
 ## Validation — clean
 
@@ -9,5 +9,5 @@ No structural issues found.
 
 ## Temporal freshness (max age: 30 days)
 
-- No stale nodes.
-- 4 node(s) have never been verified.
+- 1 node(s) not re-verified recently: decision.architecture-inconsistency-adr-check-for-harness-f48e2b65
+- 6 node(s) have never been verified.

@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "feature": "protocol-and-cli-performance",
+  "rows": [
+    {
+      "requirement": "FR-001 state advance (P1)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T002-T004",
+      "test": "spec-master/tests/test_advance.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-002 router and protocol sections (P2)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T005-T007",
+      "test": "spec-master/tests/test_protocol_sections.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-003 per-phase model/effort hints (P3)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T008",
+      "test": "spec-master/tests/test_risk_hints.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-004 pruned snapshot walk and hash cache (P4)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T009-T010",
+      "test": "spec-master/tests/test_phase_snapshot.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-005 dashboard debounce and graph cache (P5)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T011",
+      "test": "spec-master/tests/test_dashboard_debounce.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-006a MCP in-process dispatch (P6)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T012",
+      "test": "spec-master/tests/test_mcp_inprocess.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-006b cli.py lazy imports (P6)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T013",
+      "test": "spec-master/tests/test_cli_lazy.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-007 before/after numbers",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T001,T014",
+      "test": "specs/015-protocol-and-cli-performance/validation-report.md",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-008 stdlib only, native behaviour unchanged, doctor exit 0",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T014",
+      "test": "spec-master/tests/test_protocol_conformance.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "SC-001 router + section < 40% of protocol bytes",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T007",
+      "test": "spec-master/tests/test_protocol_sections.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "SC-002 state show latency below 106 ms",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T013",
+      "test": "specs/015-protocol-and-cli-performance/validation-report.md",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "SC-003 snapshot never visits pruned dirs",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T009",
+      "test": "spec-master/tests/test_phase_snapshot.py",
+      "status": "PASSED",
+      "issue": ""
+    },
+    {
+      "requirement": "SC-004 full unittest suite passes",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "protocol-and-cli-performance",
+      "spec": "specs/015-protocol-and-cli-performance/spec.md",
+      "plan": "specs/015-protocol-and-cli-performance/plan.md",
+      "task": "T014",
+      "test": "spec-master/tests",
+      "status": "PASSED",
+      "issue": ""
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "feature": "brownfield-greenfield-tracks",
+  "rows": [
+    {
+      "requirement": "Brownfield intake maps codebase with monorepo sub-package discovery and pruned walk",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "brownfield-greenfield-tracks",
+      "spec": "specs/019-brownfield-greenfield-tracks/spec.md",
+      "plan": "specs/019-brownfield-greenfield-tracks/plan.md",
+      "task": "T001-T004",
+      "test": "tests/test_discovery.py::MonorepoDiscoveryTests,tests/test_tracks.py::MapCodebaseTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Constitution proposed from repository evidence only",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "brownfield-greenfield-tracks",
+      "spec": "specs/019-brownfield-greenfield-tracks/spec.md",
+      "plan": "specs/019-brownfield-greenfield-tracks/plan.md",
+      "task": "T005",
+      "test": "tests/test_tracks.py::ConstitutionProposalTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Optional characterization-test phase before implement in brownfield",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "brownfield-greenfield-tracks",
+      "spec": "specs/019-brownfield-greenfield-tracks/spec.md",
+      "plan": "specs/019-brownfield-greenfield-tracks/plan.md",
+      "task": "T006,T009",
+      "test": "tests/test_tracks.py::CharacterizationTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Partial adoption scoped to a directory",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "brownfield-greenfield-tracks",
+      "spec": "specs/019-brownfield-greenfield-tracks/spec.md",
+      "plan": "specs/019-brownfield-greenfield-tracks/plan.md",
+      "task": "T003,T008",
+      "test": "tests/test_discovery.py::MonorepoDiscoveryTests::test_scope_limits_stacks_and_packages",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "Greenfield intake asks stack and proposes (never applies unconfirmed)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "brownfield-greenfield-tracks",
+      "spec": "specs/019-brownfield-greenfield-tracks/spec.md",
+      "plan": "specs/019-brownfield-greenfield-tracks/plan.md",
+      "task": "T007,T008",
+      "test": "tests/test_tracks.py::GreenfieldTests",
+      "status": "COVERED",
+      "issue": ""
+    }
+  ]
+}

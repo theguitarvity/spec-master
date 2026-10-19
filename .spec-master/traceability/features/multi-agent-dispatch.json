@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "feature": "multi-agent-dispatch",
+  "rows": [
+    {
+      "requirement": "Core emits per-wave dispatch manifest (package, role, playbook, model/effort, worktree, owner, reviewer)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md#FR-001",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T004",
+      "test": "tests/test_dispatch.py::test_build_manifest",
+      "status": "PLANNED",
+      "issue": ""
+    },
+    {
+      "requirement": "Claude Code adapter launches parallel subagents per wave with worktree isolation; other adapters get equivalent instructions",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md#FR-010",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T018",
+      "test": "tests/test_packaging.py::test_agents_rendered_per_host",
+      "status": "PLANNED",
+      "issue": ""
+    },
+    {
+      "requirement": "Configurable max agents per wave (default 3-5); reviewer != owner",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md#FR-003",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T004",
+      "test": "tests/test_dispatch.py::test_cap_and_reviewer",
+      "status": "PLANNED",
+      "issue": ""
+    },
+    {
+      "requirement": "Each subagent result and tokens recorded via subagent-stop event",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md#FR-006",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T008",
+      "test": "tests/test_dispatch.py::test_record_result_and_status",
+      "status": "PLANNED",
+      "issue": ""
+    },
+    {
+      "requirement": "Tech Lead integration stays gated; nothing auto-merged",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md#FR-008",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T006",
+      "test": "tests/test_dispatch.py::test_aggregate_never_merges",
+      "status": "PLANNED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-001/002 per-wave manifest with entries, batches, <=2k tokens",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T004",
+      "test": "spec-master/tests/test_dispatch.py::BuildManifestTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-003 agent cap argument > policy > 4, range 1..8",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T004",
+      "test": "spec-master/tests/test_dispatch.py::ResolveCapTests; test_dispatch_cli::test_max_agents_is_applied_and_validated",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-004 reviewer != owner, separate sm-review entry",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T010",
+      "test": "spec-master/tests/test_dispatch.py::RecordResultTests (owner review refused)",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-005 prepare delegates to worktree.plan_worktree, idempotent, markers",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T006",
+      "test": "spec-master/tests/test_dispatch.py::PrepareTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-006 result allow-list and 8000-char cap, invalid -> failed",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T008",
+      "test": "spec-master/tests/test_dispatch.py::RecordResultTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-007 status joins results, events and ledger, read-only",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T012",
+      "test": "spec-master/tests/test_dispatch.py::StatusTests; test_dispatch_cli::test_result_status_and_aggregate_commands",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-008 aggregate reports only, never merges",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T010",
+      "test": "spec-master/tests/test_dispatch.py::AggregateTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-009 hookd per-worktree governance",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T013",
+      "test": "spec-master/tests/test_dispatch_scope.py",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-010 packaging renders sm-spec/sm-implement/sm-review, review read-only",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T016-T018",
+      "test": "spec-master/tests/test_packaging.py::SubagentTests",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "FR-011 Patch refused unless forced with reason",
+      "source": "specs/018-multi-agent-dispatch/spec.md",
+      "feature": "multi-agent-dispatch",
+      "spec": "specs/018-multi-agent-dispatch/spec.md",
+      "plan": "specs/018-multi-agent-dispatch/plan.md",
+      "task": "T004",
+      "test": "spec-master/tests/test_dispatch.py::BuildManifestTests; test_dispatch_cli::test_patch_lane_is_refused_unless_forced_with_a_reason",
+      "status": "COVERED",
+      "issue": ""
+    }
+  ]
+}

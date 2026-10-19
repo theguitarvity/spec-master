@@ -338,18 +338,18 @@
         "protocol-and-cli-performance"
       ],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/019-brownfield-greenfield-tracks",
       "cycle": 2,
       "analyze_repair_cycles": 0,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       },
       "risk": {
         "tier": "M",
@@ -370,6 +370,113 @@
             "at": "2026-10-19T11:11:57Z"
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T11:52:43Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/spec.md",
+              "sha256": "68e0e10c9121ecd063660bb6a23ed2fbf3483c452a3cd5f17688d388ea9c1a14",
+              "bytes": 5291
+            }
+          ]
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T11:52:43Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/spec.md",
+              "sha256": "68e0e10c9121ecd063660bb6a23ed2fbf3483c452a3cd5f17688d388ea9c1a14",
+              "bytes": 5291
+            }
+          ]
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T11:52:43Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/plan.md",
+              "sha256": "7de3ec3765bced426012770226df73bd5c4bb7eec5b23072c902002675c81225",
+              "bytes": 2026
+            }
+          ]
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T11:52:43Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/tasks.md",
+              "sha256": "fbfd4c8052bdf4808fe32725ca6fc4dc34e84dbcd4c691507c040133c2b63ffe",
+              "bytes": 1410
+            }
+          ]
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T11:52:44Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/spec.md",
+              "sha256": "68e0e10c9121ecd063660bb6a23ed2fbf3483c452a3cd5f17688d388ea9c1a14",
+              "bytes": 5291
+            },
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/plan.md",
+              "sha256": "7de3ec3765bced426012770226df73bd5c4bb7eec5b23072c902002675c81225",
+              "bytes": 2026
+            },
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/tasks.md",
+              "sha256": "fbfd4c8052bdf4808fe32725ca6fc4dc34e84dbcd4c691507c040133c2b63ffe",
+              "bytes": 1410
+            }
+          ]
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T11:52:44Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/019-brownfield-greenfield-tracks/tasks.md",
+              "sha256": "fbfd4c8052bdf4808fe32725ca6fc4dc34e84dbcd4c691507c040133c2b63ffe",
+              "bytes": 1410
+            }
+          ]
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T11:52:44Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": []
+        }
       }
     },
     {
@@ -455,18 +562,18 @@
         "token-ledger-and-statusline"
       ],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/016-live-react-dashboard",
       "cycle": 2,
-      "analyze_repair_cycles": 0,
+      "analyze_repair_cycles": 1,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       },
       "risk": {
         "tier": "S",
@@ -487,6 +594,113 @@
             "at": "2026-10-19T11:11:57Z"
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T11:43:12Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/016-live-react-dashboard/spec.md",
+              "sha256": "519a2831224ae25d4834dce9d3d2a8552d7b9e8ee337eb3c096c6a552288e7f8",
+              "bytes": 7707
+            }
+          ]
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T11:43:12Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/016-live-react-dashboard/spec.md",
+              "sha256": "519a2831224ae25d4834dce9d3d2a8552d7b9e8ee337eb3c096c6a552288e7f8",
+              "bytes": 7707
+            }
+          ]
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T11:43:32Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/016-live-react-dashboard/plan.md",
+              "sha256": "99d527cefb71e7b338b33a5541923f8acd1a526708ae654eb9261bf73d60c906",
+              "bytes": 4801
+            }
+          ]
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T11:43:32Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/016-live-react-dashboard/tasks.md",
+              "sha256": "6ac7fae22fffd07a430e7fbaa1ba4d0d2bcfb15617b9fddb206b627fa93cd5ee",
+              "bytes": 3133
+            }
+          ]
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T11:43:58Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/016-live-react-dashboard/spec.md",
+              "sha256": "519a2831224ae25d4834dce9d3d2a8552d7b9e8ee337eb3c096c6a552288e7f8",
+              "bytes": 7707
+            },
+            {
+              "path": "specs/016-live-react-dashboard/plan.md",
+              "sha256": "99d527cefb71e7b338b33a5541923f8acd1a526708ae654eb9261bf73d60c906",
+              "bytes": 4801
+            },
+            {
+              "path": "specs/016-live-react-dashboard/tasks.md",
+              "sha256": "e4d55019b49969aa7633e567006f0984f9e16f27fa3d925d1a929f7592175c4f",
+              "bytes": 3330
+            }
+          ]
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T11:53:33Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/016-live-react-dashboard/tasks.md",
+              "sha256": "cbd9684e3ae09768e93fbccc038f0d2838e13afd5adecec470b37ea2e895b571",
+              "bytes": 3330
+            }
+          ]
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T11:54:05Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": []
+        }
       }
     },
     {
@@ -508,18 +722,18 @@
         "speed-mode-tdd-first"
       ],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/018-multi-agent-dispatch",
       "cycle": 2,
-      "analyze_repair_cycles": 0,
+      "analyze_repair_cycles": 1,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       },
       "risk": {
         "tier": "M",
@@ -540,6 +754,56 @@
             "at": "2026-10-19T11:11:57Z"
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": false,
+          "at": "2026-10-19T11:49:04Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "clarify": {
+          "verified": false,
+          "at": "2026-10-19T11:49:05Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "plan": {
+          "verified": false,
+          "at": "2026-10-19T11:49:15Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "tasks": {
+          "verified": false,
+          "at": "2026-10-19T11:49:16Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "analyze": {
+          "verified": false,
+          "at": "2026-10-19T11:49:16Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T12:10:41Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/018-multi-agent-dispatch/tasks.md",
+              "sha256": "63377ac4a447b9cbe74e667140eaccca599c64cd2ba689c7a71d40a388cb132f",
+              "bytes": 7949
+            }
+          ]
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T12:10:41Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": []
+        }
       }
     },
     {
@@ -562,18 +826,18 @@
         "token-ledger-and-statusline"
       ],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/015-protocol-and-cli-performance",
       "cycle": 2,
       "analyze_repair_cycles": 0,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       },
       "risk": {
         "tier": "M",
@@ -594,6 +858,113 @@
             "at": "2026-10-19T11:11:56Z"
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T11:43:44Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/015-protocol-and-cli-performance/spec.md",
+              "sha256": "bada510827902fa9ba2d4d49c4fc18185efff0a68c623ff04a6b330155fce27d",
+              "bytes": 8484
+            }
+          ]
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T11:43:45Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/015-protocol-and-cli-performance/spec.md",
+              "sha256": "bada510827902fa9ba2d4d49c4fc18185efff0a68c623ff04a6b330155fce27d",
+              "bytes": 8484
+            }
+          ]
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T11:43:45Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/015-protocol-and-cli-performance/plan.md",
+              "sha256": "8d03435078fbc8b561e3f95e9c1ff58a5d8cc5f72a54db9b0e74d9e7fefa467c",
+              "bytes": 3479
+            }
+          ]
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T11:43:45Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/015-protocol-and-cli-performance/tasks.md",
+              "sha256": "7b160e485d4480dbf123c26b5310609865ea958d5989983a83275c127c1bea58",
+              "bytes": 2282
+            }
+          ]
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T11:43:56Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/015-protocol-and-cli-performance/spec.md",
+              "sha256": "bada510827902fa9ba2d4d49c4fc18185efff0a68c623ff04a6b330155fce27d",
+              "bytes": 8484
+            },
+            {
+              "path": "specs/015-protocol-and-cli-performance/plan.md",
+              "sha256": "8d03435078fbc8b561e3f95e9c1ff58a5d8cc5f72a54db9b0e74d9e7fefa467c",
+              "bytes": 3479
+            },
+            {
+              "path": "specs/015-protocol-and-cli-performance/tasks.md",
+              "sha256": "7b160e485d4480dbf123c26b5310609865ea958d5989983a83275c127c1bea58",
+              "bytes": 2282
+            }
+          ]
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T11:57:53Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/015-protocol-and-cli-performance/tasks.md",
+              "sha256": "d7fa380a16400dd6bb3f6de7b91f2a741a982a9dd9c22d282b3edd518062056e",
+              "bytes": 2327
+            }
+          ]
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T11:58:01Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": []
+        }
       }
     },
     {
@@ -615,18 +986,18 @@
         "protocol-and-cli-performance"
       ],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/017-speed-mode-tdd-first",
       "cycle": 2,
-      "analyze_repair_cycles": 0,
+      "analyze_repair_cycles": 1,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       },
       "risk": {
         "tier": "M",
@@ -647,6 +1018,113 @@
             "at": "2026-10-19T11:11:57Z"
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T11:50:17Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/017-speed-mode-tdd-first/spec.md",
+              "sha256": "2f703c266247483e108e8b3cf395fe40c7a8afbb2fcd92ae707cdd30772b085e",
+              "bytes": 3983
+            }
+          ]
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T11:50:18Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/017-speed-mode-tdd-first/spec.md",
+              "sha256": "2f703c266247483e108e8b3cf395fe40c7a8afbb2fcd92ae707cdd30772b085e",
+              "bytes": 3983
+            }
+          ]
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T11:50:18Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/017-speed-mode-tdd-first/plan.md",
+              "sha256": "914230ad89338f114192de50cfe355e9b113b5456b434ef5869430fbee219fe7",
+              "bytes": 986
+            }
+          ]
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T11:50:18Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/017-speed-mode-tdd-first/tasks.md",
+              "sha256": "6e03733fcff49ca7bdf3fa417d0c8301ae203b33a82e998e856d4fa5fc4cd1c9",
+              "bytes": 655
+            }
+          ]
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T11:50:28Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/017-speed-mode-tdd-first/spec.md",
+              "sha256": "2f703c266247483e108e8b3cf395fe40c7a8afbb2fcd92ae707cdd30772b085e",
+              "bytes": 3983
+            },
+            {
+              "path": "specs/017-speed-mode-tdd-first/plan.md",
+              "sha256": "914230ad89338f114192de50cfe355e9b113b5456b434ef5869430fbee219fe7",
+              "bytes": 986
+            },
+            {
+              "path": "specs/017-speed-mode-tdd-first/tasks.md",
+              "sha256": "6e03733fcff49ca7bdf3fa417d0c8301ae203b33a82e998e856d4fa5fc4cd1c9",
+              "bytes": 655
+            }
+          ]
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T11:50:28Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/017-speed-mode-tdd-first/tasks.md",
+              "sha256": "6e03733fcff49ca7bdf3fa417d0c8301ae203b33a82e998e856d4fa5fc4cd1c9",
+              "bytes": 655
+            }
+          ]
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T11:52:18Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": []
+        }
       }
     },
     {
@@ -670,18 +1148,18 @@
         "harness-hygiene"
       ],
       "branch": null,
-      "status": "PENDING",
+      "status": "COMPLETED",
       "spec_directory": "specs/014-token-ledger-and-statusline",
       "cycle": 2,
-      "analyze_repair_cycles": 0,
+      "analyze_repair_cycles": 1,
       "phases": {
-        "specify": "PENDING",
-        "clarify": "PENDING",
-        "plan": "PENDING",
-        "tasks": "PENDING",
-        "analyze": "PENDING",
-        "implement": "PENDING",
-        "validate": "PENDING"
+        "specify": "PASSED",
+        "clarify": "PASSED",
+        "plan": "PASSED",
+        "tasks": "PASSED",
+        "analyze": "PASSED",
+        "implement": "PASSED",
+        "validate": "PASSED"
       },
       "risk": {
         "tier": "M",
@@ -706,6 +1184,43 @@
             "at": "2026-10-19T11:11:56Z"
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": false,
+          "at": "2026-10-19T11:42:56Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "clarify": {
+          "verified": false,
+          "at": "2026-10-19T11:42:56Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "plan": {
+          "verified": false,
+          "at": "2026-10-19T11:42:57Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "tasks": {
+          "verified": false,
+          "at": "2026-10-19T11:42:57Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "analyze": {
+          "verified": false,
+          "at": "2026-10-19T11:42:57Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "implement": {
+          "verified": false,
+          "at": "2026-10-19T11:51:15Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        },
+        "validate": {
+          "verified": false,
+          "at": "2026-10-19T11:52:08Z",
+          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+        }
       }
     }
   ],

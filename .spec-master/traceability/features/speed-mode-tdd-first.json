@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "feature": "speed-mode-tdd-first",
+  "rows": [
+    {
+      "requirement": "AC1 Deterministic analyze (verify:pre) covers traceability, open questions and size without LLM",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "speed-mode-tdd-first",
+      "spec": "specs/017-speed-mode-tdd-first/spec.md#FR-002",
+      "plan": "specs/017-speed-mode-tdd-first/plan.md",
+      "task": "T002",
+      "test": "tests/test_standard_lane.py::VerifyPreTests::test_clean_spec_lite_passes",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "AC2 RED passes only with a new failing test; GREEN only after RED with a passing suite",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "speed-mode-tdd-first",
+      "spec": "specs/017-speed-mode-tdd-first/spec.md#FR-003",
+      "plan": "specs/017-speed-mode-tdd-first/plan.md",
+      "task": "T003",
+      "test": "tests/test_standard_lane.py::StandardFlowTests::test_red_requires_a_failing_run_with_a_test_change",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "AC3 step end needs gates and RED-then-GREEN evidence",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "speed-mode-tdd-first",
+      "spec": "specs/017-speed-mode-tdd-first/spec.md#FR-004",
+      "plan": "specs/017-speed-mode-tdd-first/plan.md",
+      "task": "T004",
+      "test": "tests/test_standard_lane.py::StandardFlowTests::test_end_to_end_passes_only_with_red_then_green_evidence",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "AC4 TDD enforced by the hook only in block mode",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "speed-mode-tdd-first",
+      "spec": "specs/017-speed-mode-tdd-first/spec.md#FR-005",
+      "plan": "specs/017-speed-mode-tdd-first/plan.md",
+      "task": "T006",
+      "test": "tests/test_standard_lane.py::TddGuardTests::test_block_mode_denies_production_writes_until_red",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "AC5 Sensitive or large changes are refused by the lane (full cycle)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "speed-mode-tdd-first",
+      "spec": "specs/017-speed-mode-tdd-first/spec.md#FR-001",
+      "plan": "specs/017-speed-mode-tdd-first/plan.md",
+      "task": "T004",
+      "test": "tests/test_standard_lane.py::StandardFlowTests::test_critical_signals_go_to_the_full_cycle",
+      "status": "COVERED",
+      "issue": ""
+    },
+    {
+      "requirement": "AC6 Full cycle and native mode unchanged (conformance and kernel step suites stay green)",
+      "source": "docs/performance-multiagent-speed-roadmap.md",
+      "feature": "speed-mode-tdd-first",
+      "spec": "specs/017-speed-mode-tdd-first/spec.md#FR-006",
+      "plan": "specs/017-speed-mode-tdd-first/plan.md",
+      "task": "T006",
+      "test": "tests/test_protocol_conformance.py",
+      "status": "COVERED",
+      "issue": ""
+    }
+  ]
+}
