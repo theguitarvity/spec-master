@@ -236,6 +236,19 @@ Onda 0 (higiene)
 Onda 6 (brownfield/greenfield) depende só da Onda 0 + P4; pode correr em paralelo a 3–5
 ```
 
+Revisado após o merge de origin/main (ciclo 2 v2): o upstream já trazia kernel,
+hookd, telemetria, lanes/cards e `step`. Cada feature passou a cobrir só o delta
+restante. A ordem real de merge foi F19 → F17 → F14 → F16 → F15 → F18. F15 entrou
+por último porque toca o bloco de imports do `cli.py`, o `PROTOCOL.md` e o MCP.
+F18 depende de F14 (eventos) e de F17.
+
+Integração pós-merge (commit `62e798d`):
+- **H6**: `risk_profile.light_analyze` roda `verify_pre.light_analyze` nos tiers
+  XS/S, e o resultado sai em `state advance` como `next.light_analyze`.
+- `discovery` usa a lista de diretórios podados de `phase_contracts`.
+- Os roteadores (`cards/router.md`, `cards/full-cycle.md`) apontam para os cards
+  brownfield/greenfield.
+
 ## 8. Decisões (EXPLICIT, 2026-10-19)
 
 Escolhidas pelo usuário nesta sessão:
@@ -244,6 +257,13 @@ Escolhidas pelo usuário nesta sessão:
 - **Speed: S1** — perfil `speed` dentro do Spec Kit, TDD imposto por gate.
 - **Dashboard: D1** — servidor stdlib SSE + React/Vite com bundle buildado commitado.
 - **Execução: via `/spec-master` (dogfood)** — este documento é o context-file.
+- **Speed (refinado): Lane Standard** da proposta do harness: `verify:pre`
+  determinístico substitui o `/speckit.analyze` só nessa lane. O ciclo completo
+  mantém o analyze (Princípio VII). Os gates TDD RED/GREEN gravam evidência.
+- **Multi-agente (refinado): subagentes `sm-spec` / `sm-implement` / `sm-review`**,
+  gerados pelo `packaging.py` para os 8 hosts. Cada onda tem um dispatch manifest
+  (≤2k tokens) e um teto de agentes. O hookd faz governança por worktree, e o
+  Team Mode fica congelado.
 
 Não perguntadas, adotadas como default recomendado (INFERRED, podem ser revistas
 no `clarify`): **T3** (telemetria híbrida), **P1–P6**, **B1 + G1** (B2 fica no backlog).
