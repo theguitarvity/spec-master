@@ -10,8 +10,8 @@
       "plan": "specs/018-multi-agent-dispatch/plan.md",
       "task": "T004",
       "test": "tests/test_dispatch.py::test_build_manifest",
-      "status": "PLANNED",
-      "issue": ""
+      "status": "SUPERSEDED",
+      "issue": "planning row; superseded by the FR-001..FR-011 COVERED rows"
     },
     {
       "requirement": "Claude Code adapter launches parallel subagents per wave with worktree isolation; other adapters get equivalent instructions",
@@ -21,8 +21,8 @@
       "plan": "specs/018-multi-agent-dispatch/plan.md",
       "task": "T018",
       "test": "tests/test_packaging.py::test_agents_rendered_per_host",
-      "status": "PLANNED",
-      "issue": ""
+      "status": "SUPERSEDED",
+      "issue": "planning row; superseded by the FR-001..FR-011 COVERED rows"
     },
     {
       "requirement": "Configurable max agents per wave (default 3-5); reviewer != owner",
@@ -32,8 +32,8 @@
       "plan": "specs/018-multi-agent-dispatch/plan.md",
       "task": "T004",
       "test": "tests/test_dispatch.py::test_cap_and_reviewer",
-      "status": "PLANNED",
-      "issue": ""
+      "status": "SUPERSEDED",
+      "issue": "planning row; superseded by the FR-001..FR-011 COVERED rows"
     },
     {
       "requirement": "Each subagent result and tokens recorded via subagent-stop event",
@@ -43,8 +43,8 @@
       "plan": "specs/018-multi-agent-dispatch/plan.md",
       "task": "T008",
       "test": "tests/test_dispatch.py::test_record_result_and_status",
-      "status": "PLANNED",
-      "issue": ""
+      "status": "SUPERSEDED",
+      "issue": "planning row; superseded by the FR-001..FR-011 COVERED rows"
     },
     {
       "requirement": "Tech Lead integration stays gated; nothing auto-merged",
@@ -54,8 +54,8 @@
       "plan": "specs/018-multi-agent-dispatch/plan.md",
       "task": "T006",
       "test": "tests/test_dispatch.py::test_aggregate_never_merges",
-      "status": "PLANNED",
-      "issue": ""
+      "status": "SUPERSEDED",
+      "issue": "planning row; superseded by the FR-001..FR-011 COVERED rows"
     },
     {
       "requirement": "FR-001/002 per-wave manifest with entries, batches, <=2k tokens",

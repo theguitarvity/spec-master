@@ -158,3 +158,28 @@ def summary(feature: dict) -> dict:
         else:
             result[phase] = "verified" if entry.get("verified") else "unverified"
     return result
+
+
+def reverify(root: str | Path, feature: dict, *, phases: list | None = None,
+             traceability_rows: list | None = None, now: str | None = None) -> dict:
+    """Re-run `check` for PASSED phases whose evidence is unverified or missing.
+
+    A phase that now passes gets a verified record that keeps the earlier
+    entry under `replaced`; one that fails keeps its old record untouched and
+    is reported with the failing checks. Already verified phases are skipped.
+    """
+    status = summary(feature)
+    wanted = [p for p in (phases or list(status)) if status.get(p) in ("unverified", "missing")]
+    out = {"feature": feature.get("id"), "reverified": [], "failed": [],
+           "skipped": [p for p in (phases or list(status)) if p not in wanted]}
+    for phase in wanted:
+        result = check(root, feature, phase,
+                       traceability_rows=traceability_rows if phase == "validate" else None)
+        if not result["ok"]:
+            out["failed"].append({"phase": phase, "checks": [c for c in result["checks"] if not c["ok"]]})
+            continue
+        previous = (feature.get("evidence") or {}).get(phase)
+        entry = record(feature, result, now=now)
+        entry["replaced"] = previous if previous is not None else {"verified": False, "reason": "missing"}
+        out["reverified"].append(phase)
+    return out

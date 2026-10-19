@@ -408,6 +408,29 @@ def analyze_cycle(state: dict, feature_id: str, action: str) -> dict:
     raise StateError(f"unknown analyze-cycle action: {action}")
 
 
+def close_cycle(state: dict, cycle_id: int, *, today: str | None = None) -> dict:
+    """Mark a declared cycle COMPLETED once every feature in it is COMPLETED.
+
+    Features without a `cycle` field belong to cycle 1 (the dashboard reads
+    them the same way). Raises StateError while any member is not done.
+    """
+    cycles = state.get("cycles") if isinstance(state.get("cycles"), list) else []
+    entry = next((c for c in cycles if isinstance(c, dict) and c.get("id") == cycle_id), None)
+    if entry is None:
+        raise StateError(f"cycle {cycle_id} is not declared in state.json")
+    members = [f for f in state.get("features", []) if isinstance(f, dict)
+               and (f.get("cycle") if isinstance(f.get("cycle"), int) and not isinstance(f.get("cycle"), bool) else 1)
+               == cycle_id]
+    open_members = [f.get("id") for f in members if f.get("status") != "COMPLETED"]
+    if open_members:
+        raise StateError(f"cycle {cycle_id} still has features not COMPLETED: {', '.join(map(str, open_members))}")
+    already = entry.get("status") == "COMPLETED"
+    entry["status"] = "COMPLETED"
+    entry.setdefault("closed", today or time.strftime("%Y-%m-%d"))
+    return {"cycle": cycle_id, "status": "COMPLETED", "features": len(members), "already_closed": already,
+            "closed": entry["closed"]}
+
+
 def summarize(state: dict) -> dict:
     return {
         "status": state["status"],

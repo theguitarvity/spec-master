@@ -109,3 +109,30 @@ class EvidenceRecordTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EvidenceReverifyTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        _write(self.root, "specs/001-f1/spec.md", "# Spec\n\nDone.\n")
+        _write(self.root, "specs/001-f1/plan.md", "# Plan\n\nDone.\n")
+        self.feature = {"id": "f1", "spec_directory": "specs/001-f1",
+                        "phases": {"specify": "PASSED", "plan": "PASSED", "tasks": "PASSED", "analyze": "PENDING"},
+                        "evidence": {"specify": {"verified": False, "at": "t0", "reason": "imported"}}}
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_passing_phases_become_verified_and_keep_the_old_entry(self):
+        result = evidence.reverify(self.root, self.feature, now="t1")
+        self.assertEqual(result["reverified"], ["specify", "plan"])
+        self.assertEqual([f["phase"] for f in result["failed"]], ["tasks"])
+        self.assertEqual(evidence.summary(self.feature),
+                         {"specify": "verified", "plan": "verified", "tasks": "missing"})
+        self.assertEqual(self.feature["evidence"]["specify"]["replaced"]["reason"], "imported")
+        self.assertEqual(self.feature["evidence"]["plan"]["replaced"], {"verified": False, "reason": "missing"})
+
+    def test_verified_phases_are_skipped_and_phase_filter_applies(self):
+        evidence.reverify(self.root, self.feature, now="t1")
+        again = evidence.reverify(self.root, self.feature, phases=["specify"])
+        self.assertEqual((again["reverified"], again["skipped"]), ([], ["specify"]))

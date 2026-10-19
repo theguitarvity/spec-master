@@ -525,8 +525,14 @@ never the source of truth, never edited by hand. Fill
 Before printing the final status, check the evidence behind every
 feature's promotions with `state evidence --feature <id>`: `verified` phases
 passed the core's check, `unverified` ones were imported with a reason, and
-`missing` ones were promoted before evidence existed. Report the last two
-per feature — they are not proof that the phase happened. The harness's own
+`missing` ones were promoted before evidence existed. Run
+`state evidence --reverify --all` first: it re-checks those phases against the
+artifacts on disk and records the ones that pass as `verified` (the old entry
+is kept under `replaced`). Report what is still `unverified` or `missing` per
+feature — it is not proof that the phase happened. A row recorded with the
+wrong status is fixed with `traceability restatus --feature <id> --from <old>
+--to <new>`, never by hand; once every feature of a cycle is COMPLETED, close
+it with `state cycle-close --cycle <n>`. The harness's own
 self-checks (graph validation, harness evals, runtime contract) belong to the
 project's CI (`doctor`), not to every workflow run. Determine the final
 status:

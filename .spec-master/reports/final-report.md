@@ -60,9 +60,9 @@ Post-merge wiring (`62e798d`):
 
 ## Traceability
 
-`.spec-master/reports/traceability.md`: 89 rows over all features. Cycle 2: 60 rows. Two oddities:
-- F15 recorded its 13 rows with status `PASSED` instead of `COVERED`.
-- F18 keeps 5 `PLANNED` rows from planning, alongside its 10 `COVERED` rows.
+`.spec-master/reports/traceability.md`: 89 rows over all features. Cycle 2: 60 rows. Fixed after the cycle
+with `traceability restatus`: F15's 13 rows went from `PASSED` to `COVERED`, and F18's 5 planning rows went
+from `PLANNED` to `SUPERSEDED` (covered by its 10 FR rows). Cycle 2 was closed with `state cycle-close --cycle 2`.
 
 ## Quality Gates
 
@@ -95,11 +95,11 @@ Measured performance (F15):
 
 ## Remaining Risks
 
-- Evidence:
-  - F14 has 7 phases that were promoted `unverified` while its artifacts lived in a worktree. A dry-run of
-    `state evidence --phase` passes for all 7 on main now. There is no CLI to re-record it.
-  - F18 has 5 such phases (specify–analyze); its implement and validate phases are verified.
-  - 4 older features show `missing` evidence because they were promoted before evidence existed.
+- Evidence: `state evidence --reverify --all` (post-cycle maintenance) re-checked every unverified or
+  missing phase against the artifacts on main. 39 phases are now `verified` (F14 7, F18 5 and 27 across the 4
+  older features). Still `missing`: the `implement` phase of `speckit-tracker-orchestration` and
+  `team-mode-parallel-workstreams` (cycle 1, delivered outside the flow), whose `tasks.md` still has 21 unchecked
+  tasks. They were not ticked without a per-task check.
 - F18 host agent formats are INFERRED for Cursor, Copilot and Gemini. They need a check on a real install.
   The SC-005 replay with real host subagents and per-agent tokens is still pending.
 - The F16 debounce is leading-edge only, so the last event in a 2 s window renders at the next event.
@@ -109,7 +109,6 @@ Measured performance (F15):
 - `step_path_budget`: 5248 LOC against a 4500 target.
 - Splitting PROTOCOL Step 6 further.
 - A trailing dashboard render.
-- A CLI path to re-verify evidence for phases imported as unverified.
 
 ## Final Status
 

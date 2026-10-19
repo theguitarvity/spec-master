@@ -260,7 +260,28 @@ def cmd_state(args: argparse.Namespace) -> int:
             result = state_mod.analyze_cycle(s, args.feature, args.action)
         _print_json(result)
         return 0
+    if args.state_action == "cycle-close":
+        with state_mod.transaction(args.path) as s:
+            result = state_mod.close_cycle(s, args.cycle)
+        _print_json(result)
+        return 0
+    if args.state_action == "evidence" and args.reverify:
+        if bool(args.feature) == bool(args.all):
+            raise SystemExit("state evidence --reverify needs exactly one of --feature or --all")
+        root = hooks.project_root_for_state(args.path)
+        results = []
+        with state_mod.transaction(args.path) as s:
+            targets = [state_mod.find_feature(s, args.feature)] if args.feature else \
+                [f for f in s.get("features", []) if isinstance(f, dict)]
+            for f in targets:
+                rows = traceability.load_rows(s, args.path, feature=f.get("id"))
+                results.append(evidence.reverify(root, f, phases=[args.phase] if args.phase else None,
+                                                 traceability_rows=rows))
+        _print_json(results[0] if args.feature else {"features": results})
+        return 0
     if args.state_action == "evidence":
+        if not args.feature:
+            raise SystemExit("state evidence needs --feature (or --reverify --all)")
         s = state_mod.load(args.path)
         root = hooks.project_root_for_state(args.path)
         feature = state_mod.find_feature(s, args.feature)
@@ -404,6 +425,12 @@ def cmd_traceability(args: argparse.Namespace) -> int:
             _print_json({"output": args.output, "rows": len(rows)})
         else:
             print(markdown)
+        return 0
+    if args.trace_action == "restatus":
+        with state_mod.transaction(args.path) as s:
+            result = traceability.restatus(s, args.path, args.feature, args.from_status, args.to_status,
+                                           requirement=args.requirement, note=args.note)
+        _print_json(result)
         return 0
     if args.trace_action == "migrate":
         with state_mod.transaction(args.path) as s:
@@ -1178,9 +1205,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     s_evidence = state_sub.add_parser("evidence", help="check or show the evidence behind a feature's phases")
     s_evidence.add_argument("--path", default=".spec-master/state.json")
-    s_evidence.add_argument("--feature", required=True)
+    s_evidence.add_argument("--feature", default=None)
     s_evidence.add_argument("--phase", default=None, choices=state_mod.FEATURE_PHASES,
                             help="dry-run the evidence check for this phase")
+    s_evidence.add_argument("--reverify", action="store_true",
+                            help="re-check PASSED phases with unverified/missing evidence and record the ones that pass")
+    s_evidence.add_argument("--all", action="store_true", help="with --reverify: every feature")
+
+    s_cycle_close = state_sub.add_parser("cycle-close", help="mark a declared cycle COMPLETED (all its features done)")
+    s_cycle_close.add_argument("--path", default=".spec-master/state.json")
+    s_cycle_close.add_argument("--cycle", type=int, required=True)
 
     s_cycle = state_sub.add_parser("analyze-cycle")
     s_cycle.add_argument("--path", default=".spec-master/state.json")
@@ -1312,6 +1346,13 @@ def build_parser() -> argparse.ArgumentParser:
     trace_render.add_argument("--feature", default=None, help="render only this feature's rows")
     trace_render.add_argument("--output", default=None,
                               help="write Markdown here (e.g. .spec-master/reports/traceability.md)")
+    trace_restatus = trace_sub.add_parser("restatus", help="change the status of a feature's rows (e.g. PASSED -> COVERED)")
+    trace_restatus.add_argument("--path", default=".spec-master/state.json")
+    trace_restatus.add_argument("--feature", required=True)
+    trace_restatus.add_argument("--from", dest="from_status", required=True)
+    trace_restatus.add_argument("--to", dest="to_status", required=True)
+    trace_restatus.add_argument("--requirement", default=None, help="only rows whose requirement contains this text")
+    trace_restatus.add_argument("--note", default=None, help="written to the issue column when it is empty")
     trace_migrate = trace_sub.add_parser("migrate",
                                          help="move inline rows to traceability/features/<id>.json")
     trace_migrate.add_argument("--path", default=".spec-master/state.json")

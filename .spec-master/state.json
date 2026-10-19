@@ -198,6 +198,141 @@
         "analyze": "PASSED",
         "implement": "PASSED",
         "validate": "PASSED"
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/003-parallel-worktree-execution/spec.md",
+              "sha256": "1c5d64e17c4d283570125b4ccf356ba6d959ac489323a7605e3aea7df01873c4",
+              "bytes": 11156
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/003-parallel-worktree-execution/spec.md",
+              "sha256": "1c5d64e17c4d283570125b4ccf356ba6d959ac489323a7605e3aea7df01873c4",
+              "bytes": 11156
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/003-parallel-worktree-execution/plan.md",
+              "sha256": "db1e743acaf83649f32282ea1e565faf03fa07d1efc53d5a3b47db2c77ca346a",
+              "bytes": 5140
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/003-parallel-worktree-execution/tasks.md",
+              "sha256": "bea84e01b859ead861bcd81634398e4f44ab9b4228c0b05c13c4c28bc63ddec0",
+              "bytes": 12157
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/003-parallel-worktree-execution/spec.md",
+              "sha256": "1c5d64e17c4d283570125b4ccf356ba6d959ac489323a7605e3aea7df01873c4",
+              "bytes": 11156
+            },
+            {
+              "path": "specs/003-parallel-worktree-execution/plan.md",
+              "sha256": "db1e743acaf83649f32282ea1e565faf03fa07d1efc53d5a3b47db2c77ca346a",
+              "bytes": 5140
+            },
+            {
+              "path": "specs/003-parallel-worktree-execution/tasks.md",
+              "sha256": "bea84e01b859ead861bcd81634398e4f44ab9b4228c0b05c13c4c28bc63ddec0",
+              "bytes": 12157
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/003-parallel-worktree-execution/tasks.md",
+              "sha256": "bea84e01b859ead861bcd81634398e4f44ab9b4228c0b05c13c4c28bc63ddec0",
+              "bytes": 12157
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": [],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        }
       }
     },
     {
@@ -289,6 +424,122 @@
         "analyze": "PASSED",
         "implement": "PASSED",
         "validate": "PASSED"
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/005-speckit-tracker-orchestration/spec.md",
+              "sha256": "b49bb02f876b8a044db7ab6fbeb26d9f200581107bec70494afa2cba14fa40f0",
+              "bytes": 16016
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/005-speckit-tracker-orchestration/spec.md",
+              "sha256": "b49bb02f876b8a044db7ab6fbeb26d9f200581107bec70494afa2cba14fa40f0",
+              "bytes": 16016
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/005-speckit-tracker-orchestration/plan.md",
+              "sha256": "042dd0a4dbd406dcaa3ca5dc3213043ac90b68ee38add88eca123c98e2e857ae",
+              "bytes": 6758
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/005-speckit-tracker-orchestration/tasks.md",
+              "sha256": "77684d56fcd552ad22c02dd236d2be49fb024031d5fc93db42bcc5f1a5471755",
+              "bytes": 9952
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/005-speckit-tracker-orchestration/spec.md",
+              "sha256": "b49bb02f876b8a044db7ab6fbeb26d9f200581107bec70494afa2cba14fa40f0",
+              "bytes": 16016
+            },
+            {
+              "path": "specs/005-speckit-tracker-orchestration/plan.md",
+              "sha256": "042dd0a4dbd406dcaa3ca5dc3213043ac90b68ee38add88eca123c98e2e857ae",
+              "bytes": 6758
+            },
+            {
+              "path": "specs/005-speckit-tracker-orchestration/tasks.md",
+              "sha256": "77684d56fcd552ad22c02dd236d2be49fb024031d5fc93db42bcc5f1a5471755",
+              "bytes": 9952
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": [],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        }
       }
     },
     {
@@ -318,6 +569,122 @@
         "analyze": "PASSED",
         "implement": "PASSED",
         "validate": "PASSED"
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/spec.md",
+              "sha256": "dfde49279f514c3dff52c023eac7e637809dd7def78698d98834678a9050a833",
+              "bytes": 15328
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/spec.md",
+              "sha256": "dfde49279f514c3dff52c023eac7e637809dd7def78698d98834678a9050a833",
+              "bytes": 15328
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/plan.md",
+              "sha256": "989e293c1105afde83e2bbdd5006088d7e70659d559d97b6ca684e2597fcc06d",
+              "bytes": 5991
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/tasks.md",
+              "sha256": "1d8728a1affa1e61467f8025a47b03f83b5fc91fba1c482a6371d74d34443c29",
+              "bytes": 9754
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/spec.md",
+              "sha256": "dfde49279f514c3dff52c023eac7e637809dd7def78698d98834678a9050a833",
+              "bytes": 15328
+            },
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/plan.md",
+              "sha256": "989e293c1105afde83e2bbdd5006088d7e70659d559d97b6ca684e2597fcc06d",
+              "bytes": 5991
+            },
+            {
+              "path": "specs/004-team-mode-parallel-workstreams/tasks.md",
+              "sha256": "1d8728a1affa1e61467f8025a47b03f83b5fc91fba1c482a6371d74d34443c29",
+              "bytes": 9754
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": [],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        }
       }
     },
     {
@@ -543,6 +910,141 @@
             "escalated": true
           }
         ]
+      },
+      "evidence": {
+        "specify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/013-harness-hygiene/spec.md",
+              "sha256": "b12091cb20815582cb8048158925734904a2966dd581f0047bd6a4bb91ac7195",
+              "bytes": 16867
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "clarify": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/013-harness-hygiene/spec.md",
+              "sha256": "b12091cb20815582cb8048158925734904a2966dd581f0047bd6a4bb91ac7195",
+              "bytes": 16867
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "plan": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/013-harness-hygiene/plan.md",
+              "sha256": "32cbf4b25e89b7edd2619df0510907f08f28c130d8f72b809ea31dd98e11a4a4",
+              "bytes": 6906
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "tasks": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/013-harness-hygiene/tasks.md",
+              "sha256": "6fac011d099e3da03b7426765d1b46d49a799312aea73f8826569d09ee1c3a86",
+              "bytes": 5815
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "analyze": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/013-harness-hygiene/spec.md",
+              "sha256": "b12091cb20815582cb8048158925734904a2966dd581f0047bd6a4bb91ac7195",
+              "bytes": 16867
+            },
+            {
+              "path": "specs/013-harness-hygiene/plan.md",
+              "sha256": "32cbf4b25e89b7edd2619df0510907f08f28c130d8f72b809ea31dd98e11a4a4",
+              "bytes": 6906
+            },
+            {
+              "path": "specs/013-harness-hygiene/tasks.md",
+              "sha256": "6fac011d099e3da03b7426765d1b46d49a799312aea73f8826569d09ee1c3a86",
+              "bytes": 5815
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "implement": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/013-harness-hygiene/tasks.md",
+              "sha256": "6fac011d099e3da03b7426765d1b46d49a799312aea73f8826569d09ee1c3a86",
+              "bytes": 5815
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        },
+        "validate": {
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": [],
+          "replaced": {
+            "verified": false,
+            "reason": "missing"
+          }
+        }
       }
     },
     {
@@ -757,29 +1259,111 @@
       },
       "evidence": {
         "specify": {
-          "verified": false,
-          "at": "2026-10-19T11:49:04Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/018-multi-agent-dispatch/spec.md",
+              "sha256": "c0ad70660df261280ffefd5098f063c4dfbd64d1123e0c43b34b0534e0e5b0bc",
+              "bytes": 13330
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:49:04Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "clarify": {
-          "verified": false,
-          "at": "2026-10-19T11:49:05Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/018-multi-agent-dispatch/spec.md",
+              "sha256": "c0ad70660df261280ffefd5098f063c4dfbd64d1123e0c43b34b0534e0e5b0bc",
+              "bytes": 13330
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:49:05Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "plan": {
-          "verified": false,
-          "at": "2026-10-19T11:49:15Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/018-multi-agent-dispatch/plan.md",
+              "sha256": "819af91c51f7e1ee1e101a29c0f5e35889c233c3a1cbff6175c42d7b819f3cda",
+              "bytes": 6839
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:49:15Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "tasks": {
-          "verified": false,
-          "at": "2026-10-19T11:49:16Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/018-multi-agent-dispatch/tasks.md",
+              "sha256": "63377ac4a447b9cbe74e667140eaccca599c64cd2ba689c7a71d40a388cb132f",
+              "bytes": 7949
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:49:16Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "analyze": {
-          "verified": false,
-          "at": "2026-10-19T11:49:16Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/018-multi-agent-dispatch/spec.md",
+              "sha256": "c0ad70660df261280ffefd5098f063c4dfbd64d1123e0c43b34b0534e0e5b0bc",
+              "bytes": 13330
+            },
+            {
+              "path": "specs/018-multi-agent-dispatch/plan.md",
+              "sha256": "819af91c51f7e1ee1e101a29c0f5e35889c233c3a1cbff6175c42d7b819f3cda",
+              "bytes": 6839
+            },
+            {
+              "path": "specs/018-multi-agent-dispatch/tasks.md",
+              "sha256": "63377ac4a447b9cbe74e667140eaccca599c64cd2ba689c7a71d40a388cb132f",
+              "bytes": 7949
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:49:16Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "implement": {
           "verified": true,
@@ -1187,39 +1771,144 @@
       },
       "evidence": {
         "specify": {
-          "verified": false,
-          "at": "2026-10-19T11:42:56Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/014-token-ledger-and-statusline/spec.md",
+              "sha256": "dbb1795093ad6e33caa4e5452e1aed64626a64d5286dc26a246c8ac7b28ae8bb",
+              "bytes": 8224
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:42:56Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "clarify": {
-          "verified": false,
-          "at": "2026-10-19T11:42:56Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/014-token-ledger-and-statusline/spec.md",
+              "sha256": "dbb1795093ad6e33caa4e5452e1aed64626a64d5286dc26a246c8ac7b28ae8bb",
+              "bytes": 8224
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:42:56Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "plan": {
-          "verified": false,
-          "at": "2026-10-19T11:42:57Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:plan.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/014-token-ledger-and-statusline/plan.md",
+              "sha256": "9963939188a77f89a980e30790a5cf7ebbdd85bdd26705c19d6631aa4d0d0af3",
+              "bytes": 3722
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:42:57Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "tasks": {
-          "verified": false,
-          "at": "2026-10-19T11:42:57Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/014-token-ledger-and-statusline/tasks.md",
+              "sha256": "61a24bb40fa151073c9b375bd6235df0caa0958db2fe77ab7ee75669c4ce1711",
+              "bytes": 1441
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:42:57Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "analyze": {
-          "verified": false,
-          "at": "2026-10-19T11:42:57Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:spec.md",
+            "artifact:plan.md",
+            "artifact:tasks.md"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/014-token-ledger-and-statusline/spec.md",
+              "sha256": "dbb1795093ad6e33caa4e5452e1aed64626a64d5286dc26a246c8ac7b28ae8bb",
+              "bytes": 8224
+            },
+            {
+              "path": "specs/014-token-ledger-and-statusline/plan.md",
+              "sha256": "9963939188a77f89a980e30790a5cf7ebbdd85bdd26705c19d6631aa4d0d0af3",
+              "bytes": 3722
+            },
+            {
+              "path": "specs/014-token-ledger-and-statusline/tasks.md",
+              "sha256": "61a24bb40fa151073c9b375bd6235df0caa0958db2fe77ab7ee75669c4ce1711",
+              "bytes": 1441
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:42:57Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "implement": {
-          "verified": false,
-          "at": "2026-10-19T11:51:15Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "artifact:tasks.md",
+            "tasks_checked"
+          ],
+          "artifacts": [
+            {
+              "path": "specs/014-token-ledger-and-statusline/tasks.md",
+              "sha256": "61a24bb40fa151073c9b375bd6235df0caa0958db2fe77ab7ee75669c4ce1711",
+              "bytes": 1441
+            }
+          ],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:51:15Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         },
         "validate": {
-          "verified": false,
-          "at": "2026-10-19T11:52:08Z",
-          "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          "verified": true,
+          "at": "2026-10-19T12:22:37Z",
+          "checks": [
+            "traceability_rows"
+          ],
+          "artifacts": [],
+          "replaced": {
+            "verified": false,
+            "at": "2026-10-19T11:52:08Z",
+            "reason": "worktree-isolated parallel run: artifacts live in the worktree commit, not the main checkout"
+          }
         }
       }
     }
@@ -1245,8 +1934,9 @@
     {
       "id": 2,
       "context": "docs/performance-multiagent-speed-roadmap.md",
-      "status": "RUNNING",
-      "started": "2026-10-19"
+      "status": "COMPLETED",
+      "started": "2026-10-19",
+      "closed": "2026-10-19"
     }
   ]
 }

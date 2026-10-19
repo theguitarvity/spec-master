@@ -81,3 +81,27 @@ class StateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CloseCycleTests(unittest.TestCase):
+    def _state(self, second_status="COMPLETED"):
+        return {"cycles": [{"id": 1, "status": "COMPLETED"}, {"id": 2, "status": "RUNNING"}],
+                "features": [{"id": "legacy", "status": "PENDING"},
+                             {"id": "a", "cycle": 2, "status": "COMPLETED"},
+                             {"id": "b", "cycle": 2, "status": second_status}]}
+
+    def test_closes_when_every_member_is_completed(self):
+        state = self._state()
+        result = state_mod.close_cycle(state, 2, today="2026-10-19")
+        self.assertEqual(result, {"cycle": 2, "status": "COMPLETED", "features": 2,
+                                  "already_closed": False, "closed": "2026-10-19"})
+        self.assertEqual(state["cycles"][1]["status"], "COMPLETED")
+        self.assertTrue(state_mod.close_cycle(state, 2)["already_closed"])
+
+    def test_refuses_open_members_and_undeclared_cycles(self):
+        with self.assertRaisesRegex(state_mod.StateError, "b"):
+            state_mod.close_cycle(self._state("RUNNING"), 2)
+        with self.assertRaisesRegex(state_mod.StateError, "legacy"):  # no cycle field means cycle 1
+            state_mod.close_cycle(self._state(), 1)
+        with self.assertRaisesRegex(state_mod.StateError, "not declared"):
+            state_mod.close_cycle(self._state(), 9)

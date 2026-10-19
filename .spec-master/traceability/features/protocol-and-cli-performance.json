@@ -10,7 +10,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T002-T004",
       "test": "spec-master/tests/test_advance.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -21,7 +21,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T005-T007",
       "test": "spec-master/tests/test_protocol_sections.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -32,7 +32,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T008",
       "test": "spec-master/tests/test_risk_hints.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -43,7 +43,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T009-T010",
       "test": "spec-master/tests/test_phase_snapshot.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -54,7 +54,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T011",
       "test": "spec-master/tests/test_dashboard_debounce.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -65,7 +65,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T012",
       "test": "spec-master/tests/test_mcp_inprocess.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -76,7 +76,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T013",
       "test": "spec-master/tests/test_cli_lazy.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -87,7 +87,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T001,T014",
       "test": "specs/015-protocol-and-cli-performance/validation-report.md",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -98,7 +98,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T014",
       "test": "spec-master/tests/test_protocol_conformance.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -109,7 +109,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T007",
       "test": "spec-master/tests/test_protocol_sections.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -120,7 +120,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T013",
       "test": "specs/015-protocol-and-cli-performance/validation-report.md",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -131,7 +131,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T009",
       "test": "spec-master/tests/test_phase_snapshot.py",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     },
     {
@@ -142,7 +142,7 @@
       "plan": "specs/015-protocol-and-cli-performance/plan.md",
       "task": "T014",
       "test": "spec-master/tests",
-      "status": "PASSED",
+      "status": "COVERED",
       "issue": ""
     }
   ]

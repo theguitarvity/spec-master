@@ -155,6 +155,42 @@ def record(state: dict, state_path: str, row: dict) -> dict:
     return add_row(state, row)
 
 
+def restatus(state: dict, state_path: str, feature: str, from_status: str, to_status: str, *,
+             requirement: str | None = None, note: str | None = None) -> dict:
+    """Change the status of a feature's rows that currently read `from_status`.
+
+    `requirement` narrows it to rows whose requirement contains that text;
+    `note` goes in the `issue` column when that column is empty. Rows in the
+    per-feature store and legacy inline rows are both rewritten.
+    """
+    if not (from_status and to_status) or from_status == to_status:
+        raise ValueError("--from and --to must be two different, non-empty statuses")
+
+    def _hit(row: dict) -> bool:
+        return (row.get("feature") == feature and row.get("status") == from_status
+                and (requirement is None or requirement in str(row.get("requirement", ""))))
+
+    changed: list[str] = []
+
+    def _apply(rows: list[dict]) -> bool:
+        touched = False
+        for row in rows:
+            if _hit(row):
+                row["status"] = to_status
+                if note and not row.get("issue"):
+                    row["issue"] = note
+                changed.append(str(row.get("requirement", "")))
+                touched = True
+        return touched
+
+    _apply([r for r in state.get("traceability", []) if isinstance(r, dict)])
+    path = feature_file(state_path, feature)
+    rows = _read_feature_file(path)
+    if _apply(rows):
+        _write_feature_file(path, feature, rows)
+    return {"feature": feature, "from": from_status, "to": to_status, "changed": len(changed), "rows": changed}
+
+
 def migrate_from_state(state: dict, state_path: str) -> dict:
     """Move inline rows into per-feature files. Idempotent.
 

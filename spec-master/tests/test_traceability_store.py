@@ -107,3 +107,38 @@ class TraceabilityStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TraceabilityRestatusTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.state_path = str(Path(self.tmp, ".spec-master", "state.json"))
+        state_mod.init(self.state_path, context="ctx.md")
+        traceability.add_feature_row(self.state_path, _row("FR-001 a", "feat-a", "PASSED"))
+        traceability.add_feature_row(self.state_path, _row("FR-002 b", "feat-a", "PASSED"))
+        traceability.add_feature_row(self.state_path, _row("Old plan row", "feat-a", "PLANNED"))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def statuses(self):
+        return {r["requirement"]: (r["status"], r.get("issue", ""))
+                for r in traceability.load_store_rows(self.state_path, "feat-a")}
+
+    def test_cli_restatus_rewrites_only_matching_rows(self):
+        code, out = _run_cli("traceability", "restatus", "--path", self.state_path, "--feature", "feat-a",
+                             "--from", "PASSED", "--to", "COVERED")
+        self.assertEqual((code, json.loads(out)["changed"]), (0, 2))
+        self.assertEqual(self.statuses()["FR-001 a"][0], "COVERED")
+        self.assertEqual(self.statuses()["Old plan row"][0], "PLANNED")
+
+    def test_requirement_filter_and_note(self):
+        state = state_mod.load(self.state_path)
+        result = traceability.restatus(state, self.state_path, "feat-a", "PLANNED", "SUPERSEDED",
+                                       requirement="Old", note="replaced by FR rows")
+        self.assertEqual(result["rows"], ["Old plan row"])
+        self.assertEqual(self.statuses()["Old plan row"], ("SUPERSEDED", "replaced by FR rows"))
+
+    def test_same_status_is_refused(self):
+        with self.assertRaises(ValueError):
+            traceability.restatus({}, self.state_path, "feat-a", "PASSED", "PASSED")

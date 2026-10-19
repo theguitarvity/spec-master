@@ -192,6 +192,9 @@ python3 spec-master/lib/cli.py lane triage --path . --intent "..." --paths src/c
 python3 spec-master/lib/cli.py step begin  --path . --intent "..." --paths src/calc.py,tests/test_calc.py
 python3 spec-master/lib/cli.py step end    --path .
 python3 spec-master/lib/cli.py state evidence --feature <id>
+python3 spec-master/lib/cli.py state evidence --reverify --all      # reverifica fases unverified/missing
+python3 spec-master/lib/cli.py state cycle-close --cycle 2          # fecha um ciclo com todas as features COMPLETED
+python3 spec-master/lib/cli.py traceability restatus --feature <id> --from PASSED --to COVERED
 ```
 
 ## Hooks e auditoria
