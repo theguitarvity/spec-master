@@ -443,6 +443,7 @@ JSON compacto; `--pretty` (ou `SPEC_MASTER_PRETTY=1`) formata.
 | Extras | `worktree waves\|plan\|conflicts\|aggregate` | features independentes em paralelo, em git worktrees |
 | Extras | `tracker orchestrate` | qual extensão de tracker do Spec Kit (Jira, Azure DevOps, Linear, GitHub Issues) invocar |
 | Extras | `dashboard render\|model` | dashboard HTML autocontido, re-renderizado a cada fase |
+| Extras | `dashboard serve [--port 8765] [--open]` | dashboard React ao vivo (SSE, somente 127.0.0.1); bundle commitado em `dashboard/web/dist`, Node só para rebuild (ver `dashboard/web/README.md`) |
 | Extras | `pr plan` | corpo do PR no fim de uma feature Git Flow; o comando `gh`/`glab`/`az` só sai depois de confirmação explícita |
 | Extras | `ears check` | lint opcional de critérios de aceite em EARS (EN/PT) |
 | Extras | `bundle build` | um Markdown colável (prompt da fase + artefatos + contexto) para chats sem acesso a arquivos |

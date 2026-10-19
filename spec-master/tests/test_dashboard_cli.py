@@ -6,6 +6,7 @@ import tempfile
 import time
 import unittest
 from contextlib import redirect_stdout
+from unittest import mock
 
 import _pathfix  # noqa: F401
 import cli
@@ -85,6 +86,64 @@ class DashboardCliTests(unittest.TestCase):
         self.assertEqual(model["completeness"]["percent"], 14.3)
         self.assertIn(model["run"]["state"], ("settling", "idle"))
         self.assertFalse(os.path.exists(os.path.join(self.tmp, ".spec-master", "reports")))
+
+
+class DashboardServeCliTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_serve_parses_flags_and_delegates(self):
+        import dashboard_server
+        with mock.patch.object(dashboard_server, "serve", return_value=0) as served:
+            code, _ = _run_cli("dashboard", "serve", "--port", "0", "--path", self.tmp, "--open")
+        self.assertEqual(code, 0)
+        served.assert_called_once_with(os.path.abspath(self.tmp), port=0, open_browser=True)
+
+    def test_serve_defaults(self):
+        import dashboard_server
+        with mock.patch.object(dashboard_server, "serve", return_value=0) as served:
+            _run_cli("dashboard", "serve")
+        served.assert_called_once_with(os.path.abspath("."), port=8765, open_browser=False)
+
+    def test_serve_end_to_end_prints_url_and_answers(self):
+        import dashboard_server
+        import http.client
+        import threading
+        seen = {}
+
+        def ready(server):
+            seen["port"] = server.server_address[1]
+
+            def probe():  # serve_forever starts after `ready` returns, so probe from a thread
+                conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+                conn.request("GET", "/healthz")
+                seen["status"] = conn.getresponse().status
+                conn.close()
+                server.shutdown()
+
+            threading.Thread(target=probe, daemon=True).start()
+
+        out = io.StringIO()
+        code = dashboard_server.serve(self.tmp, port=0, ready=ready, out=out)
+        self.assertEqual(code, 0)
+        info = json.loads(out.getvalue())
+        self.assertEqual(info["url"], f"http://127.0.0.1:{seen['port']}/")
+        self.assertEqual(seen["status"], 200)
+        self.assertEqual(info["root"], os.path.abspath(self.tmp))
+
+    def test_serve_reports_port_in_use(self):
+        import dashboard_server
+        import socket
+        blocker = socket.socket()
+        self.addCleanup(blocker.close)
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen(1)
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err):
+            code = dashboard_server.serve(self.tmp, port=blocker.getsockname()[1], out=io.StringIO())
+        self.assertEqual(code, 1)
+        self.assertIn("cannot bind", err.getvalue())
 
 
 if __name__ == "__main__":

@@ -389,5 +389,102 @@ class HookIntegrationTests(DashboardTestBase):
             self.assertRegex(fh.read(), re.escape("1/7 phases"))
 
 
+class LiveModelKeysTests(DashboardTestBase):
+    """Additive keys for the live dashboard (feature 16): cycles, gates, lanes, hook decisions."""
+
+    def _mixed_cycles(self):
+        outside = {"mode": "agentic-outside-spec-master", "date": "2026-09-26"}
+        self._features(
+            {"id": "old", "name": "Old", "status": "COMPLETED", "delivery": outside},
+            {"id": "new1", "name": "New1", "cycle": 2, "phases": {**ALL_PASSED}, "status": "COMPLETED"},
+            {"id": "new2", "name": "New2", "cycle": 2, "phases": {"specify": "PASSED"}},
+            cycles=[{"id": 1, "context": "a.md", "status": "COMPLETED"},
+                    {"id": 2, "context": "b.md", "status": "RUNNING"}])
+
+    def test_feature_has_cycle_delivery_and_effective_percent(self):
+        self._mixed_cycles()
+        by_id = {f["id"]: f for f in dashboard.build_model(self.tmp)["features"]}
+        self.assertEqual(by_id["old"]["cycle"], 1)
+        self.assertEqual(by_id["old"]["percent"], 0.0)
+        self.assertEqual(by_id["old"]["effective_percent"], 100.0)
+        self.assertEqual(by_id["old"]["delivery"]["mode"], "agentic-outside-spec-master")
+        self.assertEqual(by_id["new1"]["effective_percent"], 100.0)
+        self.assertEqual(by_id["new2"]["cycle"], 2)
+        self.assertEqual(by_id["new2"]["effective_percent"], by_id["new2"]["percent"])
+        self.assertIsNone(by_id["new2"]["delivery"])
+
+    def test_cycles_do_not_mix_percentages(self):
+        self._mixed_cycles()
+        model = dashboard.build_model(self.tmp)
+        cycles = {c["id"]: c for c in model["cycles"]}
+        self.assertEqual(cycles[1]["status"], "COMPLETED")
+        self.assertEqual((cycles[1]["features"], cycles[1]["features_completed"]), (1, 1))
+        self.assertEqual(cycles[1]["effective_percent"], 100.0)
+        self.assertEqual((cycles[2]["features"], cycles[2]["features_completed"]), (2, 1))
+        self.assertEqual((cycles[2]["done"], cycles[2]["total"]), (8, 14))
+        self.assertEqual(cycles[2]["percent"], 57.1)
+        self.assertEqual(cycles[2]["effective_percent"], round((100.0 + 14.3) / 2, 1))
+        # the original, phase-weighted completeness is unchanged
+        self.assertEqual(model["completeness"]["done"], 8)
+        self.assertEqual(model["completeness"]["total"], 21)
+
+    def test_cycles_derived_when_state_has_no_cycle_list(self):
+        self._features({"id": "a", "name": "A", "cycle": 3})
+        model = dashboard.build_model(self.tmp)
+        self.assertEqual([c["id"] for c in model["cycles"]], [3])
+        self.assertIsNone(model["cycles"][0]["status"])
+
+    def test_gates_reduced_from_state(self):
+        self._features(quality_gates=[{"name": "test (python)", "command": "python3 -m unittest",
+                                       "blocking": True, "secret": "x"}, "junk"])
+        gates = dashboard.build_model(self.tmp)["gates"]
+        self.assertEqual(gates, [{"name": "test (python)", "command": "python3 -m unittest", "blocking": True}])
+
+    def test_lanes_active_change_and_recent_log(self):
+        changes = os.path.join(self.tmp, ".spec-master", "changes")
+        os.makedirs(changes)
+        with open(os.path.join(changes, "c1.json"), "w", encoding="utf-8") as fh:
+            json.dump({"id": "c1", "lane": "patch", "intent": "fix typo", "status": "RUNNING",
+                       "updated_at": "2026-10-19T10:00:00Z", "triage": {"big": "ignored"}}, fh)
+        with open(os.path.join(changes, "active.json"), "w", encoding="utf-8") as fh:
+            json.dump({"id": "c1", "since": "2026-10-19T10:00:00Z"}, fh)
+        with open(os.path.join(changes, "log.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"id": "c0", "status": "PASSED", "lane": "patch", "at": "t"}) + "\n")
+            fh.write("not json\n")
+        lanes = dashboard.build_model(self.tmp)["lanes"]
+        self.assertEqual(lanes["active"], {"id": "c1", "lane": "patch", "intent": "fix typo",
+                                           "status": "RUNNING", "updated_at": "2026-10-19T10:00:00Z"})
+        self.assertEqual([r["id"] for r in lanes["recent"]], ["c0"])
+
+    def test_lanes_empty_without_changes_dir(self):
+        self.assertEqual(dashboard.build_model(self.tmp)["lanes"], {"active": None, "recent": []})
+
+    def test_hook_decisions_tail_newest_first_and_skips_garbage(self):
+        path = os.path.join(self.tmp, ".spec-master", "hooks", "decisions.jsonl")
+        os.makedirs(os.path.dirname(path))
+        with open(path, "w", encoding="utf-8") as fh:
+            for i in range(25):
+                fh.write(json.dumps({"at": f"t{i:02d}", "event": "pre-tool-use", "tool": "Bash",
+                                     "decision": "allow", "reason": "r", "target": "x" * 500,
+                                     "enforced": False}) + "\n")
+            fh.write("{broken\n")
+        decisions = dashboard.build_model(self.tmp)["hook_decisions"]
+        self.assertEqual(len(decisions), 20)
+        self.assertEqual(decisions[0]["at"], "t24")
+        self.assertLessEqual(len(decisions[0]["target"]), 120)
+        self.assertEqual(decisions[0]["decision"], "allow")
+
+    def test_new_keys_do_not_create_files(self):
+        before = _tree(self.tmp)
+        dashboard.build_model(self.tmp)
+        self.assertEqual(_tree(self.tmp), before)
+
+    def test_fallback_model_has_new_keys(self):
+        with mock.patch.object(dashboard, "_build", side_effect=RuntimeError("boom")):
+            model = dashboard.build_model(self.tmp)
+        self.assertEqual((model["cycles"], model["gates"], model["hook_decisions"]), ([], [], []))
+        self.assertEqual(model["lanes"], {"active": None, "recent": []})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -376,6 +376,9 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     if args.dashboard_action == "model":
         _print_json(dashboard.build_model(args.path))
         return 0
+    if args.dashboard_action == "serve":
+        import dashboard_server  # lazy: only `dashboard serve` loads the live server (Principle IX path)
+        return dashboard_server.serve(os.path.abspath(args.path), port=args.port, open_browser=args.open)
     raise SystemExit(f"unknown dashboard action: {args.dashboard_action}")
 
 
@@ -1230,6 +1233,11 @@ def build_parser() -> argparse.ArgumentParser:
                                   help="auto-refresh seconds while a run is active (default 5; 0 disables)")
     dashboard_model = dashboard_sub.add_parser("model", help="print the read-only dashboard model as JSON")
     dashboard_model.add_argument("--path", default=".")
+    dashboard_serve = dashboard_sub.add_parser(
+        "serve", help="live dashboard: stdlib SSE server on 127.0.0.1 + committed React bundle")
+    dashboard_serve.add_argument("--path", default=".")
+    dashboard_serve.add_argument("--port", type=int, default=8765, help="TCP port on 127.0.0.1 (0 = ephemeral)")
+    dashboard_serve.add_argument("--open", action="store_true", help="open the dashboard in the default browser")
 
     p_hooks = sub.add_parser("hooks", help="declarative event hooks (.spec-master/hooks.json)")
     p_hooks.set_defaults(func=cmd_hooks)
