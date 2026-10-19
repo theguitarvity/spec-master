@@ -109,6 +109,12 @@ Measured performance (F15):
 - `step_path_budget`: 5248 LOC against a 4500 target.
 - Splitting PROTOCOL Step 6 further.
 - A trailing dashboard render.
+- Before `harness mode --mode block`, `kernel/policy.py` needs these fixes:
+  - **Security fix:** newline-separated commands parse as a single segment, so `rm -rf` on line 2 is not seen.
+  - **False asks:** heredoc bodies make the parser ask with "could not be parsed".
+  - **False denies:** scratch files in temp dirs are denied, both by the phase guard and by `rm`.
+
+  The temp-dir relaxation needs the user's sign-off; the host's auto-mode classifier refused it on 2026-10-19.
 
 ## Final Status
 
