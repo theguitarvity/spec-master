@@ -4,6 +4,9 @@ You were invoked with `--lane`: the harness decides how much process this
 change needs **before** any artifact exists. Follow these steps; read
 `PROTOCOL.md` only if the lane sends you there. Rules: `core.md`.
 
+0. **New to this repo?** No `.spec-master/context/` yet: existing code, follow
+   `cards/brownfield.md`; empty repo, follow `cards/greenfield.md`
+   (`tracks` commands only propose; the user approves before anything is applied).
 1. **Look** (read-only, at most 5 turns): open what the change needs and list
    every file you will touch, tests included.
 2. **Triage**:

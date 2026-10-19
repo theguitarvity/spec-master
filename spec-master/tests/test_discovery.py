@@ -355,5 +355,12 @@ class MonorepoDiscoveryTests(unittest.TestCase):
                 discovery.scan(self.tmp, scope=bad)
 
 
+class SharedPrunedDirsTests(unittest.TestCase):
+    def test_discovery_prunes_the_same_dirs_as_the_phase_snapshot(self):
+        import phase_contracts
+        self.assertEqual(discovery.PRUNED_DIRS, frozenset(phase_contracts.PRUNED_DIR_NAMES))
+        self.assertTrue({"node_modules", ".venv", "venv", "vendored", "coverage"} <= discovery.PRUNED_DIRS)
+
+
 if __name__ == "__main__":
     unittest.main()

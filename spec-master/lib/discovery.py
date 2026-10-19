@@ -20,6 +20,7 @@ import os
 import posixpath
 import re
 
+import phase_contracts
 import sast_gates
 import tracker_orchestration
 
@@ -342,10 +343,10 @@ def _is_git_repo(root: str) -> bool:
 
 # --- Monorepo sub-package discovery -------------------------------------------
 
-# Directories that never hold first-party packages. Hidden directories are
-# skipped as well. Follow-up: unify with the shared pruned walker of the
-# protocol-and-cli-performance feature once both are merged.
-PRUNED_DIRS = frozenset({".git", "node_modules", "dist", "build", "target", ".venv", "vendor", "__pycache__"})
+# Directories that never hold first-party packages: the one list shared with the
+# phase snapshot walker (`phase_contracts.PRUNED_DIR_NAMES`). Hidden directories
+# are skipped as well.
+PRUNED_DIRS = frozenset(phase_contracts.PRUNED_DIR_NAMES)
 MAX_PACKAGE_DEPTH = 4
 
 

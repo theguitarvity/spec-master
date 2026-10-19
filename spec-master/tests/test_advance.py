@@ -79,6 +79,31 @@ class AdvanceHelpersTests(unittest.TestCase):
         self.assertIn(block["hint"]["effort"], ("low", "medium", "high"))
         self.assertIn("skippable", block["clarify"])
 
+    def _at_analyze(self, tier, spec_directory=None):
+        feature = {"phases": {p: "PENDING" for p in state_mod.FEATURE_PHASES}, "risk": {"tier": tier}}
+        for phase in ("specify", "clarify", "plan", "tasks"):
+            feature["phases"][phase] = "PASSED"
+        if spec_directory:
+            feature["spec_directory"] = spec_directory
+        return feature
+
+    def test_light_tier_runs_the_deterministic_precheck_before_analyze(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        _write(root, "specs/001-x/spec.md", "# Spec\n\n- [NEEDS CLARIFICATION: which port?]\n")
+        _write(root, "specs/001-x/tasks.md", "- [ ] T001 do it\n")
+        block = advance.next_block(self._at_analyze("XS", "specs/001-x"), root=root)
+        self.assertEqual(block["phase"], "analyze")
+        self.assertEqual(block["analyze"], "light")
+        self.assertIs(block["light_analyze"]["ok"], False)
+
+    def test_deep_tier_and_unknown_spec_dir_have_no_precheck(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        self.assertNotIn("light_analyze", advance.next_block(self._at_analyze("M", "specs/001-x"), root=root))
+        self.assertNotIn("light_analyze", advance.next_block(self._at_analyze("XS"), root=root))
+        self.assertNotIn("light_analyze", advance.next_block(self._at_analyze("XS", "specs/001-x")))
+
     def test_next_block_none_when_done(self):
         feature = {"phases": {p: "PASSED" for p in state_mod.FEATURE_PHASES}}
         self.assertIsNone(advance.next_block(feature))

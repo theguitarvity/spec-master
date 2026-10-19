@@ -91,7 +91,8 @@ _PLACEHOLDER_PATTERNS = tuple(re.compile(pattern) for pattern in (
     r"NEEDS CLARIFICATION",
 ))
 
-_SNAPSHOT_IGNORED_DIR_NAMES = (
+# Directories no walk enters: the phase snapshot here and discovery's package scan.
+PRUNED_DIR_NAMES = (
     ".git",
     "__pycache__",
     ".venv",
@@ -109,6 +110,7 @@ _SNAPSHOT_IGNORED_DIR_NAMES = (
     "vendor",
     "vendored",
 )
+_SNAPSHOT_IGNORED_DIR_NAMES = PRUNED_DIR_NAMES
 _SNAPSHOT_IGNORED_RELATIVE_PREFIXES = (
     ".spec-master/failed-attempts/",
     ".spec-master/logs/",

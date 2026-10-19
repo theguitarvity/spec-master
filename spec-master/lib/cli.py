@@ -209,7 +209,7 @@ def _advance(args: argparse.Namespace) -> int:
         payload["round"] = _append_round(args.rounds or metrics_export.default_rounds_path(
             hooks.project_root_for_state(args.path)), row)
     feature = state_mod.find_feature(state_mod.load(args.path), args.feature)
-    payload["next"] = advance.next_block(feature)
+    payload["next"] = advance.next_block(feature, root=hooks.project_root_for_state(args.path))
     _print_json(payload)
     return 0
 

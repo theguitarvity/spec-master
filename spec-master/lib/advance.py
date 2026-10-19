@@ -80,8 +80,9 @@ def feature_tier(feature: dict) -> str:
         return DEFAULT_TIER
 
 
-def next_block(feature: dict) -> dict | None:
-    """What to do next for the feature, or None when every phase is done."""
+def next_block(feature: dict, root: str | None = None) -> dict | None:
+    """What to do next for the feature, or None when every phase is done. With
+    `root`, a "light" analyze (XS/S) carries the deterministic pre-check result."""
     phase = state_mod.next_phase(feature)
     if phase is None:
         return None
@@ -95,4 +96,11 @@ def next_block(feature: dict) -> dict | None:
     }
     if phase in state_mod.SKIPPABLE_PHASES:
         block[phase] = profile.get(phase)
+    if phase == "analyze":
+        block["analyze"] = profile.get("analyze")
+        spec_directory = feature.get("spec_directory")
+        if root and spec_directory:
+            precheck = risk_profile.light_analyze(root, tier, spec_directory)
+            if precheck is not None:
+                block["light_analyze"] = precheck
     return block

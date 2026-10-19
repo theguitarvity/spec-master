@@ -6,7 +6,7 @@ whole or for one directory (`--scope path/`). Read-only until the user agrees.
 1. **Map** — `python3 spec-master/lib/cli.py tracks brownfield-map --path . [--scope dir/] --write`.
    Four readers, one pass: stack, architecture, conventions, risks. A host may
    run them as parallel subagents. Every finding cites `file:line`; the walk
-   skips `.git node_modules dist build target .venv vendor __pycache__`.
+   skips hidden, build, vendored and virtualenv dirs (`phase_contracts.PRUNED_DIR_NAMES`).
    `--write` saves `.spec-master/context/codebase-map.md` and never overwrites.
 2. **Constitution by evidence** — `tracks brownfield-constitution --path . --write`
    saves `.spec-master/context/constitution-proposal.md`. It lists only

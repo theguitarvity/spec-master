@@ -132,6 +132,16 @@ def hint_text(tier: str, phase: str) -> str:
     return f"Hint (tier {normalize_tier(tier)}): model class {hint['model']}, reasoning effort {hint['effort']}."
 
 
+def light_analyze(root: str, tier: str, spec_directory: str) -> dict | None:
+    """H6: under a "light" analyze profile (XS/S) run the deterministic analyze
+    (`verify_pre.light_analyze`) on the feature's spec directory; None otherwise.
+    It is a pre-check: the full cycle still runs /speckit.analyze (Principle VII)."""
+    if CEREMONY_PROFILES[normalize_tier(tier)]["analyze"] != "light":
+        return None
+    import verify_pre  # lazy: keeps the kernel off the import path of simple commands
+    return verify_pre.light_analyze(root, spec_directory)
+
+
 # Work packages for L/XL, chained in this order (each depends on the previous).
 WORK_PACKAGE_TEMPLATE = (
     {"kind": "contract", "owner_agent": "architect", "title": "Define or confirm the interface contracts"},

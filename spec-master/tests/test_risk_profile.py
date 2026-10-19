@@ -397,5 +397,20 @@ class MetricsTierFieldsTests(unittest.TestCase):
             metrics.record_round(**self.ARGS, tier="huge")
 
 
+class LightAnalyzeTests(unittest.TestCase):
+    """H6: the XS/S "light" analyze is a deterministic check, not just a label."""
+
+    def test_light_profile_runs_verify_pre(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        os.makedirs(os.path.join(root, "specs", "001-x"))
+        result = risk_profile.light_analyze(root, "S", "specs/001-x")
+        self.assertIsInstance(result, dict)
+        self.assertIn("ok", result)
+
+    def test_deep_profile_returns_none(self):
+        self.assertIsNone(risk_profile.light_analyze(tempfile.gettempdir(), "L", "specs/001-x"))
+
+
 if __name__ == "__main__":
     unittest.main()

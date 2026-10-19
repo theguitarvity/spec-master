@@ -30,6 +30,7 @@ its size). Paths starting with `spec-master/` mean the engine directory.
 | -1 | no context file given | `protocol show --section "Step -1"` |
 | 0 | always first: resolve input, resume or restart | `protocol show --section "Step 0"` |
 | 1 | discovery (read-only) | `protocol show --section "Step 1"` |
+| 1, 4 | existing code / empty repo | `cards/brownfield.md` / `cards/greenfield.md` (proposals only) |
 | 2 | Spec Kit available, Git strategy (once, batched) | `protocol show --section "Step 2"` |
 | 3 | normalized context layer | `protocol show --section "Step 3"` |
 | 4 | constitution | `protocol show --section "Step 4"` |
@@ -63,7 +64,8 @@ For each feature in the resolved order, phases are
 4. `clarify` may be `SKIPPED` only when the tier's profile says `skippable`.
    `analyze` is never skipped: on findings repair the artifact and re-run,
    counting with `state analyze-cycle --feature <id> --action increment|check`
-   (3 cycles, then `BLOCKED` and escalate).
+   (3 cycles, then `BLOCKED` and escalate). On XS/S, `next.light_analyze` is a
+   deterministic pre-check: fix what it flags first, then run `/speckit.analyze`.
 5. Round numbers come from the host (`telemetry ingest ... --append`) or are
    typed with 0 tokens; never invent them.
 
