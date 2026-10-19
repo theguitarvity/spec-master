@@ -1,6 +1,9 @@
 # Contrato — Token ledger e event stream v1 (ciclo 2)
 
-> Status: INFERRED (fixado pelo orquestrador em 2026-10-19 para permitir que
+> Status: INFERRED, revisado após o merge de origin/main (alinhado a
+> `telemetry.TOKEN_FIELDS`, `metrics.SOURCES` e `metrics.COST_BASES`; o ledger
+> reaproveita o parser de `telemetry.py`, nunca um segundo parser).
+> Fixado pelo orquestrador em 2026-10-19 para permitir que
 > `token-ledger-and-statusline` (produtor) e `live-react-dashboard` (consumidor)
 > rodem em paralelo). Mudanças exigem atualizar este arquivo e as duas features.
 
@@ -21,20 +24,25 @@ Campos comuns: `schema` = `"spec-master.event/v1"`, `ts`, `type`, `session_id` (
 
 ## 2. `.spec-master/metrics/tokens.jsonl` — ledger de tokens
 
-Uma linha por requisição ao modelo (deduplicada por `request_id` quando existir).
+Uma linha por resposta do modelo, deduplicada por `message.id` (fallback
+`request_id`). Somente metadados: nunca conteúdo de prompt/resposta.
+`output_tokens_complete=false` quando o host só expõe limite inferior
+(transcripts de subagente). `cost_usd` só com fonte medida ou com tabela de
+preços documentada (`cost_basis: "estimated"`); senão `null`.
 
 ```json
 {
   "schema": "spec-master.tokens/v1",
   "ts": "2026-10-19T12:00:00Z",
-  "source": "claude-code-transcript | otel | codex | opencode",
+  "source": "host-transcript | host-headless | host-otel",
   "session_id": "…", "request_id": "…|null",
   "agent_id": "…|null", "agent_type": "…|null",
   "feature_id": "…|null", "phase": "…|null",
   "model": "claude-…",
   "input_tokens": 0, "output_tokens": 0,
-  "cache_read_tokens": 0, "cache_creation_tokens": 0,
-  "cost_usd_estimate": 0.0
+  "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+  "output_tokens_complete": true,
+  "cost_usd": 0.0, "cost_basis": "measured | estimated | null"
 }
 ```
 
@@ -48,7 +56,7 @@ Saída JSON (`schema: "spec-master.tokens-summary/v1"`):
 
 ```json
 {
-  "totals": {"input_tokens":0,"output_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"total_tokens":0,"cost_usd_estimate":0.0,"cache_hit_ratio":0.0},
+  "totals": {"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"total_tokens":0,"cost_usd":0.0,"cache_hit_ratio":0.0},
   "by_feature": {"<id>": {…mesmos campos…}},
   "by_phase": {"<feature_id>:<phase>": {…}},
   "by_agent": {"<agent_id>": {"agent_type":"…", …}},
@@ -58,7 +66,7 @@ Saída JSON (`schema: "spec-master.tokens-summary/v1"`):
 }
 ```
 
-`cache_hit_ratio = cache_read / (input + cache_read + cache_creation)`; 0 quando o denominador é 0.
+`cache_hit_ratio = cache_read_input / (input + cache_read_input + cache_creation_input)`; 0 quando o denominador é 0.
 
 ## 4. Live server (`live-react-dashboard`)
 
@@ -66,6 +74,7 @@ Saída JSON (`schema: "spec-master.tokens-summary/v1"`):
   acrescido da chave `tokens` com o agregado da §3 (ou `null` se o ledger não existir).
 - `GET /api/events` → SSE. Cada mensagem `event: <type>` + `data: <linha JSON>`
   para novas linhas de `events.jsonl`, `metrics/tokens.jsonl` (`type: "tokens"`)
-  e `hooks/firings.jsonl` (`type: "hook.fired"`); `event: model` quando
+  `hooks/firings.jsonl` (`type: "hook.fired"`), `hooks/decisions.jsonl`
+  (`type: "hook.decision"`) e mudanças em `.spec-master/changes/` (`type: "change"`); `event: model` quando
   `state.json` mudar. Heartbeat `: ping` a cada 15 s.
 - Bind exclusivo em `127.0.0.1`.
